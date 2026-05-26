@@ -1,0 +1,39 @@
+// =============================================================
+//  CinePRO — Configurações
+//  Preencha as chaves abaixo antes de distribuir o plugin
+// =============================================================
+
+const CINEPRO_CONFIG = {
+
+  // -- Google Drive --
+  // Crie um projeto em console.cloud.google.com, habilite a Drive API
+  // e gere uma API Key restrita ao domínio do plugin
+  GOOGLE_DRIVE_API_KEY: 'AIzaSyDH8LOHaVtJdWXSc3WjxU-z4JyGhrqYu5o',
+  GOOGLE_DRIVE_FOLDER_ID: '16nWLu5vz2AB9LjuvwNp3vJP57UHBWfEz',
+
+  // -- Firebase --
+  // Crie um projeto em console.firebase.google.com
+  // Ative Authentication (Email/Senha) e Firestore Database
+  FIREBASE: {
+    apiKey: 'AIzaSyAN3Ggu6G4baVygJHWX9XyatfpgeP8rUiE',
+    authDomain: 'cinepro-42971.firebaseapp.com',
+    projectId: 'cinepro-42971',
+    storageBucket: 'cinepro-42971.firebasestorage.app',
+    messagingSenderId: '1049378331282',
+    appId: '1:1049378331282:web:9874f0bf54cda67aa6e44b',
+    measurementId: 'G-DFNKN12C62',
+  },
+
+  // -- Ticto --
+  // URL da sua página de vendas na Ticto
+  TICTO_CHECKOUT_URL: 'https://checkout.ticto.app/O292AD8B4',
+
+  // -- App --
+  PLUGIN_VERSION: '1.0.0',
+
+  // -- Admins (acesso vitalício, ignora assinatura) --
+  // Coloque aqui os emails que sempre terão acesso, mesmo sem comprar
+  ADMIN_EMAILS: [
+    'thales.rioss@gmail.com',
+  ],
+};

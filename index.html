@@ -107,18 +107,26 @@
     </div>
   </div>
 
-  <!-- CATEGORY TABS (geradas pelo JS) -->
-  <div class="category-tabs" id="category-tabs"></div>
+  <!-- LAYOUT: SIDEBAR + GRID -->
+  <div class="layout-split">
 
-  <!-- EFFECTS GRID -->
-  <div class="effects-container" id="effects-container">
-    <div class="effects-grid" id="effects-grid">
-      <!-- Skeletons enquanto carrega -->
-      <div class="skeleton skeleton-card"></div>
-      <div class="skeleton skeleton-card"></div>
-      <div class="skeleton skeleton-card"></div>
-      <div class="skeleton skeleton-card"></div>
+    <!-- SIDEBAR — árvore de pastas (gerada pelo JS) -->
+    <aside class="sidebar" id="sidebar">
+      <div class="sidebar-inner" id="sidebar-tree">
+        <div class="sidebar-skeleton">Carregando categorias...</div>
+      </div>
+    </aside>
+
+    <!-- EFFECTS GRID -->
+    <div class="effects-container" id="effects-container">
+      <div class="effects-grid" id="effects-grid">
+        <div class="skeleton skeleton-card"></div>
+        <div class="skeleton skeleton-card"></div>
+        <div class="skeleton skeleton-card"></div>
+        <div class="skeleton skeleton-card"></div>
+      </div>
     </div>
+
   </div>
 
   <!-- STATUS BAR -->
@@ -132,18 +140,7 @@
 <!-- TOAST -->
 <div class="toast" id="toast"></div>
 
-<!-- MODAL PREVIEW -->
-<div class="preview-modal" id="preview-modal">
-  <div class="preview-backdrop" id="preview-backdrop"></div>
-  <div class="preview-box">
-    <button class="preview-close" id="preview-close" title="Fechar">✕</button>
-    <div class="preview-media" id="preview-media"></div>
-    <div class="preview-info">
-      <div class="preview-name" id="preview-name"></div>
-      <div class="preview-meta" id="preview-meta"></div>
-    </div>
-  </div>
-</div>
+<!-- (modal preview removido — preview agora é inline no card) -->
 
 </body>
 </html>

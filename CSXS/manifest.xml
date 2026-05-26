@@ -40,12 +40,12 @@
                     </Icons>
                     <Geometry>
                         <Size>
-                            <Height>600</Height>
-                            <Width>320</Width>
+                            <Height>720</Height>
+                            <Width>520</Width>
                         </Size>
                         <MinSize>
-                            <Height>400</Height>
-                            <Width>280</Width>
+                            <Height>500</Height>
+                            <Width>460</Width>
                         </MinSize>
                     </Geometry>
                 </UI>

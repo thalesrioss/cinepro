@@ -3,15 +3,19 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta name="description" content="CinePRO — pack profissional de efeitos para Adobe Premiere Pro. SFX, transições, LUTs, presets prontos pra arrastar na timeline.">
-  <meta property="og:title" content="CinePRO — Editing Even Faster">
-  <meta property="og:description" content="Pack de efeitos profissionais para Adobe Premiere Pro. 12.000+ assets prontos pra usar.">
+  <meta name="description" content="O CinePRO Plugin agora roda DENTRO do Adobe Premiere Pro. 12.000+ assets, busca em tempo real, drag-and-drop em 1 clique.">
+  <meta property="og:title" content="CinePRO Plugin — O Premiere vira cinema em 1 clique">
+  <meta property="og:description" content="Painel oficial CinePRO dentro do Adobe Premiere Pro. 12.000+ assets profissionais.">
   <meta property="og:image" content="assets/banner.jpg">
-  <meta property="og:type" content="website">
-  <title>CinePRO — Editing Even Faster</title>
+  <title>CinePRO Plugin — Edição ainda mais rápida</title>
   <link rel="icon" type="image/png" href="assets/logo.png">
   <link rel="stylesheet" href="css/tokens.css">
   <link rel="stylesheet" href="css/lp.css">
+
+  <!-- Firebase pra criar conta direto na LP -->
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+  <script src="js/config.js"></script>
   <script src="js/lp.js" defer></script>
 </head>
 <body>
@@ -21,160 +25,345 @@
   <a href="#" class="nav-brand">
     <img src="assets/logo.png" alt="" width="32" height="32">
     <span>Cine<strong>PRO</strong></span>
+    <small>Plugin · Premiere Pro</small>
   </a>
-  <div class="nav-links">
-    <a href="#features">Recursos</a>
-    <a href="#how">Como funciona</a>
-    <a href="#pricing">Assinar</a>
+  <div class="nav-actions">
+    <span class="nav-price">R$ 29,97/mês · 3 dias grátis</span>
+    <a href="#signup" class="btn btn--primary">Criar conta + baixar</a>
   </div>
 </nav>
 
 <!-- ══════════ HERO ══════════ -->
 <header class="hero">
   <div class="hero-bg" aria-hidden="true"></div>
+  <div class="container">
 
-  <div class="hero-content">
-    <div class="hero-eyebrow">🎁 3 dias grátis · R$ 29,97/mês</div>
+    <div class="hero-pill">
+      <span class="dot"></span>
+      Plugin oficial · Adobe Premiere Pro · 2026
+    </div>
+
     <h1 class="hero-title">
-      Edição<br>
-      <span class="brand-gradient">ainda mais rápida.</span>
+      1 clique.<br>
+      <span class="alt">O Premiere</span> vira <span class="brand-gradient">cinema.</span>
     </h1>
+
     <p class="hero-subtitle">
-      Pack completo de efeitos profissionais pro Adobe Premiere Pro. <br>
-      <strong>12.000+ assets</strong> — SFX, transições, LUTs e presets — prontos pra arrastar na timeline.
+      LUTs cinematográficos, transições e sound FX
+      <strong>dentro do teu Adobe Premiere Pro</strong>.
+      Busca em tempo real, preview ao vivo, drag-and-drop em 1 clique.
     </p>
 
-    <!-- DOWNLOAD CTAs — preenchidos via JS conforme SO detectado -->
-    <div class="hero-cta" id="hero-cta">
-      <button class="btn btn--primary-gradient btn--xl" id="btn-download-primary" data-os="auto">
-        <span class="btn-download-icon" id="btn-download-icon">⬇</span>
-        <span class="btn-download-label" id="btn-download-label">Baixar CinePRO</span>
-      </button>
-      <button class="btn btn--ghost btn--xl" id="btn-download-secondary">
-        <span id="btn-download-secondary-label">Outra plataforma</span>
-      </button>
+    <div class="hero-cta">
+      <a href="#signup" class="btn btn--primary-gradient btn--xl">
+        Criar conta + baixar
+      </a>
+      <a href="#features" class="btn btn--ghost btn--xl">
+        Ver o que tem dentro ↓
+      </a>
     </div>
 
-    <div class="hero-meta" id="hero-meta">
-      Detectando seu sistema...
+    <div class="hero-trust">
+      <span>3 dias grátis</span>
+      <span>Cancele quando quiser</span>
+      <span>Sem fidelidade</span>
+      <span>Mac + Windows</span>
     </div>
-  </div>
 
-  <div class="hero-banner">
-    <img src="assets/banner.jpg" alt="Editing Even Faster — CinePRO" loading="lazy">
+    <!-- ── MOCK do painel CinePRO dentro do Premiere ── -->
+    <div class="hero-demo">
+      <div class="hero-demo-bar">
+        <span class="b-dot r"></span>
+        <span class="b-dot y"></span>
+        <span class="b-dot g"></span>
+        <span class="b-title">Adobe Premiere Pro · CinePRO Plugin</span>
+      </div>
+      <div class="hero-demo-body">
+        <aside class="demo-panel">
+          <div class="demo-panel-title">● CinePRO · Painel</div>
+          <div class="demo-search">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+            <span class="demo-search-text">buscar "whoosh"...</span>
+          </div>
+          <div class="demo-tags">
+            <span class="demo-tag active">Todos</span>
+            <span class="demo-tag">★ Favoritos</span>
+            <span class="demo-tag">SFX</span>
+            <span class="demo-tag">LUTs</span>
+          </div>
+          <div class="demo-assets">
+            <div class="demo-asset gold"><span>LUT 01</span></div>
+            <div class="demo-asset blue"><span>SFX 02</span></div>
+            <div class="demo-asset red"><span>BURN</span></div>
+            <div class="demo-asset green"><span>GRAIN</span></div>
+            <div class="demo-asset"><span>WIPE</span></div>
+            <div class="demo-asset gold"><span>LUT 02</span></div>
+          </div>
+        </aside>
+        <div class="demo-canvas">
+          <div class="demo-canvas-img"><span>PREVIEW · TIMELINE</span></div>
+          <div class="demo-timeline">
+            <div class="demo-track">
+              <div class="clip"></div>
+              <div class="clip t2"></div>
+            </div>
+            <div class="demo-track">
+              <div class="clip" style="background: linear-gradient(90deg, var(--brand-deep), var(--brand)); width: 18%; left: 8%;"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
   </div>
 </header>
+
+<!-- ══════════ METRICS ══════════ -->
+<section class="metrics">
+  <div class="container">
+    <div class="metrics-grid">
+      <div>
+        <div class="metric-num">1 clique</div>
+        <div class="metric-label">aplicar efeito</div>
+      </div>
+      <div>
+        <div class="metric-num">12k+</div>
+        <div class="metric-label">arquivos no painel</div>
+      </div>
+      <div>
+        <div class="metric-num">3 dias</div>
+        <div class="metric-label">grátis pra testar</div>
+      </div>
+      <div>
+        <div class="metric-num">∞</div>
+        <div class="metric-label">updates inclusos</div>
+      </div>
+    </div>
+  </div>
+</section>
 
 <!-- ══════════ FEATURES ══════════ -->
 <section class="features" id="features">
   <div class="container">
     <div class="section-header">
-      <div class="section-eyebrow">● Recursos</div>
-      <h2 class="section-title">Tudo que você precisa pra editar mais rápido</h2>
+      <div class="section-eyebrow">● O que tem dentro</div>
+      <h2 class="section-title">Painel. Busca. Preview. Aplica.</h2>
     </div>
 
     <div class="features-grid">
       <div class="feature-card">
         <div class="feature-icon">🎬</div>
-        <h3>Drag-and-drop na timeline</h3>
-        <p>Arraste qualquer efeito direto na sua sequência. Sem importar, sem configurar.</p>
+        <h3>Painel nativo no Premiere</h3>
+        <p>Instala uma vez, vira janela permanente do seu workspace. Sem alternar entre apps.</p>
       </div>
-
       <div class="feature-card">
-        <div class="feature-icon">🎵</div>
-        <h3>12.000+ SFX e trilhas</h3>
-        <p>Impactos, whooshes, ambientes, cyberpunk, vintage, foley. Categorizado pra você achar rápido.</p>
+        <div class="feature-icon">↗</div>
+        <h3>Drag-and-drop de 1 clique</h3>
+        <p>Arrastou o efeito, soltou na timeline. Aplica direto. Sem caminho de pasta.</p>
       </div>
-
       <div class="feature-card">
-        <div class="feature-icon">🎨</div>
-        <h3>LUTs profissionais</h3>
-        <p>Color grading instantâneo. Aplica direto no Lumetri Color do Premiere.</p>
+        <div class="feature-icon">⌕</div>
+        <h3>Busca em tempo real</h3>
+        <p>Digita "whoosh", filtra. Tags inteligentes pra você não memorizar nome de arquivo.</p>
       </div>
-
       <div class="feature-card">
-        <div class="feature-icon">✨</div>
-        <h3>Presets de efeito</h3>
-        <p>Suas combinações favoritas de blur, glow, glitch e mais — um clique e tá aplicado.</p>
+        <div class="feature-icon">▷</div>
+        <h3>Preview antes de aplicar</h3>
+        <p>Clique no asset, ouve o sound ou vê o LUT. Decide antes — não depois.</p>
       </div>
-
-      <div class="feature-card">
-        <div class="feature-icon">⚡</div>
-        <h3>Cache inteligente</h3>
-        <p>Arquivos baixados ficam no seu Mac/PC pra sempre. Re-uso é instantâneo.</p>
-      </div>
-
       <div class="feature-card">
         <div class="feature-icon">⭐</div>
         <h3>Favoritos personalizados</h3>
-        <p>Marque seus efeitos mais usados com uma estrela e acesse na aba de favoritos.</p>
+        <p>Marque os efeitos mais usados. Aba dedicada pra acessar em 1 clique.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">💾</div>
+        <h3>Cache offline persistente</h3>
+        <p>Arquivos baixados ficam no seu PC pra sempre. Re-uso instantâneo, sem internet.</p>
       </div>
     </div>
   </div>
 </section>
 
-<!-- ══════════ HOW IT WORKS ══════════ -->
-<section class="how" id="how">
+<!-- ══════════ LIBRARY ══════════ -->
+<section class="library">
   <div class="container">
     <div class="section-header">
-      <div class="section-eyebrow">● Como funciona</div>
-      <h2 class="section-title">Em 3 passos, na sua timeline</h2>
+      <div class="section-eyebrow">● Dentro da biblioteca</div>
+      <h2 class="section-title">12.000 arquivos.<br>6 categorias. A 1 clique.</h2>
     </div>
 
-    <div class="how-steps">
-      <div class="how-step">
-        <div class="how-step-num">1</div>
-        <h3>Baixe o instalador</h3>
-        <p>Único arquivo de instalação. Coloca tudo no lugar certo automaticamente.</p>
+    <div class="library-grid">
+      <div class="library-card">
+        <div class="library-thumb gold"><span class="library-icon">🎨</span></div>
+        <div class="library-meta">
+          <div class="library-num">01 · PRESETS PRO PACK</div>
+          <div class="library-name">Combinações prontas</div>
+          <div class="library-desc">Presets de efeito Premiere — blur, glow, glitch, color grade.</div>
+        </div>
       </div>
-
-      <div class="how-step">
-        <div class="how-step-num">2</div>
-        <h3>Abra o Premiere</h3>
-        <p>Janela → Extensões → CinePRO. Faça login com sua conta.</p>
+      <div class="library-card">
+        <div class="library-thumb purple"><span class="library-icon">🖼</span></div>
+        <div class="library-meta">
+          <div class="library-num">02 · VISUAL DESIGN</div>
+          <div class="library-name">Overlays, transições, LUTs</div>
+          <div class="library-desc">1.625+ arquivos. Lens flare, frames film antigo, GIFs, MORGS PRO.</div>
+        </div>
       </div>
-
-      <div class="how-step">
-        <div class="how-step-num">3</div>
-        <h3>Arraste pra timeline</h3>
-        <p>Escolha, arraste, edite. Sem fricção entre você e seu próximo vídeo.</p>
+      <div class="library-card">
+        <div class="library-thumb cyan"><span class="library-icon">🎵</span></div>
+        <div class="library-meta">
+          <div class="library-num">03 · SOUND DESIGN</div>
+          <div class="library-name">SFX e trilhas premium</div>
+          <div class="library-desc">8.946 arquivos. SFX, CINE PLUS PACK, AFTER PARTY, PLAYLIST.</div>
+        </div>
+      </div>
+      <div class="library-card">
+        <div class="library-thumb red"><span class="library-icon">👁</span></div>
+        <div class="library-meta">
+          <div class="library-num">04 · OCULAR SOUNDS</div>
+          <div class="library-name">Som cinematográfico</div>
+          <div class="library-desc">1.484 arquivos. Utility, Velocity, Shift, Momentum, Aperture.</div>
+        </div>
+      </div>
+      <div class="library-card">
+        <div class="library-thumb green"><span class="library-icon">🎬</span></div>
+        <div class="library-meta">
+          <div class="library-num">05 · MISTER HORSE</div>
+          <div class="library-name">Previews oficiais</div>
+          <div class="library-desc">Visualize antes de aplicar. Packs profissionais.</div>
+        </div>
+      </div>
+      <div class="library-card">
+        <div class="library-thumb blue"><span class="library-icon">✨</span></div>
+        <div class="library-meta">
+          <div class="library-num">06 · ATUALIZAÇÕES</div>
+          <div class="library-name">Sempre crescendo</div>
+          <div class="library-desc">Asset novo entra todo mês. Sem download, sem importar.</div>
+        </div>
       </div>
     </div>
   </div>
 </section>
 
-<!-- ══════════ PRICING / CTA ══════════ -->
-<section class="pricing" id="pricing">
+<!-- ══════════ COMPARISON ══════════ -->
+<section class="compare-section">
   <div class="container">
-    <div class="pricing-card">
+    <div class="section-header">
+      <div class="section-eyebrow">● Por que plugin nativo</div>
+      <h2 class="section-title">Você não precisa de mais arquivo.<br>Precisa de menos fricção.</h2>
+    </div>
 
-      <div class="pricing-badge">🎁 3 dias grátis pra testar</div>
+    <div class="compare">
+      <div class="compare-col bad">
+        <h4>Sem o CinePRO</h4>
+        <ul class="compare-list">
+          <li>2 a 3 horas por vídeo</li>
+          <li>Procurar LUT no Google e baixar avulso</li>
+          <li>Importar pro Premiere manualmente</li>
+          <li>Sem saber se a cor vai ficar boa até aplicar</li>
+          <li>Sound FX de YouTube com qualidade ruim</li>
+          <li>Sem organização, sem favoritos, sem busca</li>
+        </ul>
+      </div>
+      <div class="compare-col good">
+        <h4>Com o CinePRO Plugin</h4>
+        <ul class="compare-list">
+          <li>15 minutos por vídeo</li>
+          <li>Busca dentro do painel — digita e acha</li>
+          <li>Drag-and-drop direto no clipe</li>
+          <li>Preview ao vivo antes de aplicar</li>
+          <li>Tudo testado em projeto premium real</li>
+          <li>Favoritos, tags e cache offline</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</section>
 
-      <div class="pricing-eyebrow">● Assinatura mensal</div>
-      <h2>Acesso ilimitado a tudo</h2>
+<!-- ══════════ SIGNUP + DOWNLOAD ══════════ -->
+<section class="signup-section" id="signup">
+  <div class="container">
+    <div class="section-header">
+      <div class="section-eyebrow">● Criar conta + baixar</div>
+      <h2 class="section-title">Crie sua conta. Baixe o app.<br>Começa o trial grátis dentro dele.</h2>
+      <p class="lead">
+        A LP só cria sua conta e te dá o instalador. A assinatura você fecha <strong>dentro do app</strong>,
+        com 3 dias grátis e cancelamento online.
+      </p>
+    </div>
 
-      <div class="pricing-price">
-        <span class="pricing-currency">R$</span>
-        <span class="pricing-amount">29</span><span class="pricing-cents">,97</span>
-        <span class="pricing-period">/mês</span>
+    <div class="signup-grid">
+
+      <!-- FORM -->
+      <div class="signup-form">
+        <div class="signup-form-header">
+          <div class="signup-form-num">01</div>
+          <h3>Cria sua conta</h3>
+        </div>
+        <p class="signup-form-desc">Use esse mesmo email/senha pra entrar no app depois.</p>
+
+        <form id="signup-form">
+          <div class="input-group">
+            <label>E-mail</label>
+            <input type="email" id="signup-email" placeholder="seu@email.com" autocomplete="email" required>
+          </div>
+          <div class="input-group">
+            <label>Senha (mínimo 6 caracteres)</label>
+            <input type="password" id="signup-password" placeholder="••••••••" autocomplete="new-password" minlength="6" required>
+          </div>
+
+          <div class="signup-error" id="signup-error"></div>
+          <div class="signup-success" id="signup-success"></div>
+
+          <button type="submit" id="signup-submit" class="btn btn--primary-gradient btn--xl btn--block">
+            Criar conta
+          </button>
+
+          <p class="signup-note">
+            Já tem conta? <a href="#" id="signup-skip">Pular pra download →</a>
+          </p>
+        </form>
       </div>
 
-      <p class="pricing-trial-text">
-        Comece com <strong>3 dias grátis</strong>.<br>
-        Cancele quando quiser, sem multa.
-      </p>
+      <!-- DOWNLOAD -->
+      <div class="signup-download" id="signup-download">
+        <div class="signup-form-header">
+          <div class="signup-form-num">02</div>
+          <h3>Baixa o instalador</h3>
+        </div>
+        <p class="signup-form-desc">Detectamos seu sistema. <span id="os-detect">Carregando...</span></p>
 
-      <a href="https://checkout.ticto.app/O292AD8B4" class="btn btn--primary-gradient btn--xl" id="btn-subscribe">
-        Começar trial grátis
-      </a>
+        <div class="download-buttons">
+          <a href="#" id="btn-download-mac" class="btn btn--soft btn--xl btn--block download-btn">
+            <span class="download-icon">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M17.05 20.28c-.98.95-2.05.8-3.08.35-1.09-.46-2.09-.48-3.24 0-1.44.62-2.2.44-3.06-.35C2.79 15.25 3.51 7.59 9.05 7.31c1.35.07 2.29.74 3.08.8 1.18-.24 2.31-.93 3.57-.84 1.51.12 2.65.72 3.4 1.8-3.12 1.87-2.38 5.98.48 7.13-.57 1.5-1.31 2.99-2.53 4.08zM12 7.25c-.15-2.23 1.66-4.07 3.74-4.25.29 2.58-2.34 4.5-3.74 4.25z"/></svg>
+            </span>
+            <span class="download-text">
+              <strong>Baixar pra Mac</strong>
+              <small>.pkg · 93 MB · macOS 10.14+</small>
+            </span>
+          </a>
 
-      <div class="pricing-features">
-        <div>✓ 12.000+ efeitos</div>
-        <div>✓ Mac + Windows</div>
-        <div>✓ Atualizações inclusas</div>
-        <div>✓ Cache offline ilimitado</div>
-        <div>✓ Suporte por e-mail</div>
-        <div>✓ Cancelamento fácil</div>
+          <a href="#" id="btn-download-win" class="btn btn--soft btn--xl btn--block download-btn">
+            <span class="download-icon">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M2 12V6.59l8.5-1.13v6.45H2zm0 6.41V12.62h8.5v6.39L2 18.41zM11.05 12V5.32L22 4v8H11.05zm0 7.32V12.62H22V20l-10.95-.68z"/></svg>
+            </span>
+            <span class="download-text">
+              <strong>Baixar pra Windows</strong>
+              <small>.exe · ~90 MB · Windows 10+</small>
+            </span>
+          </a>
+        </div>
+
+        <div class="signup-next">
+          <strong>Próximo passo:</strong>
+          <ol>
+            <li>Instale o app no seu PC</li>
+            <li>Abra o CinePRO e faça login</li>
+            <li>Comece o trial de <strong>3 dias grátis</strong></li>
+          </ol>
+        </div>
       </div>
 
     </div>
@@ -191,33 +380,33 @@
 
     <div class="faq-list">
       <details class="faq-item">
+        <summary>Por que criar a conta antes de baixar?</summary>
+        <p>Pra você usar a mesma conta no app depois. O instalador é leve (~93 MB) — os efeitos baixam só quando você usa. Sem cobrar nada pra criar a conta.</p>
+      </details>
+
+      <details class="faq-item">
         <summary>Como funciona o trial grátis de 3 dias?</summary>
-        <p>Você cadastra seu cartão, mas não paga nada nos primeiros 3 dias. Se cancelar antes desse prazo, não tem cobrança. Se gostar, deixa rolar — depois é R$ 29,97/mês.</p>
+        <p>Você cria a conta aqui, baixa o app, e dentro dele clica em "Começar trial". Cadastra o cartão mas não paga nada nos primeiros 3 dias. Cancelou antes de 3 dias = zero cobrança.</p>
+      </details>
+
+      <details class="faq-item">
+        <summary>O que vem no painel?</summary>
+        <p>12.000+ arquivos divididos em 6 categorias: Presets PRO Pack, Visual Design (overlays, LUTs, transições), Sound Design (SFX, trilhas), Ocular Sounds, Mister Horse Previews.</p>
       </details>
 
       <details class="faq-item">
         <summary>Quais versões do Premiere são suportadas?</summary>
-        <p>Adobe Premiere Pro 2019 em diante (CC 13.0+), tanto Mac quanto Windows. Funciona com Apple Silicon (M1/M2/M3) nativamente.</p>
+        <p>Adobe Premiere Pro 2019 em diante (CC 13.0+), Mac e Windows. Funciona com Apple Silicon nativamente.</p>
       </details>
 
       <details class="faq-item">
         <summary>Posso usar os efeitos em vídeos comerciais?</summary>
-        <p>Sim. A licença cobre uso pessoal e comercial. Você pode usar em qualquer projeto (clientes, YouTube monetizado, anúncios, etc.).</p>
+        <p>Sim. A licença cobre uso pessoal e comercial. Pode usar em projeto de cliente, YouTube monetizado, anúncios.</p>
       </details>
 
       <details class="faq-item">
         <summary>Como cancelo a assinatura?</summary>
-        <p>Pelo app CinePRO no seu computador (Dashboard → Gerenciar assinatura) ou direto no painel da Ticto. Sem ligação, sem burocracia.</p>
-      </details>
-
-      <details class="faq-item">
-        <summary>Os efeitos ficam no meu computador?</summary>
-        <p>Sim. Toda vez que você usa um efeito, ele baixa pra uma pasta local (~/Library/Application Support/CinePRO/cache). Re-uso é instantâneo, sem internet.</p>
-      </details>
-
-      <details class="faq-item">
-        <summary>Se eu cancelar, perco o que já baixei?</summary>
-        <p>O acesso aos novos efeitos é revogado, mas os arquivos que já estão no seu computador continuam lá. Você só não consegue baixar mais.</p>
+        <p>Pelo app CinePRO no seu computador (Dashboard → Gerenciar assinatura) ou direto no painel da Ticto. Sem ligação.</p>
       </details>
     </div>
   </div>

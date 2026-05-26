@@ -1,24 +1,44 @@
 // =============================================================
-//  CinePRO Landing Page — Detecção de SO + CTAs
+//  CinePRO Landing Page — Signup + Download
 // =============================================================
 
-// IMPORTANTE: troque essas URLs depois de criar os Releases no GitHub
-// Formato típico: https://github.com/SEU_USUARIO/cinepro/releases/latest/download/CinePRO-x.y.z.pkg
+// Links reais do GitHub Releases — atualiza quando subir versão nova
 var DOWNLOADS = {
-  mac:     'https://github.com/SEU_USUARIO/cinepro/releases/latest/download/CinePRO.pkg',
-  windows: 'https://github.com/SEU_USUARIO/cinepro/releases/latest/download/CinePRO-Setup.exe',
+  mac:     'https://github.com/thalesrioss/cinepro/releases/latest/download/CinePRO-1.0.0.pkg',
+  windows: 'https://github.com/thalesrioss/cinepro/releases/latest/download/CinePRO-1.0.0-Setup.exe',
 };
 
+var auth = null;
+
 document.addEventListener('DOMContentLoaded', function () {
-  detectOSAndRenderCTAs();
+  initFirebase();
+  setupDownloads();
+  setupSignupForm();
   document.getElementById('year').textContent = new Date().getFullYear();
 });
 
-function detectOSAndRenderCTAs() {
-  var ua = navigator.userAgent;
-  var os = 'unknown';
+// ──────── Firebase ────────
 
-  if (/Mac|iPhone|iPad/.test(ua) || navigator.platform.indexOf('Mac') !== -1) {
+function initFirebase() {
+  try {
+    if (typeof firebase === 'undefined') {
+      console.warn('[CinePRO LP] Firebase SDK não carregou');
+      return;
+    }
+    firebase.initializeApp(CINEPRO_CONFIG.FIREBASE);
+    auth = firebase.auth();
+  } catch (e) {
+    console.error('[CinePRO LP] init Firebase falhou:', e);
+  }
+}
+
+// ──────── OS Detection + Download URLs ────────
+
+function setupDownloads() {
+  var ua = navigator.userAgent;
+  var os = 'mac';  // padrão otimista
+
+  if (/Mac|iPhone|iPad/.test(ua) || (navigator.platform || '').indexOf('Mac') !== -1) {
     os = 'mac';
   } else if (/Win/.test(ua) || /Windows/.test(ua)) {
     os = 'windows';
@@ -26,36 +46,114 @@ function detectOSAndRenderCTAs() {
     os = 'linux';
   }
 
-  var primaryBtn   = document.getElementById('btn-download-primary');
-  var primaryIcon  = document.getElementById('btn-download-icon');
-  var primaryLabel = document.getElementById('btn-download-label');
-  var secondaryBtn = document.getElementById('btn-download-secondary');
-  var secondaryLbl = document.getElementById('btn-download-secondary-label');
-  var meta         = document.getElementById('hero-meta');
-
-  function setupAsLink(btn, url, target) {
-    btn.onclick = function () { window.open(url, target || '_self'); };
+  // Atualiza texto de detecção
+  var osLabel = document.getElementById('os-detect');
+  if (osLabel) {
+    osLabel.textContent = os === 'mac' ? '🍎 Você está no macOS'
+                       : os === 'windows' ? '🪟 Você está no Windows'
+                       : '💻 Disponível pra Mac e Windows';
   }
 
-  if (os === 'mac') {
-    primaryIcon.textContent  = '';  // SVG vai substituir
-    primaryLabel.innerHTML   = '<svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" style="margin-right:4px;vertical-align:-4px;"><path d="M17.05 20.28c-.98.95-2.05.8-3.08.35-1.09-.46-2.09-.48-3.24 0-1.44.62-2.2.44-3.06-.35C2.79 15.25 3.51 7.59 9.05 7.31c1.35.07 2.29.74 3.08.8 1.18-.24 2.31-.93 3.57-.84 1.51.12 2.65.72 3.4 1.8-3.12 1.87-2.38 5.98.48 7.13-.57 1.5-1.31 2.99-2.53 4.08zM12 7.25c-.15-2.23 1.66-4.07 3.74-4.25.29 2.58-2.34 4.5-3.74 4.25z"/></svg>Baixar pra Mac';
-    setupAsLink(primaryBtn, DOWNLOADS.mac);
-    secondaryLbl.innerHTML   = 'Tem Windows? Clique aqui';
-    setupAsLink(secondaryBtn, DOWNLOADS.windows);
-    meta.innerHTML = '🍎 Detectamos macOS · 93 MB · Compatível com Premiere 2019+';
-  } else if (os === 'windows') {
-    primaryIcon.textContent  = '';
-    primaryLabel.innerHTML   = '<svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" style="margin-right:4px;vertical-align:-4px;"><path d="M2 12V6.59l8.5-1.13v6.45H2zm0 6.41V12.62h8.5v6.39L2 18.41zM11.05 12V5.32L22 4v8H11.05zm0 7.32V12.62H22V20l-10.95-.68z"/></svg>Baixar pra Windows';
-    setupAsLink(primaryBtn, DOWNLOADS.windows);
-    secondaryLbl.innerHTML   = 'Tem Mac? Clique aqui';
-    setupAsLink(secondaryBtn, DOWNLOADS.mac);
-    meta.innerHTML = '🪟 Detectamos Windows · ~90 MB · Compatível com Premiere 2019+';
-  } else {
-    primaryLabel.textContent = 'Baixar pra Mac';
-    setupAsLink(primaryBtn, DOWNLOADS.mac);
-    secondaryLbl.textContent = 'Baixar pra Windows';
-    setupAsLink(secondaryBtn, DOWNLOADS.windows);
-    meta.innerHTML = 'O CinePRO funciona no macOS e Windows';
+  // Atribui URLs reais nos botões
+  var macBtn = document.getElementById('btn-download-mac');
+  var winBtn = document.getElementById('btn-download-win');
+  if (macBtn) macBtn.href = DOWNLOADS.mac;
+  if (winBtn) winBtn.href = DOWNLOADS.windows;
+
+  // Destaca o botão do SO detectado
+  if (os === 'mac' && macBtn) {
+    macBtn.classList.add('is-detected');
+  } else if (os === 'windows' && winBtn) {
+    winBtn.classList.add('is-detected');
   }
+}
+
+// ──────── Signup form ────────
+
+function setupSignupForm() {
+  var form    = document.getElementById('signup-form');
+  var skipBtn = document.getElementById('signup-skip');
+  var dlBlock = document.getElementById('signup-download');
+
+  if (!form) return;
+
+  form.addEventListener('submit', function (e) {
+    e.preventDefault();
+    doSignup();
+  });
+
+  skipBtn.addEventListener('click', function (e) {
+    e.preventDefault();
+    revealDownloads('Bom retorno! Baixa agora →');
+  });
+}
+
+function doSignup() {
+  var email   = document.getElementById('signup-email').value.trim().toLowerCase();
+  var pass    = document.getElementById('signup-password').value;
+  var err     = document.getElementById('signup-error');
+  var success = document.getElementById('signup-success');
+  var btn     = document.getElementById('signup-submit');
+
+  err.textContent = '';
+  err.classList.remove('visible');
+  success.classList.remove('visible');
+
+  if (!email || !pass || pass.length < 6) {
+    err.textContent = 'Preencha email válido e senha de pelo menos 6 caracteres.';
+    err.classList.add('visible');
+    return;
+  }
+  if (!auth) {
+    // Sem Firebase, segue direto pro download (degrada bem)
+    revealDownloads('Pronto! Baixa o instalador agora →');
+    return;
+  }
+
+  btn.disabled = true;
+  btn.textContent = 'Criando conta...';
+
+  auth.createUserWithEmailAndPassword(email, pass)
+    .then(function (cred) {
+      // Sucesso — conta criada
+      revealDownloads('Conta criada! Use ' + email + ' pra logar no app.');
+    })
+    .catch(function (e) {
+      var code = e.code || '';
+      if (code === 'auth/email-already-in-use') {
+        // Usuário já existe — tentar login pra validar a senha
+        return auth.signInWithEmailAndPassword(email, pass)
+          .then(function () {
+            revealDownloads('Bem-vindo de volta! Baixa o instalador →');
+          })
+          .catch(function () {
+            err.textContent = 'Esse email já tem conta. Use a senha original ou outro email.';
+            err.classList.add('visible');
+            btn.disabled = false;
+            btn.textContent = 'Criar conta';
+          });
+      }
+      if (code === 'auth/invalid-email') err.textContent = 'Email inválido.';
+      else if (code === 'auth/weak-password') err.textContent = 'Senha muito fraca. Use ao menos 6 caracteres.';
+      else err.textContent = e.message || 'Falha ao criar conta. Tente de novo.';
+      err.classList.add('visible');
+      btn.disabled = false;
+      btn.textContent = 'Criar conta';
+    });
+}
+
+function revealDownloads(message) {
+  var success = document.getElementById('signup-success');
+  var dlBlock = document.getElementById('signup-download');
+  var form    = document.getElementById('signup-form');
+
+  success.textContent = '✓ ' + message;
+  success.classList.add('visible');
+
+  dlBlock.classList.add('unlocked');
+
+  // Scroll suave pra o bloco de download
+  setTimeout(function () {
+    dlBlock.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }, 200);
 }

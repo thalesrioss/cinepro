@@ -19,7 +19,6 @@ document.addEventListener('DOMContentLoaded', function () {
   initFirebase();
   bindLoginUI();
   bindAppUI();
-  bindPreviewModal();
   hydrateCacheFromDisk();
 });
 
@@ -438,42 +437,141 @@ function driveFileToEffect(driveFile, category, subcategory, path) {
   };
 }
 
-// ══ CATEGORIES ════════════════════════════════════════════════
+// ══ SIDEBAR (folder tree estilo Mister Horse) ═══════════════════
 
-function buildCategoryTabs() {
-  // Categorias vêm de driveCategories (descobertas no boot), não de allEffects (que pode tá vazio até lazy load)
-  var cats = ['all', 'favorites'].concat(driveCategories.map(function (c) { return c.name; }));
+// Estado: { categoryName: true } — pastas abertas (expanded)
+var sidebarExpanded = { '_all': true, '_favorites': true };
 
-  var container = document.getElementById('category-tabs');
-  container.innerHTML = '';
+// Filtro adicional pra subcategoria selecionada (ex: "VISUAL DESIGN / Overlay")
+var activeSubcategory = null;
 
-  cats.forEach(function (cat) {
-    var btn = document.createElement('button');
-    btn.className = 'tab-btn' + (cat === activeCategory ? ' active' : '') + (cat === 'favorites' ? ' tab-favorites' : '');
-    var label = cat === 'all'        ? 'Todos'
-              : cat === 'favorites'  ? '★ Favoritos'
-              :                        cat;
-    var n = cat === 'all'       ? allEffects.length
-          : cat === 'favorites' ? getFavoriteIds().length
-          :                       allEffects.filter(function(e){return e.category===cat;}).length;
-    btn.innerHTML = label + ' <span class="tab-count">' + n + '</span>';
-    btn.dataset.cat = cat;
-    btn.addEventListener('click', function () {
-      activeCategory = cat;
-      document.querySelectorAll('.tab-btn').forEach(function (b) { b.classList.remove('active'); });
-      btn.classList.add('active');
+function buildCategoryTabs() {  // mantém nome pra evitar quebra externa
+  buildSidebarTree();
+}
 
-      // Lazy load: se for categoria do Drive e ainda não carregou, busca agora
-      var needsLoad = cat !== 'all' && cat !== 'favorites' && !driveLoadedCats[cat];
-      var ready = needsLoad ? loadCategoryDeep(cat) : Promise.resolve();
+function buildSidebarTree() {
+  var tree = document.getElementById('sidebar-tree');
+  if (!tree) return;
+  tree.innerHTML = '';
 
-      ready.then(function () {
-        var search = document.getElementById('search-input').value.trim().toLowerCase();
-        filterEffects(search);
-      });
+  // ─ Item "Todos" ─
+  tree.appendChild(makeSidebarItem({
+    label: 'Todos',
+    icon: '▦',
+    isActive: activeCategory === 'all' && !activeSubcategory,
+    onClick: function () {
+      setActiveCategory('all', null);
+    },
+    count: allEffects.length,
+  }));
+
+  // ─ Item "Favoritos" ─
+  tree.appendChild(makeSidebarItem({
+    label: 'Favoritos',
+    icon: '★',
+    isFav: true,
+    isActive: activeCategory === 'favorites' && !activeSubcategory,
+    onClick: function () {
+      setActiveCategory('favorites', null);
+    },
+    count: getFavoriteIds().length,
+  }));
+
+  // ─ Separador ─
+  var sep = document.createElement('div');
+  sep.className = 'sidebar-sep';
+  sep.textContent = 'Categorias';
+  tree.appendChild(sep);
+
+  // ─ Pastas de categorias ─
+  driveCategories.forEach(function (cat) {
+    var isExpanded = !!sidebarExpanded[cat.name];
+    var subs = getSubcategoriesFor(cat.name);
+
+    var item = makeSidebarItem({
+      label:    cat.name,
+      icon:     isExpanded ? '▾' : '▸',
+      isFolder: true,
+      isActive: activeCategory === cat.name && !activeSubcategory,
+      hasChildren: subs.length > 0,
+      onClick: function () {
+        if (!driveLoadedCats[cat.name]) {
+          // Primeiro click: carrega + expande
+          loadCategoryDeep(cat.name).then(function () {
+            sidebarExpanded[cat.name] = true;
+            buildSidebarTree();
+            setActiveCategory(cat.name, null);
+          });
+        } else {
+          // Já carregado: toggle expansão + ativa categoria
+          sidebarExpanded[cat.name] = !sidebarExpanded[cat.name];
+          buildSidebarTree();
+          setActiveCategory(cat.name, null);
+        }
+      },
+      count: cat.loaded
+        ? allEffects.filter(function (e) { return e.category === cat.name; }).length
+        : null,
     });
-    container.appendChild(btn);
+    tree.appendChild(item);
+
+    // ─ Subcategorias (visíveis se a pasta tá expandida) ─
+    if (isExpanded && subs.length) {
+      subs.forEach(function (sub) {
+        tree.appendChild(makeSidebarItem({
+          label: sub.name,
+          icon: '·',
+          isSub: true,
+          isActive: activeCategory === cat.name && activeSubcategory === sub.name,
+          onClick: function () {
+            setActiveCategory(cat.name, sub.name);
+          },
+          count: sub.count,
+        }));
+      });
+    }
   });
+}
+
+function makeSidebarItem(opts) {
+  var btn = document.createElement('button');
+  btn.className = 'sidebar-item'
+    + (opts.isActive   ? ' is-active'   : '')
+    + (opts.isFav      ? ' is-fav'      : '')
+    + (opts.isFolder   ? ' is-folder'   : '')
+    + (opts.isSub      ? ' is-sub'      : '');
+  btn.innerHTML =
+    '<span class="sidebar-icon">' + (opts.icon || '·') + '</span>' +
+    '<span class="sidebar-label">' + opts.label + '</span>' +
+    (opts.count != null
+      ? '<span class="sidebar-count">' + opts.count + '</span>'
+      : '');
+  btn.addEventListener('click', opts.onClick);
+  return btn;
+}
+
+function getSubcategoriesFor(categoryName) {
+  var seen = {};
+  var subs = [];
+  allEffects.forEach(function (e) {
+    if (e.category !== categoryName || !e.subcategory) return;
+    if (!seen[e.subcategory]) {
+      seen[e.subcategory] = 0;
+      subs.push({ name: e.subcategory, count: 0 });
+    }
+    seen[e.subcategory]++;
+  });
+  subs.forEach(function (s) { s.count = seen[s.name]; });
+  return subs.sort(function (a, b) { return a.name.localeCompare(b.name); });
+}
+
+/** Muda categoria/subcategoria ativa e re-renderiza */
+function setActiveCategory(cat, sub) {
+  activeCategory    = cat;
+  activeSubcategory = sub;
+  var search = document.getElementById('search-input').value.trim().toLowerCase();
+  buildSidebarTree();
+  filterEffects(search);
 }
 
 function countByCategory() {
@@ -534,6 +632,10 @@ function filterEffects(query) {
     var inCat = activeCategory === 'all'
               || (activeCategory === 'favorites' && favSet.has(e.id))
               || e.category === activeCategory;
+    // Se há subcategoria ativa, restringe mais
+    if (activeSubcategory) {
+      inCat = inCat && e.subcategory === activeSubcategory;
+    }
     if (!query) return inCat;
     var haystack = (
       e.name + ' ' +
@@ -584,9 +686,38 @@ function renderEffects(effects) {
       grid.appendChild(title);
     }
     groups[label].forEach(function (effect) {
-      grid.appendChild(createEffectCard(effect));
+      var card = createEffectCard(effect);
+      grid.appendChild(card);
+
+      // Pra cards de áudio, dispara geração de waveform lazy (quando entra no viewport)
+      if (effect.kind === 'audio' && card.querySelector('.effect-thumb-placeholder')) {
+        observeForWaveform(card, effect);
+      }
     });
   });
+}
+
+// IntersectionObserver compartilhado pra waveform lazy
+var WAVEFORM_OBSERVER = null;
+function observeForWaveform(card, effect) {
+  if (!('IntersectionObserver' in window)) {
+    requestWaveform(effect, card);
+    return;
+  }
+  if (!WAVEFORM_OBSERVER) {
+    WAVEFORM_OBSERVER = new IntersectionObserver(function (entries) {
+      entries.forEach(function (e) {
+        if (e.isIntersecting) {
+          var c = e.target;
+          var fx = c._cinepro_effect;
+          if (fx) requestWaveform(fx, c);
+          WAVEFORM_OBSERVER.unobserve(c);
+        }
+      });
+    }, { rootMargin: '200px' });
+  }
+  card._cinepro_effect = effect;
+  WAVEFORM_OBSERVER.observe(card);
 }
 
 function renderEmpty(msg) {
@@ -661,24 +792,9 @@ function createEffectCard(effect) {
     card.querySelector('.btn-preview').addEventListener('click', function (e) {
       e.stopPropagation();
       e.preventDefault();
-      openPreview(effect);
-      silentPrefetch(effect, card);  // se o usuário quer ver, provavelmente vai usar
+      togglePlayInline(effect, card);
     });
   }
-
-  // ── PRÉ-CACHE NO HOVER ────────────────────────────────
-  // Se o usuário hover por >600ms, baixa em background.
-  // Evita disparar download em scroll rápido.
-  var hoverTimer = null;
-  card.addEventListener('mouseenter', function () {
-    if (effectCache[effect.id]) return;
-    hoverTimer = setTimeout(function () {
-      silentPrefetch(effect, card);
-    }, 600);
-  });
-  card.addEventListener('mouseleave', function () {
-    if (hoverTimer) { clearTimeout(hoverTimer); hoverTimer = null; }
-  });
 
   // ── DRAG-AND-DROP ────────────────────────────────────
   // CEP só inicia drag externo se chamado SÍNCRONO no mousedown.
@@ -716,58 +832,68 @@ function createEffectCard(effect) {
   return card;
 }
 
-// ══ PREVIEW MODAL ══════════════════════════════════════════════
+// ══ PREVIEW INLINE (sem modal) ══════════════════════════════════
+// Click no ▶ toca o áudio/vídeo direto no card. Click de novo → pausa.
+// Outro card → fecha o anterior automaticamente.
 
-function openPreview(effect) {
-  var modal = document.getElementById('preview-modal');
-  var media = document.getElementById('preview-media');
-  var name  = document.getElementById('preview-name');
-  var meta  = document.getElementById('preview-meta');
+var currentlyPlaying = null;  // referência ao card que tá tocando
 
-  // Limpa qualquer player anterior
-  media.innerHTML = '';
+function togglePlayInline(effect, card) {
+  // Se esse card já tá tocando → pausa
+  if (currentlyPlaying === card) {
+    stopInline(card);
+    return;
+  }
 
-  // URL de stream direto do Drive (mesma usada pra download)
+  // Se outro card tá tocando → para ele
+  if (currentlyPlaying) {
+    stopInline(currentlyPlaying);
+  }
+
   var url = 'https://www.googleapis.com/drive/v3/files/' + effect.id
           + '?alt=media&key=' + CINEPRO_CONFIG.GOOGLE_DRIVE_API_KEY;
 
   if (effect.kind === 'audio') {
-    media.innerHTML =
-      '<div class="preview-audio-wrap">' +
-        '<div class="preview-audio-icon">🎵</div>' +
-        '<audio controls autoplay src="' + url + '"></audio>' +
-      '</div>';
-  } else if (effect.kind === 'video') {
-    media.innerHTML =
-      '<video controls autoplay loop playsinline src="' + url + '"></video>';
-  } else if (effect.kind === 'image') {
-    media.innerHTML =
-      '<img src="' + url + '" alt="' + effect.name + '">';
-  } else {
-    media.innerHTML =
-      '<div class="preview-placeholder">' + thumbForKind(effect.kind) +
-      '<br>Preview indisponível</div>';
+    var audio = new Audio(url);
+    audio.play().catch(function(){});
+    card._audio = audio;
+    audio.addEventListener('ended', function () { stopInline(card); });
+  } else if (effect.kind === 'video' || effect.kind === 'image') {
+    // Pra vídeo: cria um <video> sobre o thumb e toca
+    var thumb = card.querySelector('.effect-thumb');
+    var existing = card.querySelector('.inline-video');
+    if (existing) existing.remove();
+    if (effect.kind === 'video') {
+      var v = document.createElement('video');
+      v.className = 'inline-video';
+      v.src = url;
+      v.autoplay = true;
+      v.loop = true;
+      v.muted = false;
+      v.playsInline = true;
+      v.controls = false;
+      thumb.appendChild(v);
+      card._video = v;
+    }
+    // image: já mostra o thumb, não precisa fazer nada extra
   }
 
-  name.textContent = effect.name;
-  meta.textContent = [
-    effect.category,
-    effect.subcategory,
-    effect.ext.toUpperCase(),
-    effect.size ? formatBytes(effect.size) : null,
-  ].filter(Boolean).join(' • ');
+  card.classList.add('is-playing');
+  // Troca o ícone do botão pra ⏸
+  var btn = card.querySelector('.btn-preview');
+  if (btn) btn.textContent = '⏸';
 
-  modal.classList.add('visible');
+  currentlyPlaying = card;
 }
 
-function closePreview() {
-  var modal = document.getElementById('preview-modal');
-  var media = document.getElementById('preview-media');
-  // Pausa qualquer mídia em reprodução antes de esconder
-  var v = media.querySelector('video, audio');
-  if (v) { v.pause(); v.src = ''; }
-  modal.classList.remove('visible');
-  media.innerHTML = '';
+function stopInline(card) {
+  if (!card) return;
+  if (card._audio) { card._audio.pause(); card._audio = null; }
+  if (card._video) { card._video.pause(); card._video.remove(); card._video = null; }
+  card.classList.remove('is-playing');
+  var btn = card.querySelector('.btn-preview');
+  if (btn) btn.textContent = '▶';
+  if (currentlyPlaying === card) currentlyPlaying = null;
 }
 
 function formatBytes(bytes) {
@@ -777,12 +903,128 @@ function formatBytes(bytes) {
   return (bytes/1024/1024/1024).toFixed(2) + ' GB';
 }
 
-function bindPreviewModal() {
-  document.getElementById('preview-close').addEventListener('click', closePreview);
-  document.getElementById('preview-backdrop').addEventListener('click', closePreview);
-  document.addEventListener('keydown', function (e) {
-    if (e.key === 'Escape') closePreview();
-  });
+// (modal preview foi removido — preview agora é inline no card)
+
+// ══ WAVEFORM (renderização sob demanda) ════════════════════════
+// Decodifica o áudio via WebAudio, desenha waveform num canvas,
+// salva como data URL no localStorage pra reuso.
+
+var WAVEFORM_CACHE_KEY = 'cinepro_waveforms_v1';
+var WAVEFORM_PENDING = {};   // id → Promise (deduplica)
+var WAVEFORM_QUEUE = [];     // throttling de processamento
+var WAVEFORM_PROCESSING = 0;
+var WAVEFORM_MAX_CONCURRENT = 2;
+
+function getWaveformCache() {
+  try { return JSON.parse(sessionStorage.getItem(WAVEFORM_CACHE_KEY) || '{}'); }
+  catch (e) { return {}; }
+}
+function saveWaveformCache(c) {
+  try { sessionStorage.setItem(WAVEFORM_CACHE_KEY, JSON.stringify(c)); }
+  catch (e) {/* quota — ignora */}
+}
+
+function requestWaveform(effect, card) {
+  if (effect.kind !== 'audio') return;
+
+  var thumbEl = card.querySelector('.effect-thumb-placeholder');
+  if (!thumbEl) return;
+
+  var cache = getWaveformCache();
+  if (cache[effect.id]) {
+    renderWaveformImg(thumbEl, cache[effect.id]);
+    return;
+  }
+
+  if (WAVEFORM_PENDING[effect.id]) return;
+  WAVEFORM_PENDING[effect.id] = true;
+  WAVEFORM_QUEUE.push({ effect: effect, thumbEl: thumbEl });
+  pumpWaveformQueue();
+}
+
+function pumpWaveformQueue() {
+  while (WAVEFORM_PROCESSING < WAVEFORM_MAX_CONCURRENT && WAVEFORM_QUEUE.length) {
+    var task = WAVEFORM_QUEUE.shift();
+    WAVEFORM_PROCESSING++;
+    generateWaveform(task.effect).then(function (dataUrl) {
+      if (dataUrl) {
+        var c = getWaveformCache();
+        c[task.effect.id] = dataUrl;
+        saveWaveformCache(c);
+        renderWaveformImg(task.thumbEl, dataUrl);
+      }
+    }).catch(function () {/* falha silenciosa */})
+      .then(function () {
+        delete WAVEFORM_PENDING[task.effect.id];
+        WAVEFORM_PROCESSING--;
+        pumpWaveformQueue();
+      });
+  }
+}
+
+function renderWaveformImg(thumbEl, dataUrl) {
+  thumbEl.innerHTML = '<img class="waveform-img" src="' + dataUrl + '" alt="">';
+}
+
+function generateWaveform(effect) {
+  var url = 'https://www.googleapis.com/drive/v3/files/' + effect.id
+          + '?alt=media&key=' + CINEPRO_CONFIG.GOOGLE_DRIVE_API_KEY;
+
+  return fetch(url)
+    .then(function (r) { return r.arrayBuffer(); })
+    .then(function (buf) {
+      var AC = window.AudioContext || window.webkitAudioContext;
+      if (!AC) return null;
+      var ctx = new AC();
+      return ctx.decodeAudioData(buf).then(function (audioBuffer) {
+        ctx.close();
+        return drawWaveform(audioBuffer);
+      });
+    });
+}
+
+function drawWaveform(audioBuffer) {
+  var canvas = document.createElement('canvas');
+  var W = 320, H = 64;
+  canvas.width = W;
+  canvas.height = H;
+  var g = canvas.getContext('2d');
+
+  var data = audioBuffer.getChannelData(0);
+  var step = Math.floor(data.length / W);
+  var amps = new Float32Array(W);
+  for (var i = 0; i < W; i++) {
+    var sum = 0;
+    for (var j = 0; j < step; j++) {
+      sum += Math.abs(data[i * step + j] || 0);
+    }
+    amps[i] = sum / step;
+  }
+  // Normaliza
+  var max = 0;
+  for (var k = 0; k < W; k++) if (amps[k] > max) max = amps[k];
+  if (max === 0) max = 1;
+  for (var k2 = 0; k2 < W; k2++) amps[k2] /= max;
+
+  // Desenha
+  var gradient = g.createLinearGradient(0, 0, 0, H);
+  gradient.addColorStop(0, '#4DD2FF');
+  gradient.addColorStop(1, '#0088CC');
+  g.fillStyle = gradient;
+
+  var barW = 2;
+  var gap  = 1;
+  var count = Math.floor(W / (barW + gap));
+  for (var b = 0; b < count; b++) {
+    var idx = Math.floor((b / count) * W);
+    var amp = amps[idx];
+    var barH = Math.max(2, amp * H * 0.9);
+    var x = b * (barW + gap);
+    var y = (H - barH) / 2;
+    g.fillRect(x, y, barW, barH);
+  }
+
+  return canvas.toDataURL('image/png');
 }
 
 function thumbForKind(kind) {
