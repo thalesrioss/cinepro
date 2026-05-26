@@ -9,6 +9,9 @@ var DOWNLOADS = {
   windows: 'https://github.com/thalesrioss/cinepro/releases/latest/download/CinePRO-Setup.exe',
 };
 
+// Endpoint de captura de lead (escreve no Firestore + Google Sheets)
+var LEAD_CAPTURE_URL = 'https://southamerica-east1-cinepro-42971.cloudfunctions.net/leadCapture';
+
 var auth = null;
 
 document.addEventListener('DOMContentLoaded', function () {
@@ -123,6 +126,7 @@ function doSignup() {
 
   auth.createUserWithEmailAndPassword(c.email, c.pass)
     .then(function (cred) {
+      sendLeadToSheets(cred.user.email);
       revealDownloads('Conta criada! Use ' + cred.user.email + ' pra logar no app.');
     })
     .catch(function (e) {
@@ -131,6 +135,7 @@ function doSignup() {
         setBtnLoading(true, 'Entrando...');
         return auth.signInWithEmailAndPassword(c.email, c.pass)
           .then(function (cred) {
+            sendLeadToSheets(cred.user.email);
             revealDownloads('Bem-vindo de volta, ' + cred.user.email + '!');
           })
           .catch(function () {
@@ -160,6 +165,7 @@ function doExistingLogin() {
 
   auth.signInWithEmailAndPassword(c.email, c.pass)
     .then(function (cred) {
+      sendLeadToSheets(cred.user.email);
       revealDownloads('Bem-vindo de volta, ' + cred.user.email + '!');
     })
     .catch(function (e) {
@@ -175,6 +181,49 @@ function doExistingLogin() {
 }
 
 // ──────── Reveal downloads (após auth com sucesso) ────────
+
+// ──────── Lead enrichment (Sheets sync) ────────
+
+function detectOS() {
+  var ua = navigator.userAgent;
+  if (/Mac|iPhone|iPad/.test(ua) || (navigator.platform || '').indexOf('Mac') !== -1) return 'mac';
+  if (/Win|Windows/.test(ua)) return 'windows';
+  if (/Linux/.test(ua))       return 'linux';
+  return 'unknown';
+}
+
+function getQueryParam(name) {
+  var params = new URLSearchParams(window.location.search);
+  return params.get(name) || '';
+}
+
+function sendLeadToSheets(email) {
+  if (!LEAD_CAPTURE_URL) return;
+
+  var payload = {
+    email:        email,
+    os:           detectOS(),
+    ua:           navigator.userAgent,
+    referrer:     document.referrer || '',
+    utm_source:   getQueryParam('utm_source'),
+    utm_medium:   getQueryParam('utm_medium'),
+    utm_campaign: getQueryParam('utm_campaign'),
+    utm_term:     getQueryParam('utm_term'),
+    utm_content:  getQueryParam('utm_content'),
+  };
+
+  // Best-effort, async. Não trava o fluxo se falhar.
+  try {
+    fetch(LEAD_CAPTURE_URL, {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify(payload),
+      mode:    'cors',
+    }).catch(function (e) { console.warn('[CinePRO LP] leadCapture falhou:', e); });
+  } catch (e) {
+    console.warn('[CinePRO LP] leadCapture exception:', e);
+  }
+}
 
 function revealDownloads(message) {
   var dlBlock    = document.getElementById('signup-download');
