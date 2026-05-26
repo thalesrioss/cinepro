@@ -398,6 +398,48 @@
             </a>
           </div>
 
+          <!-- Aviso sobre Gatekeeper/SmartScreen + tutorial expansível -->
+          <details class="install-help">
+            <summary>
+              <span class="install-help-icon">⚠️</span>
+              <span><strong>Mac/Windows pode mostrar um aviso na primeira vez.</strong>
+              É normal — veja como abrir em 10 segundos.</span>
+              <span class="install-help-chev">+</span>
+            </summary>
+            <div class="install-help-content">
+
+              <div class="install-help-os">
+                <div class="install-help-os-title">
+                  <span>🍎</span> No macOS
+                </div>
+                <ol class="install-steps">
+                  <li>Baixe o <code>CinePRO.pkg</code> e abra a pasta <strong>Downloads</strong></li>
+                  <li><strong>Clique-direito</strong> (ou Ctrl+clique) no arquivo → escolha <strong>Abrir</strong></li>
+                  <li>Vai aparecer: <em>"A Apple não pode verificar..."</em> → clique em <strong>Abrir</strong> de novo</li>
+                  <li>Pronto. Da segunda vez em diante, basta duplo-clique normal</li>
+                </ol>
+                <div class="install-help-note">
+                  <strong>Por que aparece esse aviso?</strong> Estamos em processo de certificação Apple Developer
+                  ($99/ano). Até lá, o macOS pede essa confirmação extra na primeira instalação. Não é vírus —
+                  você pode inspecionar o .pkg em qualquer antivírus (VirusTotal, etc).
+                </div>
+              </div>
+
+              <div class="install-help-os">
+                <div class="install-help-os-title">
+                  <span>🪟</span> No Windows
+                </div>
+                <ol class="install-steps">
+                  <li>Baixe o <code>CinePRO-Setup.exe</code> e dê duplo-clique</li>
+                  <li>SmartScreen mostra: <em>"O Windows protegeu seu PC"</em></li>
+                  <li>Clique em <strong>"Mais informações"</strong></li>
+                  <li>Aparece o botão <strong>"Executar mesmo assim"</strong> → clique nele</li>
+                </ol>
+              </div>
+
+            </div>
+          </details>
+
           <div class="signup-next">
             <strong>Próximo passo:</strong>
             <ol>
@@ -426,6 +468,22 @@
       <details class="faq-item">
         <summary>Por que criar a conta antes de baixar?</summary>
         <p>Pra você usar a mesma conta no app depois. O instalador é leve (~93 MB) — os efeitos baixam só quando você usa. Sem cobrar nada pra criar a conta.</p>
+      </details>
+
+      <details class="faq-item">
+        <summary>"Apple não pôde verificar este arquivo" — o que faço?</summary>
+        <p>É normal — o macOS bloqueia qualquer instalador sem certificado Apple Developer ($99/ano, em processo).
+        <br><br>
+        <strong>Fix em 10 segundos:</strong> clique-direito no <code>CinePRO.pkg</code> → <strong>Abrir</strong>.
+        Vai aparecer o aviso de novo com botão <strong>Abrir</strong> habilitado. Da segunda vez em diante, duplo-clique normal funciona.
+        <br><br>
+        Se quiser conferir antes, suba o arquivo em <a href="https://www.virustotal.com" target="_blank" rel="noopener">VirusTotal</a>.</p>
+      </details>
+
+      <details class="faq-item">
+        <summary>"O Windows protegeu seu PC" (SmartScreen) — o que faço?</summary>
+        <p>Mesma coisa do Mac: clique em <strong>"Mais informações"</strong> → <strong>"Executar mesmo assim"</strong>.
+        Acontece com qualquer instalador novo até o SmartScreen acumular reputação ou recebermos certificado EV.</p>
       </details>
 
       <details class="faq-item">
