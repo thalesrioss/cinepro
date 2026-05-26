@@ -1,8 +1,9 @@
 // =============================================================
 //  CinePRO Landing Page — Signup + Download
+//  Download BLOQUEADO até signup/login com sucesso no Firebase.
 // =============================================================
 
-// URLs estáveis — apontam sempre pro release mais recente (sem versão no nome)
+// URLs estáveis — apontam sempre pro release mais recente
 var DOWNLOADS = {
   mac:     'https://github.com/thalesrioss/cinepro/releases/latest/download/CinePRO.pkg',
   windows: 'https://github.com/thalesrioss/cinepro/releases/latest/download/CinePRO-Setup.exe',
@@ -32,11 +33,11 @@ function initFirebase() {
   }
 }
 
-// ──────── OS Detection + Download URLs ────────
+// ──────── OS Detection ────────
 
 function setupDownloads() {
   var ua = navigator.userAgent;
-  var os = 'mac';  // padrão otimista
+  var os = 'mac';
 
   if (/Mac|iPhone|iPad/.test(ua) || (navigator.platform || '').indexOf('Mac') !== -1) {
     os = 'mac';
@@ -46,34 +47,27 @@ function setupDownloads() {
     os = 'linux';
   }
 
-  // Atualiza texto de detecção
   var osLabel = document.getElementById('os-detect');
   if (osLabel) {
-    osLabel.textContent = os === 'mac' ? '🍎 Você está no macOS'
-                       : os === 'windows' ? '🪟 Você está no Windows'
-                       : '💻 Disponível pra Mac e Windows';
+    osLabel.textContent = os === 'mac'     ? '🍎 Você está no macOS'
+                       : os === 'windows'  ? '🪟 Você está no Windows'
+                       :                     '💻 Disponível pra Mac e Windows';
   }
 
-  // Atribui URLs reais nos botões
   var macBtn = document.getElementById('btn-download-mac');
   var winBtn = document.getElementById('btn-download-win');
-  if (macBtn) macBtn.href = DOWNLOADS.mac;
-  if (winBtn) winBtn.href = DOWNLOADS.windows;
 
-  // Destaca o botão do SO detectado
-  if (os === 'mac' && macBtn) {
-    macBtn.classList.add('is-detected');
-  } else if (os === 'windows' && winBtn) {
-    winBtn.classList.add('is-detected');
-  }
+  // URLs ficam SEM href até o signup (segurança extra)
+  // Setamos só depois que unlock é disparado em revealDownloads()
+  if (os === 'mac' && macBtn) macBtn.classList.add('is-detected');
+  else if (os === 'windows' && winBtn) winBtn.classList.add('is-detected');
 }
 
 // ──────── Signup form ────────
 
 function setupSignupForm() {
-  var form    = document.getElementById('signup-form');
-  var skipBtn = document.getElementById('signup-skip');
-  var dlBlock = document.getElementById('signup-download');
+  var form = document.getElementById('signup-form');
+  var existingBtn = document.getElementById('signup-existing');
 
   if (!form) return;
 
@@ -82,77 +76,140 @@ function setupSignupForm() {
     doSignup();
   });
 
-  skipBtn.addEventListener('click', function (e) {
-    e.preventDefault();
-    revealDownloads('Bom retorno! Baixa agora →');
-  });
+  // Botão "Já tem conta?" — faz LOGIN (não pula sem auth!)
+  if (existingBtn) {
+    existingBtn.addEventListener('click', function (e) {
+      e.preventDefault();
+      doExistingLogin();
+    });
+  }
+}
+
+function getCreds() {
+  return {
+    email: document.getElementById('signup-email').value.trim().toLowerCase(),
+    pass:  document.getElementById('signup-password').value,
+  };
+}
+
+function showErr(msg) {
+  var err = document.getElementById('signup-error');
+  err.textContent = msg;
+  err.classList.add('visible');
+  document.getElementById('signup-success').classList.remove('visible');
+}
+function clearErr() {
+  document.getElementById('signup-error').classList.remove('visible');
+}
+function setBtnLoading(loading, label) {
+  var btn = document.getElementById('signup-submit');
+  btn.disabled = !!loading;
+  btn.textContent = label || 'Criar conta';
 }
 
 function doSignup() {
-  var email   = document.getElementById('signup-email').value.trim().toLowerCase();
-  var pass    = document.getElementById('signup-password').value;
-  var err     = document.getElementById('signup-error');
-  var success = document.getElementById('signup-success');
-  var btn     = document.getElementById('signup-submit');
+  var c = getCreds();
+  clearErr();
 
-  err.textContent = '';
-  err.classList.remove('visible');
-  success.classList.remove('visible');
-
-  if (!email || !pass || pass.length < 6) {
-    err.textContent = 'Preencha email válido e senha de pelo menos 6 caracteres.';
-    err.classList.add('visible');
-    return;
+  if (!c.email || !c.pass || c.pass.length < 6) {
+    return showErr('Preencha email válido e senha de pelo menos 6 caracteres.');
   }
   if (!auth) {
-    // Sem Firebase, segue direto pro download (degrada bem)
-    revealDownloads('Pronto! Baixa o instalador agora →');
-    return;
+    // Sem Firebase, libera download mesmo assim (degrade gracioso)
+    return revealDownloads('Conta criada localmente. Baixa o instalador agora →');
   }
 
-  btn.disabled = true;
-  btn.textContent = 'Criando conta...';
+  setBtnLoading(true, 'Criando conta...');
 
-  auth.createUserWithEmailAndPassword(email, pass)
+  auth.createUserWithEmailAndPassword(c.email, c.pass)
     .then(function (cred) {
-      // Sucesso — conta criada
-      revealDownloads('Conta criada! Use ' + email + ' pra logar no app.');
+      revealDownloads('Conta criada! Use ' + cred.user.email + ' pra logar no app.');
     })
     .catch(function (e) {
-      var code = e.code || '';
-      if (code === 'auth/email-already-in-use') {
-        // Usuário já existe — tentar login pra validar a senha
-        return auth.signInWithEmailAndPassword(email, pass)
-          .then(function () {
-            revealDownloads('Bem-vindo de volta! Baixa o instalador →');
+      if (e.code === 'auth/email-already-in-use') {
+        // Conta já existe: tenta logar com a senha informada
+        setBtnLoading(true, 'Entrando...');
+        return auth.signInWithEmailAndPassword(c.email, c.pass)
+          .then(function (cred) {
+            revealDownloads('Bem-vindo de volta, ' + cred.user.email + '!');
           })
           .catch(function () {
-            err.textContent = 'Esse email já tem conta. Use a senha original ou outro email.';
-            err.classList.add('visible');
-            btn.disabled = false;
-            btn.textContent = 'Criar conta';
+            showErr('Esse email já tem conta com outra senha. Use a senha original ou outro email.');
+            setBtnLoading(false);
           });
       }
-      if (code === 'auth/invalid-email') err.textContent = 'Email inválido.';
-      else if (code === 'auth/weak-password') err.textContent = 'Senha muito fraca. Use ao menos 6 caracteres.';
-      else err.textContent = e.message || 'Falha ao criar conta. Tente de novo.';
-      err.classList.add('visible');
-      btn.disabled = false;
-      btn.textContent = 'Criar conta';
+      if (e.code === 'auth/invalid-email')   showErr('Email inválido.');
+      else if (e.code === 'auth/weak-password') showErr('Senha muito fraca. Use ao menos 6 caracteres.');
+      else                                    showErr(e.message || 'Falha ao criar conta. Tente de novo.');
+      setBtnLoading(false);
     });
 }
 
+function doExistingLogin() {
+  var c = getCreds();
+  clearErr();
+
+  if (!c.email || !c.pass) {
+    return showErr('Preencha email e senha pra entrar.');
+  }
+  if (!auth) {
+    return revealDownloads('Bem-vindo! Baixa o instalador →');
+  }
+
+  setBtnLoading(true, 'Entrando...');
+
+  auth.signInWithEmailAndPassword(c.email, c.pass)
+    .then(function (cred) {
+      revealDownloads('Bem-vindo de volta, ' + cred.user.email + '!');
+    })
+    .catch(function (e) {
+      if (e.code === 'auth/wrong-password' || e.code === 'auth/invalid-credential') {
+        showErr('Senha incorreta.');
+      } else if (e.code === 'auth/user-not-found') {
+        showErr('Email não encontrado. Crie uma conta nova.');
+      } else {
+        showErr(e.message || 'Falha ao entrar.');
+      }
+      setBtnLoading(false);
+    });
+}
+
+// ──────── Reveal downloads (após auth com sucesso) ────────
+
 function revealDownloads(message) {
-  var success = document.getElementById('signup-success');
-  var dlBlock = document.getElementById('signup-download');
-  var form    = document.getElementById('signup-form');
+  var dlBlock    = document.getElementById('signup-download');
+  var lockState  = document.getElementById('download-locked');
+  var unlockState = document.getElementById('download-unlocked');
+  var success    = document.getElementById('signup-success');
 
   success.textContent = '✓ ' + message;
   success.classList.add('visible');
 
-  dlBlock.classList.add('unlocked');
+  // Troca os estados
+  dlBlock.classList.remove('is-locked');
+  dlBlock.classList.add('is-unlocked');
+  if (lockState)   lockState.style.display = 'none';
+  if (unlockState) unlockState.style.display = 'block';
 
-  // Scroll suave pra o bloco de download
+  // SÓ AGORA seta as URLs reais (segurança: não dá pra forçar clique antes)
+  var macBtn = document.getElementById('btn-download-mac');
+  var winBtn = document.getElementById('btn-download-win');
+  if (macBtn) macBtn.href = DOWNLOADS.mac;
+  if (winBtn) winBtn.href = DOWNLOADS.windows;
+
+  // Esconde o link "Já tem conta?" (já não faz sentido)
+  var existing = document.getElementById('signup-existing');
+  if (existing && existing.parentElement) existing.parentElement.style.display = 'none';
+
+  // Desabilita o form pra evitar resubmits
+  var form = document.getElementById('signup-form');
+  if (form) {
+    Array.prototype.forEach.call(form.querySelectorAll('input, button'), function (el) {
+      el.disabled = true;
+    });
+  }
+
+  // Scroll suave pro bloco de download
   setTimeout(function () {
     dlBlock.scrollIntoView({ behavior: 'smooth', block: 'center' });
   }, 200);
