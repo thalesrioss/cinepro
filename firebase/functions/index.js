@@ -43,20 +43,21 @@ async function getSheets() {
 }
 
 async function appendRow(tabName, row) {
-  if (!SHEET_ID.value()) {
-    console.log('GOOGLE_SHEET_ID não configurado — skip Sheets append');
+  const sheetId = (SHEET_ID.value() || '').trim();  // blinda contra \n no secret
+  if (!sheetId) {
+    console.log('GOOGLE_SHEET_ID nao configurado - skip Sheets append');
     return;
   }
   try {
     const sheets = await getSheets();
     await sheets.spreadsheets.values.append({
-      spreadsheetId: SHEET_ID.value(),
+      spreadsheetId: sheetId,
       range: `${tabName}!A:Z`,
       valueInputOption: 'USER_ENTERED',
       requestBody: { values: [row] },
     });
+    console.log('Sheets OK (' + tabName + '): ' + row.slice(0, 2).join(' | '));
   } catch (err) {
-    // Não derruba o webhook se o Sheets falhar — só loga
     console.error('Sheets append falhou (' + tabName + '):', err.message);
   }
 }
