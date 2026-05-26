@@ -1,0 +1,22 @@
+#!/bin/bash
+# =============================================================
+#  CinePRO — Preinstall macOS
+#  Avisa se o Premiere estiver aberto + remove instalação antiga
+# =============================================================
+
+set -e
+
+# 1. Checa se o Premiere tá rodando
+if pgrep -i "Adobe Premiere Pro" > /dev/null; then
+  /usr/bin/osascript -e 'display alert "Fecha o Premiere Pro" message "Por favor, feche o Adobe Premiere Pro antes de continuar a instalação do CinePRO." as critical buttons {"Cancelar"} default button "Cancelar"'
+  exit 1
+fi
+
+# 2. Remove instalação antiga (system-wide e per-user)
+rm -rf "/Library/Application Support/Adobe/CEP/extensions/CinePRO" 2>/dev/null || true
+
+USER_NAME="${USER:-$(stat -f%Su /dev/console)}"
+USER_HOME=$(eval echo "~$USER_NAME")
+rm -rf "$USER_HOME/Library/Application Support/Adobe/CEP/extensions/CinePRO" 2>/dev/null || true
+
+exit 0

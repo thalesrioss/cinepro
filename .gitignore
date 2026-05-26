@@ -1,0 +1,60 @@
+# ════════════════════════════
+#  CinePRO — gitignore
+# ════════════════════════════
+
+# OS junk
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+*~
+
+# Editors
+.vscode/
+.idea/
+
+# Node / npm
+node_modules/
+npm-debug.log*
+yarn-error.log
+.npm
+.eslintcache
+
+# Electron / electron-builder build outputs
+desktop-app/dist/
+desktop-app/out/
+
+# Installer build artifacts (NÃO commitar binários — vão via GitHub Actions Releases)
+installer/dist/*.pkg
+installer/dist/*.dmg
+installer/dist/*.exe
+installer/dist/*.blockmap
+installer/dist/mac/
+installer/dist/mac-arm64/
+installer/dist/mac-x64/
+installer/dist/win-unpacked/
+installer/dist/builder-debug.yml
+installer/dist/builder-effective-config.yaml
+installer/mac/.build/
+installer/.icons-tmp/
+
+# Firebase
+firebase/functions/node_modules/
+firebase/functions/.runtimeconfig.json
+firebase/.firebase/
+firebase-debug.log
+
+# Logs
+*.log
+
+# Tmp
+*.tmp
+.tmp/
+
+# Misc
+.python-version
+__pycache__/
+*.pyc
+
+# Claude Code local config
+.claude/

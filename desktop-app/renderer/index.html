@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="Content-Security-Policy"
+        content="default-src 'self' 'unsafe-inline';
+                 script-src 'self' 'unsafe-inline' https://www.gstatic.com https://*.firebaseio.com https://*.googleapis.com;
+                 connect-src 'self' https://*.googleapis.com https://*.firebaseio.com https://identitytoolkit.googleapis.com https://securetoken.googleapis.com https://firestore.googleapis.com wss://*.firebaseio.com;
+                 img-src 'self' data: https:;">
+  <title>CinePRO</title>
+  <link rel="stylesheet" href="css/tokens.css">
+  <link rel="stylesheet" href="css/app.css">
+
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+  <script src="js/config.js"></script>
+  <script src="js/app.js" defer></script>
+</head>
+<body>
+
+<!-- Drag region for hiddenInset titlebar on macOS -->
+<div class="titlebar-drag"></div>
+
+<!-- ══════════════════════════════ LOGIN ══════════════════════════════ -->
+<section id="screen-login" class="screen screen-centered">
+  <div class="hero">
+    <img src="icons/logo.jpg" alt="CinePRO" class="hero-logo">
+    <div class="hero-title">Cine<span>PRO</span></div>
+    <div class="hero-tagline">Pack profissional de efeitos pro Premiere</div>
+  </div>
+
+  <div class="login-card">
+    <div class="input-group">
+      <label>E-mail</label>
+      <input type="email" id="login-email" placeholder="seu@email.com">
+    </div>
+    <div class="input-group">
+      <label>Senha</label>
+      <input type="password" id="login-password" placeholder="••••••••">
+    </div>
+    <div id="login-error" class="login-error"></div>
+    <button id="btn-login" class="btn btn--primary btn--lg btn--block">Entrar</button>
+    <div class="login-footer">
+      Ainda não tem assinatura?
+      <a href="#" id="link-subscribe-from-login">Assinar agora</a>
+    </div>
+  </div>
+
+  <div class="login-status-row">
+    <span class="status-dot loading" id="login-status-dot"></span>
+    <span id="login-status-text">Conectando ao Firebase...</span>
+  </div>
+</section>
+
+<!-- ══════════════════════════════ DASHBOARD ══════════════════════════════ -->
+<section id="screen-dashboard" class="screen hidden">
+
+  <!-- Top bar -->
+  <header class="topbar">
+    <div class="topbar-left">
+      <img src="icons/logo.jpg" alt="" class="topbar-logo">
+      <div>
+        <div class="topbar-title">CinePRO</div>
+        <div class="topbar-version" id="topbar-version">v1.0.0</div>
+      </div>
+    </div>
+    <div class="topbar-right">
+      <span class="user-badge" id="user-badge">—</span>
+      <button class="btn btn--ghost btn--icon" id="btn-logout" title="Sair">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
+          <polyline points="16 17 21 12 16 7"/>
+          <line x1="21" y1="12" x2="9" y2="12"/>
+        </svg>
+      </button>
+    </div>
+  </header>
+
+  <main class="dashboard">
+
+    <!-- Status da assinatura — card hero -->
+    <div class="card subscription-card" id="subscription-card">
+      <div class="subscription-status">
+        <div class="status-pill" id="sub-status-pill">
+          <span class="status-pill-dot"></span>
+          <span id="sub-status-text">Verificando assinatura...</span>
+        </div>
+        <div class="subscription-meta" id="sub-meta"></div>
+      </div>
+      <div class="subscription-actions">
+        <button id="btn-subscribe" class="btn btn--primary-gradient btn--lg hidden">Assinar agora</button>
+        <button id="btn-manage-sub" class="btn btn--soft btn--md hidden">Gerenciar assinatura</button>
+      </div>
+    </div>
+
+    <!-- Grid de ações -->
+    <div class="action-grid">
+
+      <div class="card action-card">
+        <div class="action-icon">🎬</div>
+        <div class="action-title">Abrir no Premiere</div>
+        <div class="action-desc">Inicie o Premiere e use o painel CinePRO em Janela → Extensões.</div>
+        <button id="btn-open-premiere" class="btn btn--soft btn--block">Abrir Premiere</button>
+      </div>
+
+      <div class="card action-card">
+        <div class="action-icon">📦</div>
+        <div class="action-title">Plugin instalado</div>
+        <div class="action-desc" id="plugin-status-desc">Verificando...</div>
+        <button id="btn-reinstall" class="btn btn--ghost btn--block">Reinstalar plugin</button>
+      </div>
+
+      <div class="card action-card">
+        <div class="action-icon">💾</div>
+        <div class="action-title">Cache</div>
+        <div class="action-desc" id="cache-desc">Calculando...</div>
+        <button id="btn-clear-cache" class="btn btn--ghost btn--block">Limpar cache</button>
+      </div>
+
+      <div class="card action-card">
+        <div class="action-icon">💬</div>
+        <div class="action-title">Suporte</div>
+        <div class="action-desc">Precisa de ajuda? Mande e-mail.</div>
+        <button id="btn-support" class="btn btn--ghost btn--block">Falar com suporte</button>
+      </div>
+
+    </div>
+
+  </main>
+
+</section>
+
+<!-- Toast -->
+<div class="toast" id="toast"></div>
+
+</body>
+</html>

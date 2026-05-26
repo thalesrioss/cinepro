@@ -1,0 +1,69 @@
+{
+  "name": "cinepro-desktop",
+  "version": "1.0.0",
+  "description": "CinePRO Manager — desktop app para gerenciar assinatura e plugin",
+  "main": "main.js",
+  "author": "CinePRO",
+  "license": "Proprietary",
+  "private": true,
+  "scripts": {
+    "start":       "electron .",
+    "build":       "electron-builder",
+    "build:mac":   "electron-builder --mac",
+    "build:win":   "electron-builder --win",
+    "build:all":   "electron-builder -mwl"
+  },
+  "devDependencies": {
+    "electron": "^31.0.0",
+    "electron-builder": "^25.0.0"
+  },
+  "build": {
+    "appId": "com.cinepro.manager",
+    "productName": "CinePRO",
+    "directories": {
+      "output": "../installer/dist",
+      "buildResources": "build"
+    },
+    "files": [
+      "main.js",
+      "preload.js",
+      "renderer/**/*",
+      "shared/**/*"
+    ],
+    "mac": {
+      "category": "public.app-category.video",
+      "icon": "build/icon.icns",
+      "target": [
+        { "target": "dmg", "arch": ["arm64", "x64"] }
+      ],
+      "hardenedRuntime": false,
+      "gatekeeperAssess": false,
+      "identity": null
+    },
+    "dmg": {
+      "title": "CinePRO ${version}",
+      "icon": "build/icon.icns",
+      "background": null,
+      "contents": [
+        { "x": 130, "y": 220, "type": "file" },
+        { "x": 410, "y": 220, "type": "link", "path": "/Applications" }
+      ],
+      "window": { "width": 540, "height": 380 }
+    },
+    "win": {
+      "icon": "build/icon.ico",
+      "target": [
+        { "target": "nsis", "arch": ["x64"] }
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowElevation": true,
+      "allowToChangeInstallationDirectory": false,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "CinePRO"
+    }
+  }
+}

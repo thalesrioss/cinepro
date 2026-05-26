@@ -1,0 +1,40 @@
+#!/bin/bash
+# =============================================================
+#  CinePRO — Postinstall macOS
+#  Habilita PlayerDebugMode pra o plugin rodar sem assinatura
+#  Adobe (durante beta). Roda como o usuário, não como root.
+# =============================================================
+
+set -e
+
+# Quem invocou o instalador (não confundir com root durante install)
+USER_NAME="${USER:-$(stat -f%Su /dev/console)}"
+USER_HOME=$(eval echo "~$USER_NAME")
+
+LOG="/tmp/cinepro-install.log"
+echo "[$(date)] Postinstall iniciado (usuário: $USER_NAME)" > "$LOG"
+
+# 1. Habilita PlayerDebugMode pra CEP 9–13 (cobre Premiere 2019–2026)
+sudo -u "$USER_NAME" defaults write com.adobe.CSXS.9  PlayerDebugMode 1
+sudo -u "$USER_NAME" defaults write com.adobe.CSXS.10 PlayerDebugMode 1
+sudo -u "$USER_NAME" defaults write com.adobe.CSXS.11 PlayerDebugMode 1
+sudo -u "$USER_NAME" defaults write com.adobe.CSXS.12 PlayerDebugMode 1
+sudo -u "$USER_NAME" defaults write com.adobe.CSXS.13 PlayerDebugMode 1
+echo "[$(date)] PlayerDebugMode habilitado (CEP 9–13)" >> "$LOG"
+
+# 2. Permissões da pasta do plugin — deixa tudo legível por todos
+PLUGIN_DIR="/Library/Application Support/Adobe/CEP/extensions/CinePRO"
+if [ -d "$PLUGIN_DIR" ]; then
+  chmod -R 755 "$PLUGIN_DIR"
+  echo "[$(date)] Permissões ajustadas em $PLUGIN_DIR" >> "$LOG"
+fi
+
+# 3. Limpa cache do CEP do usuário (força Premiere a relê os manifestos)
+CEP_CACHE="$USER_HOME/Library/Caches/CSXS"
+if [ -d "$CEP_CACHE" ]; then
+  sudo -u "$USER_NAME" rm -rf "$CEP_CACHE" 2>/dev/null || true
+  echo "[$(date)] Cache CEP limpo" >> "$LOG"
+fi
+
+echo "[$(date)] Postinstall concluído com sucesso" >> "$LOG"
+exit 0

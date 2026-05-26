@@ -1,0 +1,27 @@
+CinePRO — Licença de Uso
+
+Ao instalar este software, você concorda com os seguintes termos:
+
+1. USO PESSOAL
+O CinePRO é licenciado para uso individual com sua conta. A conta NÃO pode ser
+compartilhada com outras pessoas. Em caso de uso compartilhado, sua assinatura
+poderá ser cancelada sem reembolso.
+
+2. EFEITOS E ASSETS
+Os efeitos, sons, presets e templates fornecidos podem ser usados em projetos
+pessoais e comerciais. NÃO é permitido revender, redistribuir ou repackagear
+os assets como produto próprio.
+
+3. ASSINATURA
+O acesso aos efeitos é vinculado à sua assinatura ativa. Quando a assinatura
+for cancelada ou expirar, o acesso será automaticamente revogado.
+
+4. SUPORTE E ATUALIZAÇÕES
+Atualizações estão incluídas enquanto a assinatura estiver ativa.
+Suporte: thales@cinepro.com
+
+5. RESPONSABILIDADE
+O CinePRO é fornecido "como está", sem garantias. O autor não se responsabiliza
+por danos diretos ou indiretos decorrentes do uso do software.
+
+© CinePRO — todos os direitos reservados.

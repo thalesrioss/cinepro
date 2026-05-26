@@ -1,0 +1,11 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /users/{userId} {
+      // Usuário lê só o próprio documento
+      allow read: if request.auth != null && request.auth.uid == userId;
+      // Escrita só via Admin SDK (Cloud Functions)
+      allow write: if false;
+    }
+  }
+}

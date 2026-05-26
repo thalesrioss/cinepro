@@ -1,0 +1,117 @@
+/* ==========================================================================
+   CinePRO — Design Tokens (v2)
+   Linguagem visual atômica do plugin. Não usar valores hardcoded fora daqui.
+   ========================================================================== */
+
+:root {
+  /* ─── Brand (ciano tech) ──────────────────────────────────── */
+  --brand:           #00B8FF;
+  --brand-deep:      #0066CC;
+  --brand-bright:    #4DD2FF;
+  --brand-glow-1:    rgba(0,184,255,0.08);  /* hover sutil */
+  --brand-glow-2:    rgba(0,184,255,0.18);  /* active / chip */
+  --brand-glow-3:    rgba(0,184,255,0.35);  /* border focus */
+
+  /* ─── Surface ─────────────────────────────────────────────── */
+  --surface-0:       #07090F;   /* bg do app */
+  --surface-1:       #0E1218;   /* card */
+  --surface-2:       #161B23;   /* elevated (chip, header) */
+  --surface-3:       #11161D;   /* input */
+  --surface-scrim:   rgba(0,0,0,0.55);
+  --surface-modal:   rgba(0,0,0,0.85);
+
+  /* ─── Text ────────────────────────────────────────────────── */
+  --text-strong:     #FFFFFF;
+  --text:            #E5E9F0;
+  --text-muted:      #8A95A8;
+  --text-faint:      #4A5566;
+
+  /* ─── Border ──────────────────────────────────────────────── */
+  --border-subtle:   rgba(255,255,255,0.06);
+  --border-default:  rgba(255,255,255,0.10);
+  --border-brand:    rgba(0,184,255,0.35);
+
+  /* ─── Semantic ────────────────────────────────────────────── */
+  --success:         #22C55E;
+  --success-glow:    rgba(34,197,94,0.18);
+  --danger:          #EF4444;
+  --danger-glow:     rgba(239,68,68,0.18);
+  --warning:         #FFC74D;
+  --warning-glow:    rgba(255,199,77,0.18);
+
+  /* ─── Spacing (base 4px) ──────────────────────────────────── */
+  --space-1:  4px;
+  --space-2:  8px;
+  --space-3:  12px;
+  --space-4:  16px;
+  --space-5:  20px;
+  --space-6:  24px;
+  --space-8:  32px;
+  --space-10: 40px;
+
+  /* ─── Type scale (panel-tight) ────────────────────────────── */
+  --text-xs:   10px;   /* meta, badges */
+  --text-sm:   11px;   /* body padrão */
+  --text-base: 12px;   /* inputs, buttons */
+  --text-lg:   14px;   /* títulos */
+  --text-xl:   16px;   /* headings */
+  --text-2xl:  20px;   /* hero */
+
+  --weight-normal:   400;
+  --weight-medium:   500;
+  --weight-semibold: 600;
+  --weight-bold:     700;
+
+  --leading-tight:  1.2;
+  --leading-normal: 1.5;
+
+  /* ─── Radius ──────────────────────────────────────────────── */
+  --radius-xs:    4px;
+  --radius-sm:    6px;
+  --radius-md:    8px;
+  --radius-lg:    12px;
+  --radius-xl:    16px;
+  --radius-full:  9999px;
+
+  /* ─── Motion ──────────────────────────────────────────────── */
+  --duration-fast: 100ms;
+  --duration-base: 200ms;
+  --duration-slow: 300ms;
+  --ease-out:      cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-in:       cubic-bezier(0.7, 0, 0.84, 0);
+  --ease-smooth:   cubic-bezier(0.4, 0, 0.2, 1);
+
+  /* ─── Elevation ───────────────────────────────────────────── */
+  --shadow-sm:     0 2px 8px rgba(0,0,0,0.25);
+  --shadow-md:     0 8px 24px rgba(0,0,0,0.35);
+  --shadow-lg:     0 20px 60px rgba(0,0,0,0.5);
+  --shadow-brand:  0 8px 30px rgba(0,184,255,0.25);
+
+  /* ─── Z-index scale ───────────────────────────────────────── */
+  --z-base:        0;
+  --z-sticky:      10;
+  --z-dropdown:    50;
+  --z-overlay:     100;
+  --z-modal:       200;
+  --z-toast:       300;
+
+  /* ─── Legacy alias (compat com código antigo, deprecar) ────── */
+  --gold:          var(--brand);
+  --gold-dim:      var(--brand-deep);
+  --gold-glow:     var(--brand-glow-2);
+  --border-gold:   var(--border-brand);
+  --bg-main:       var(--surface-0);
+  --bg-card:       var(--surface-1);
+  --bg-elevated:   var(--surface-2);
+  --bg-input:      var(--surface-3);
+  --text-main:     var(--text-strong);
+  --text-dim:      var(--text-faint);
+  --border:        var(--border-subtle);
+  --cyan:          var(--brand);
+  --cyan-deep:     var(--brand-deep);
+  --cyan-bright:   var(--brand-bright);
+  --border-cyan:   var(--border-brand);
+  --red:           var(--danger);
+  --green:         var(--success);
+  --yellow-star:   var(--warning);
+}

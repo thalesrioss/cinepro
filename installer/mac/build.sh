@@ -1,0 +1,119 @@
+#!/bin/bash
+# =============================================================
+#  CinePRO — Build unificado .pkg (macOS)
+#
+#  Gera UM ÚNICO instalador que coloca:
+#    /Applications/CinePRO.app                        ← app desktop (Electron)
+#    /Library/Application Support/Adobe/CEP/...       ← plugin CEP do Premiere
+#
+#  Uso: ./build.sh [versão]   # ex: ./build.sh 1.0.0
+# =============================================================
+
+set -e
+
+VERSION="${1:-1.0.0}"
+HERE="$(cd "$(dirname "$0")" && pwd)"
+ROOT="$(cd "$HERE/../.." && pwd)"
+DIST="$ROOT/installer/dist"
+BUILD="$HERE/.build"
+PAYLOAD="$BUILD/payload"
+ELECTRON_DIR="$ROOT/desktop-app"
+
+echo "════════════════════════════════════════════════════"
+echo "  Building CinePRO v$VERSION installer (.pkg)"
+echo "════════════════════════════════════════════════════"
+
+# 1. Build da Electron .app (se ainda não tiver)
+echo "→ Buildando desktop app (Electron)..."
+if [ ! -d "$ELECTRON_DIR/node_modules" ]; then
+  ( cd "$ELECTRON_DIR" && npm install --silent )
+fi
+( cd "$ELECTRON_DIR" && npx electron-builder --mac --dir 2>&1 | tail -5 )
+
+# A .app gerada vai pra installer/dist/mac-arm64/CinePRO.app
+ELECTRON_APP="$DIST/mac-arm64/CinePRO.app"
+if [ ! -d "$ELECTRON_APP" ]; then
+  ELECTRON_APP="$DIST/mac/CinePRO.app"
+fi
+
+if [ ! -d "$ELECTRON_APP" ]; then
+  echo "❌ Não achei a CinePRO.app gerada pelo Electron"
+  exit 1
+fi
+
+echo "  ✓ App em: $ELECTRON_APP ($(du -sh "$ELECTRON_APP" | cut -f1))"
+
+# 2. Limpa e prepara payload
+rm -rf "$BUILD"
+mkdir -p "$PAYLOAD/Applications"
+mkdir -p "$PAYLOAD/Library/Application Support/Adobe/CEP/extensions/CinePRO"
+mkdir -p "$DIST"
+
+# 3. Copia a .app pra /Applications/
+echo "→ Copiando CinePRO.app pra /Applications..."
+cp -R "$ELECTRON_APP" "$PAYLOAD/Applications/"
+
+# 4. Copia o plugin CEP pra Library/.../extensions/CinePRO/
+echo "→ Copiando plugin CEP..."
+PLUGIN_DEST="$PAYLOAD/Library/Application Support/Adobe/CEP/extensions/CinePRO"
+rsync -a \
+  --exclude='/installer' \
+  --exclude='/desktop-app' \
+  --exclude='/firebase' \
+  --exclude='/.claude' \
+  --exclude='/.github' \
+  --exclude='/node_modules' \
+  --exclude='*.log' \
+  --exclude='.DS_Store' \
+  --exclude='SETUP.md' \
+  --exclude='INICIO_RAPIDO.md' \
+  --exclude='serve.py' \
+  "$ROOT/" "$PLUGIN_DEST/"
+
+echo "  ✓ Plugin: $(du -sh "$PLUGIN_DEST" | cut -f1)"
+echo "  ✓ Payload total: $(du -sh "$PAYLOAD" | cut -f1)"
+
+# 5. Empacota o componente
+echo "→ Empacotando componente..."
+pkgbuild \
+  --root "$PAYLOAD" \
+  --identifier "com.cinepro.plugin" \
+  --version "$VERSION" \
+  --scripts "$HERE/scripts" \
+  --ownership recommended \
+  "$BUILD/CinePRO.pkg"
+
+# 6. Instalador com UI
+echo "→ Construindo instalador final..."
+productbuild \
+  --distribution "$HERE/distribution.xml" \
+  --resources "$HERE/resources" \
+  --package-path "$BUILD" \
+  --version "$VERSION" \
+  "$DIST/CinePRO-${VERSION}.pkg"
+
+# 7. Aplica o ícone CinePRO no .pkg
+PNG_LOGO="$ROOT/icons/logo-1024.png"
+PKG_FILE="$DIST/CinePRO-${VERSION}.pkg"
+if [ -f "$PNG_LOGO" ] && command -v Rez >/dev/null && command -v SetFile >/dev/null; then
+  echo "→ Aplicando ícone CinePRO no .pkg..."
+  CARRIER="$BUILD/_icon-carrier.png"
+  RSRC="$BUILD/_icon.rsrc"
+  cp "$PNG_LOGO" "$CARRIER"
+  /usr/bin/sips -i "$CARRIER" >/dev/null
+  /usr/bin/DeRez -only icns "$CARRIER" > "$RSRC"
+  /usr/bin/Rez -append "$RSRC" -o "$PKG_FILE"
+  /usr/bin/SetFile -a C "$PKG_FILE"
+  echo "  ✓ Ícone aplicado"
+fi
+
+# 8. Limpa intermediários (mantém só o .pkg final)
+rm -rf "$BUILD"
+
+echo ""
+echo "✅ Pronto!"
+echo ""
+echo "   Arquivo:  $PKG_FILE"
+echo "   Tamanho:  $(du -h "$PKG_FILE" | cut -f1)"
+echo "   Inclui:   /Applications/CinePRO.app + plugin CEP"
+echo ""
