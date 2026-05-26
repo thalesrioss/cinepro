@@ -49,7 +49,8 @@ Name: "en";   MessagesFile: "compiler:Default.isl"
 
 [Files]
 ; ─── DESKTOP APP (Electron) → %LOCALAPPDATA%\Programs\CinePRO\ ───
-Source: "..\..\desktop-app\dist\win-unpacked\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
+; electron-builder output vem pra ../dist/win-unpacked/ (config no package.json)
+Source: "..\dist\win-unpacked\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
 
 ; ─── PLUGIN CEP → %APPDATA%\Adobe\CEP\extensions\CinePRO\ ───
 Source: "..\..\index.html"; DestDir: "{userappdata}\Adobe\CEP\extensions\CinePRO"; Flags: ignoreversion

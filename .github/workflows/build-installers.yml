@@ -56,7 +56,20 @@ jobs:
         run: |
           cd desktop-app
           npm install --no-audit --no-fund
+          if ($LASTEXITCODE -ne 0) { throw "npm install falhou" }
           npx electron-builder --win --dir
+          if ($LASTEXITCODE -ne 0) { throw "electron-builder falhou" }
+
+      - name: Verificar output do electron-builder
+        shell: powershell
+        run: |
+          Write-Host "Conteúdo de installer/dist/:"
+          Get-ChildItem installer/dist -ErrorAction SilentlyContinue
+          if (!(Test-Path "installer/dist/win-unpacked")) {
+            throw "ERRO: installer/dist/win-unpacked/ não encontrado — electron-builder não gerou os arquivos"
+          }
+          Write-Host "win-unpacked OK. Conteúdo:"
+          Get-ChildItem installer/dist/win-unpacked | Select-Object -First 10
 
       - name: Instalar Inno Setup
         run: choco install innosetup -y --no-progress
@@ -75,6 +88,9 @@ jobs:
         run: |
           cd installer/windows
           & 'C:\Program Files (x86)\Inno Setup 6\ISCC.exe' /DMyAppVersion="${{ steps.ver.outputs.version }}" CinePRO.iss
+          if ($LASTEXITCODE -ne 0) { throw "Inno Setup falhou" }
+          Write-Host "Conteúdo de installer/dist/ após Inno Setup:"
+          Get-ChildItem ../dist
 
       - uses: actions/upload-artifact@v4
         with:
