@@ -410,18 +410,38 @@
 
               <div class="install-help-os">
                 <div class="install-help-os-title">
-                  <span>🍎</span> No macOS
+                  <span>🍎</span> No macOS — passo-a-passo testado
                 </div>
+
+                <p class="install-help-tip"><strong>Método 1</strong> · funciona em Sonoma (14) e antigos:</p>
                 <ol class="install-steps">
-                  <li>Baixe o <code>CinePRO.pkg</code> e abra a pasta <strong>Downloads</strong></li>
-                  <li><strong>Clique-direito</strong> (ou Ctrl+clique) no arquivo → escolha <strong>Abrir</strong></li>
-                  <li>Vai aparecer: <em>"A Apple não pode verificar..."</em> → clique em <strong>Abrir</strong> de novo</li>
-                  <li>Pronto. Da segunda vez em diante, basta duplo-clique normal</li>
+                  <li>Baixe o <code>CinePRO.pkg</code> e abra <strong>Downloads</strong> no Finder</li>
+                  <li><strong>Clique-direito</strong> (ou Ctrl+clique) → <strong>Abrir</strong></li>
+                  <li>Aparece <em>"Apple não pode verificar..."</em> → clique <strong>Abrir</strong> de novo</li>
                 </ol>
+
+                <p class="install-help-tip"><strong>Método 2</strong> · macOS Sequoia (15+) — a Apple removeu o atalho do método 1:</p>
+                <ol class="install-steps">
+                  <li>Tenta abrir o .pkg normalmente (vai aparecer o aviso)</li>
+                  <li>Vai em <strong>Ajustes do Sistema → Privacidade e Segurança</strong></li>
+                  <li>Rola até a seção <strong>"Segurança"</strong> no fim</li>
+                  <li>Vai aparecer: <em>"CinePRO.pkg foi bloqueado"</em> → clica em <strong>"Abrir Mesmo Assim"</strong></li>
+                  <li>Confirma com Touch ID ou senha do Mac</li>
+                </ol>
+
+                <p class="install-help-tip"><strong>Método 3</strong> · se aparecer <em>"CinePRO.pkg está danificado"</em> — abra o Terminal:</p>
+                <ol class="install-steps">
+                  <li>Abre o app <strong>Terminal</strong> (Cmd+Espaço, digita "Terminal")</li>
+                  <li>Cola esse comando e dá Enter:
+                    <pre class="install-cmd">xattr -dr com.apple.quarantine ~/Downloads/CinePRO.pkg</pre>
+                  </li>
+                  <li>Volta no Finder e duplo-clique no .pkg — abre normal</li>
+                </ol>
+
                 <div class="install-help-note">
-                  <strong>Por que aparece esse aviso?</strong> Estamos em processo de certificação Apple Developer
-                  ($99/ano). Até lá, o macOS pede essa confirmação extra na primeira instalação. Não é vírus —
-                  você pode inspecionar o .pkg em qualquer antivírus (VirusTotal, etc).
+                  <strong>Por que tanto teatro?</strong> Estamos em processo de certificação Apple Developer
+                  ($99/ano). Até lá, o macOS exige essas confirmações pra software não assinado.
+                  Não é vírus — você pode escanear o .pkg em <a href="https://www.virustotal.com" target="_blank" rel="noopener">VirusTotal</a> antes.
                 </div>
               </div>
 
@@ -472,12 +492,12 @@
 
       <details class="faq-item">
         <summary>"Apple não pôde verificar este arquivo" — o que faço?</summary>
-        <p>É normal — o macOS bloqueia qualquer instalador sem certificado Apple Developer ($99/ano, em processo).
-        <br><br>
-        <strong>Fix em 10 segundos:</strong> clique-direito no <code>CinePRO.pkg</code> → <strong>Abrir</strong>.
-        Vai aparecer o aviso de novo com botão <strong>Abrir</strong> habilitado. Da segunda vez em diante, duplo-clique normal funciona.
-        <br><br>
-        Se quiser conferir antes, suba o arquivo em <a href="https://www.virustotal.com" target="_blank" rel="noopener">VirusTotal</a>.</p>
+        <p>É normal pra software sem certificado Apple Developer (em processo aqui). Tem <strong>3 métodos</strong> dependendo da versão do macOS:</p>
+        <p><strong>1) Sonoma (14) e antigos:</strong> clique-direito no .pkg → <strong>Abrir</strong> → confirma no aviso.</p>
+        <p><strong>2) Sequoia (15+) — a Apple tirou o atalho:</strong> tenta abrir, vai aparecer o aviso. Vá em <strong>Ajustes do Sistema → Privacidade e Segurança</strong> → role até o fim → clique em <strong>"Abrir Mesmo Assim"</strong>.</p>
+        <p><strong>3) Se aparecer "está danificado":</strong> abra o Terminal e cole:
+        <br><code>xattr -dr com.apple.quarantine ~/Downloads/CinePRO.pkg</code>
+        <br>Depois duplo-clique normal funciona.</p>
       </details>
 
       <details class="faq-item">
