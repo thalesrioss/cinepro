@@ -12,12 +12,18 @@
 set -e
 
 VERSION="${1:-1.0.0}"
+# Remove o prefixo "v" se vier (ex: "v1.0.0" → "1.0.0")
+VERSION="${VERSION#v}"
+
 HERE="$(cd "$(dirname "$0")" && pwd)"
 ROOT="$(cd "$HERE/../.." && pwd)"
 DIST="$ROOT/installer/dist"
 BUILD="$HERE/.build"
 PAYLOAD="$BUILD/payload"
 ELECTRON_DIR="$ROOT/desktop-app"
+
+# Nome estável (sem versão) — facilita link permanente na LP
+OUTPUT_NAME="CinePRO.pkg"
 
 echo "════════════════════════════════════════════════════"
 echo "  Building CinePRO v$VERSION installer (.pkg)"
@@ -90,11 +96,11 @@ productbuild \
   --resources "$HERE/resources" \
   --package-path "$BUILD" \
   --version "$VERSION" \
-  "$DIST/CinePRO-${VERSION}.pkg"
+  "$DIST/${OUTPUT_NAME}"
 
 # 7. Aplica o ícone CinePRO no .pkg
 PNG_LOGO="$ROOT/icons/logo-1024.png"
-PKG_FILE="$DIST/CinePRO-${VERSION}.pkg"
+PKG_FILE="$DIST/${OUTPUT_NAME}"
 if [ -f "$PNG_LOGO" ] && command -v Rez >/dev/null && command -v SetFile >/dev/null; then
   echo "→ Aplicando ícone CinePRO no .pkg..."
   CARRIER="$BUILD/_icon-carrier.png"

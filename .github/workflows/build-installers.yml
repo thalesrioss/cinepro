@@ -17,14 +17,28 @@ jobs:
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Build .pkg
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Calcular versão limpa (sem prefixo "v")
+        id: ver
+        run: |
+          RAW="${{ inputs.version || github.ref_name }}"
+          CLEAN="${RAW#v}"
+          echo "version=$CLEAN" >> $GITHUB_OUTPUT
+          echo "Versão: $CLEAN"
+
+      - name: Build .pkg (Mac)
         run: |
           chmod +x installer/mac/build.sh
-          ./installer/mac/build.sh ${{ inputs.version || github.ref_name }}
+          ./installer/mac/build.sh ${{ steps.ver.outputs.version }}
+
       - uses: actions/upload-artifact@v4
         with:
           name: CinePRO-macOS
-          path: installer/dist/CinePRO-*.pkg
+          path: installer/dist/CinePRO.pkg
           if-no-files-found: error
 
   # ──────────────── Windows .exe ────────────────
@@ -32,20 +46,43 @@ jobs:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Build Electron .exe (desktop app)
+        shell: powershell
+        run: |
+          cd desktop-app
+          npm install --no-audit --no-fund
+          npx electron-builder --win --dir
+
       - name: Instalar Inno Setup
         run: choco install innosetup -y --no-progress
-      - name: Compilar .exe
+
+      - name: Calcular versão limpa
+        id: ver
+        shell: powershell
+        run: |
+          $raw = "${{ inputs.version || github.ref_name }}"
+          $clean = $raw.TrimStart('v')
+          echo "version=$clean" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+          echo "Versão: $clean"
+
+      - name: Compilar instalador (Inno Setup)
         shell: powershell
         run: |
           cd installer/windows
-          & 'C:\Program Files (x86)\Inno Setup 6\ISCC.exe' /DMyAppVersion="${{ inputs.version || github.ref_name }}" CinePRO.iss
+          & 'C:\Program Files (x86)\Inno Setup 6\ISCC.exe' /DMyAppVersion="${{ steps.ver.outputs.version }}" CinePRO.iss
+
       - uses: actions/upload-artifact@v4
         with:
           name: CinePRO-Windows
-          path: installer/dist/CinePRO-*.exe
+          path: installer/dist/CinePRO-Setup.exe
           if-no-files-found: error
 
-  # ──────────────── Release ────────────────
+  # ──────────────── Release (só em tag) ────────────────
   release:
     needs: [build-mac, build-windows]
     if: startsWith(github.ref, 'refs/tags/')
@@ -56,10 +93,13 @@ jobs:
       - uses: actions/download-artifact@v4
         with:
           path: artifacts
+      - name: Listar artifacts
+        run: ls -la artifacts/ artifacts/*/
       - name: Publicar release
         uses: softprops/action-gh-release@v2
         with:
           files: |
-            artifacts/CinePRO-macOS/*.pkg
-            artifacts/CinePRO-Windows/*.exe
+            artifacts/CinePRO-macOS/CinePRO.pkg
+            artifacts/CinePRO-Windows/CinePRO-Setup.exe
           generate_release_notes: true
+          make_latest: 'true'

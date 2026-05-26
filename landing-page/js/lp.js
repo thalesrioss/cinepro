@@ -2,10 +2,10 @@
 //  CinePRO Landing Page — Signup + Download
 // =============================================================
 
-// Links reais do GitHub Releases — atualiza quando subir versão nova
+// URLs estáveis — apontam sempre pro release mais recente (sem versão no nome)
 var DOWNLOADS = {
-  mac:     'https://github.com/thalesrioss/cinepro/releases/latest/download/CinePRO-1.0.0.pkg',
-  windows: 'https://github.com/thalesrioss/cinepro/releases/latest/download/CinePRO-1.0.0-Setup.exe',
+  mac:     'https://github.com/thalesrioss/cinepro/releases/latest/download/CinePRO.pkg',
+  windows: 'https://github.com/thalesrioss/cinepro/releases/latest/download/CinePRO-Setup.exe',
 };
 
 var auth = null;
