@@ -51,45 +51,45 @@ jobs:
         with:
           node-version: 22
 
-      - name: Build Electron .exe (desktop app)
-        shell: powershell
+      - name: Build Electron desktop app
+        shell: pwsh
         run: |
           cd desktop-app
           npm install --no-audit --no-fund
-          if ($LASTEXITCODE -ne 0) { throw "npm install falhou" }
+          if ($LASTEXITCODE -ne 0) { throw "npm install failed" }
           npx electron-builder --win --dir
-          if ($LASTEXITCODE -ne 0) { throw "electron-builder falhou" }
+          if ($LASTEXITCODE -ne 0) { throw "electron-builder failed" }
 
-      - name: Verificar output do electron-builder
-        shell: powershell
+      - name: Verify electron-builder output
+        shell: pwsh
         run: |
-          Write-Host "Conteúdo de installer/dist/:"
+          Write-Host "=== installer/dist contents ==="
           Get-ChildItem installer/dist -ErrorAction SilentlyContinue
           if (!(Test-Path "installer/dist/win-unpacked")) {
-            throw "ERRO: installer/dist/win-unpacked/ não encontrado — electron-builder não gerou os arquivos"
+            throw "ERROR: installer/dist/win-unpacked not found - electron-builder did not produce output"
           }
-          Write-Host "win-unpacked OK. Conteúdo:"
+          Write-Host "=== win-unpacked first 10 entries ==="
           Get-ChildItem installer/dist/win-unpacked | Select-Object -First 10
 
-      - name: Instalar Inno Setup
+      - name: Install Inno Setup
         run: choco install innosetup -y --no-progress
 
-      - name: Calcular versão limpa
+      - name: Compute clean version
         id: ver
-        shell: powershell
+        shell: pwsh
         run: |
           $raw = "${{ inputs.version || github.ref_name }}"
           $clean = $raw.TrimStart('v')
-          echo "version=$clean" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
-          echo "Versão: $clean"
+          "version=$clean" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+          Write-Host "Version: $clean"
 
-      - name: Compilar instalador (Inno Setup)
-        shell: powershell
+      - name: Compile Inno Setup installer
+        shell: pwsh
         run: |
           cd installer/windows
           & 'C:\Program Files (x86)\Inno Setup 6\ISCC.exe' /DMyAppVersion="${{ steps.ver.outputs.version }}" CinePRO.iss
-          if ($LASTEXITCODE -ne 0) { throw "Inno Setup falhou" }
-          Write-Host "Conteúdo de installer/dist/ após Inno Setup:"
+          if ($LASTEXITCODE -ne 0) { throw "Inno Setup failed" }
+          Write-Host "=== installer/dist after Inno Setup ==="
           Get-ChildItem ../dist
 
       - uses: actions/upload-artifact@v4
