@@ -410,38 +410,21 @@
 
               <div class="install-help-os">
                 <div class="install-help-os-title">
-                  <span>🍎</span> No macOS — passo-a-passo testado
+                  <span>🍎</span> No macOS
                 </div>
 
-                <p class="install-help-tip"><strong>Método 1</strong> · funciona em Sonoma (14) e antigos:</p>
-                <ol class="install-steps">
-                  <li>Baixe o <code>CinePRO.pkg</code> e abra <strong>Downloads</strong> no Finder</li>
-                  <li><strong>Clique-direito</strong> (ou Ctrl+clique) → <strong>Abrir</strong></li>
-                  <li>Aparece <em>"Apple não pode verificar..."</em> → clique <strong>Abrir</strong> de novo</li>
-                </ol>
+                <p class="install-help-tip">É normal pra software sem certificado Apple Developer (em processo aqui). Se seu Mac não permitir o download:</p>
 
-                <p class="install-help-tip"><strong>Método 2</strong> · macOS Sequoia (15+) — a Apple removeu o atalho do método 1:</p>
                 <ol class="install-steps">
-                  <li>Tenta abrir o .pkg normalmente (vai aparecer o aviso)</li>
-                  <li>Vai em <strong>Ajustes do Sistema → Privacidade e Segurança</strong></li>
-                  <li>Rola até a seção <strong>"Segurança"</strong> no fim</li>
-                  <li>Vai aparecer: <em>"CinePRO.pkg foi bloqueado"</em> → clica em <strong>"Abrir Mesmo Assim"</strong></li>
-                  <li>Confirma com Touch ID ou senha do Mac</li>
-                </ol>
-
-                <p class="install-help-tip"><strong>Método 3</strong> · se aparecer <em>"CinePRO.pkg está danificado"</em> — abra o Terminal:</p>
-                <ol class="install-steps">
-                  <li>Abre o app <strong>Terminal</strong> (Cmd+Espaço, digita "Terminal")</li>
+                  <li>Abra o app <strong>Terminal</strong> (Cmd+Espaço, digita "Terminal")</li>
                   <li>Cola esse comando e dá Enter:
                     <pre class="install-cmd">xattr -dr com.apple.quarantine ~/Downloads/CinePRO.pkg</pre>
                   </li>
-                  <li>Volta no Finder e duplo-clique no .pkg — abre normal</li>
+                  <li>Depois é só duplo-clique normal no .pkg — vai funcionar</li>
                 </ol>
 
                 <div class="install-help-note">
-                  <strong>Por que tanto teatro?</strong> Estamos em processo de certificação Apple Developer
-                  ($99/ano). Até lá, o macOS exige essas confirmações pra software não assinado.
-                  Não é vírus — você pode escanear o .pkg em <a href="https://www.virustotal.com" target="_blank" rel="noopener">VirusTotal</a> antes.
+                  Não é vírus — pode escanear o .pkg em <a href="https://www.virustotal.com" target="_blank" rel="noopener">VirusTotal</a> antes se quiser. Quando finalizarmos o registro Apple Developer ($99/ano), esse aviso some.
                 </div>
               </div>
 
@@ -492,12 +475,11 @@
 
       <details class="faq-item">
         <summary>"Apple não pôde verificar este arquivo" — o que faço?</summary>
-        <p>É normal pra software sem certificado Apple Developer (em processo aqui). Tem <strong>3 métodos</strong> dependendo da versão do macOS:</p>
-        <p><strong>1) Sonoma (14) e antigos:</strong> clique-direito no .pkg → <strong>Abrir</strong> → confirma no aviso.</p>
-        <p><strong>2) Sequoia (15+) — a Apple tirou o atalho:</strong> tenta abrir, vai aparecer o aviso. Vá em <strong>Ajustes do Sistema → Privacidade e Segurança</strong> → role até o fim → clique em <strong>"Abrir Mesmo Assim"</strong>.</p>
-        <p><strong>3) Se aparecer "está danificado":</strong> abra o Terminal e cole:
-        <br><code>xattr -dr com.apple.quarantine ~/Downloads/CinePRO.pkg</code>
-        <br>Depois duplo-clique normal funciona.</p>
+        <p>É normal pra software sem certificado Apple Developer (em processo aqui).</p>
+        <p>Temos um método caso seu Mac não permita o download:</p>
+        <p>Abra o <strong>Terminal</strong> e cole:</p>
+        <p><code>xattr -dr com.apple.quarantine ~/Downloads/CinePRO.pkg</code></p>
+        <p>Depois é só duplo-clique normal no .pkg que vai funcionar.</p>
       </details>
 
       <details class="faq-item">
