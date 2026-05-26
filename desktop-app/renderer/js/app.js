@@ -142,9 +142,10 @@ function refreshSubscription() {
       } else {
         pill.className = 'status-pill inactive';
         text.textContent = 'Assinatura inativa';
-        meta.textContent = data && data.lastStatus
+        meta.innerHTML = data && data.lastStatus
           ? 'Status: ' + data.lastStatus + '. Reative pra continuar usando o CinePRO.'
-          : 'Você ainda não tem uma assinatura ativa. Assine agora pra liberar todos os efeitos.';
+          : '<strong>3 dias grátis</strong> pra testar. Depois R$ 29,97/mês. Cancele quando quiser.';
+        btnSub.textContent = data && data.lastStatus ? 'Reativar assinatura' : 'Começar trial grátis';
         btnSub.classList.remove('hidden');
         btnMgmt.classList.add('hidden');
       }
