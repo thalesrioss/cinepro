@@ -398,6 +398,7 @@ function applyManifest(manifest) {
     }
   });
 
+  buildSearchIndex();
   buildCategoryTabs();
   renderEffects(allEffects);
 }
@@ -468,6 +469,7 @@ function loadCategoryDeep(categoryName) {
     .then(function () {
       driveLoadedCats[categoryName] = true;
       cat.loaded = true;
+      buildSearchIndex();  // rebuild com itens novos
       setStatus('ok', allEffects.filter(function(e){return e.category===categoryName;}).length + ' itens em "' + categoryName + '"');
       // Atualiza contadores nas abas
       var btn = document.querySelector('.tab-btn[data-cat="' + categoryName + '"] .tab-count');
@@ -614,24 +616,19 @@ function buildSidebarTree() {
 
   // ─ Item "Todos" ─
   tree.appendChild(makeSidebarItem({
-    label: 'Todos',
-    icon: '▦',
+    label: 'Todos', icon: '▦',
+    dataCat: 'all', dataSub: '',
     isActive: activeCategory === 'all' && !activeSubcategory,
-    onClick: function () {
-      setActiveCategory('all', null);
-    },
+    onClick: function () { setActiveCategory('all', null); },
     count: allEffects.length,
   }));
 
   // ─ Item "Favoritos" ─
   tree.appendChild(makeSidebarItem({
-    label: 'Favoritos',
-    icon: '★',
-    isFav: true,
+    label: 'Favoritos', icon: '★', isFav: true,
+    dataCat: 'favorites', dataSub: '',
     isActive: activeCategory === 'favorites' && !activeSubcategory,
-    onClick: function () {
-      setActiveCategory('favorites', null);
-    },
+    onClick: function () { setActiveCategory('favorites', null); },
     count: getFavoriteIds().length,
   }));
 
@@ -647,48 +644,58 @@ function buildSidebarTree() {
     var subs = getSubcategoriesFor(cat.name);
 
     var item = makeSidebarItem({
-      label:    cat.name,
-      icon:     isExpanded ? '▾' : '▸',
+      label: cat.name,
+      icon: isExpanded ? '▾' : '▸',
       isFolder: true,
+      dataCat: cat.name, dataSub: '',
       isActive: activeCategory === cat.name && !activeSubcategory,
       hasChildren: subs.length > 0,
       onClick: function () {
         if (!driveLoadedCats[cat.name]) {
-          // Primeiro click: carrega + expande
           loadCategoryDeep(cat.name).then(function () {
             sidebarExpanded[cat.name] = true;
             buildSidebarTree();
             setActiveCategory(cat.name, null);
           });
         } else {
-          // Já carregado: toggle expansão + ativa categoria
           sidebarExpanded[cat.name] = !sidebarExpanded[cat.name];
           buildSidebarTree();
           setActiveCategory(cat.name, null);
         }
       },
-      count: cat.loaded
-        ? allEffects.filter(function (e) { return e.category === cat.name; }).length
-        : null,
+      count: cat.loaded ? allEffects.filter(function (e) { return e.category === cat.name; }).length : null,
     });
     tree.appendChild(item);
 
-    // ─ Subcategorias (visíveis se a pasta tá expandida) ─
     if (isExpanded && subs.length) {
       subs.forEach(function (sub) {
         tree.appendChild(makeSidebarItem({
-          label: sub.name,
-          icon: '·',
-          isSub: true,
+          label: sub.name, icon: '·', isSub: true,
+          dataCat: cat.name, dataSub: sub.name,
           isActive: activeCategory === cat.name && activeSubcategory === sub.name,
-          onClick: function () {
-            setActiveCategory(cat.name, sub.name);
-          },
+          onClick: function () { setActiveCategory(cat.name, sub.name); },
           count: sub.count,
         }));
       });
     }
   });
+}
+
+/**
+ * PERF: atualiza só a classe .is-active na sidebar SEM reconstruir o DOM.
+ * Chamado por setActiveCategory quando estrutura não muda (caso comum).
+ */
+function updateSidebarActive() {
+  var tree = document.getElementById('sidebar-tree');
+  if (!tree) return;
+  var items = tree.querySelectorAll('.sidebar-item');
+  for (var i = 0; i < items.length; i++) {
+    var el = items[i];
+    var cat = el.dataset.cat;
+    var sub = el.dataset.sub || null;
+    var isActive = (cat === activeCategory && sub === (activeSubcategory || null) && (!sub || sub === activeSubcategory));
+    el.classList.toggle('is-active', isActive);
+  }
 }
 
 function makeSidebarItem(opts) {
@@ -698,6 +705,8 @@ function makeSidebarItem(opts) {
     + (opts.isFav      ? ' is-fav'      : '')
     + (opts.isFolder   ? ' is-folder'   : '')
     + (opts.isSub      ? ' is-sub'      : '');
+  if (opts.dataCat != null) btn.dataset.cat = opts.dataCat;
+  if (opts.dataSub != null) btn.dataset.sub = opts.dataSub;
   btn.innerHTML =
     '<span class="sidebar-icon">' + (opts.icon || '·') + '</span>' +
     '<span class="sidebar-label">' + opts.label + '</span>' +
@@ -735,7 +744,10 @@ function setActiveCategory(cat, sub) {
     WAVEFORM_OBSERVER = null;
   }
   var search = document.getElementById('search-input').value.trim().toLowerCase();
-  buildSidebarTree();
+  // PERF: diff em vez de wipe — só toggle de .is-active no DOM existente.
+  // Estrutura da sidebar só muda em expand/collapse/load — quem cuida disso
+  // chama buildSidebarTree() diretamente antes de chamar setActiveCategory.
+  updateSidebarActive();
   filterEffects(search);
 }
 
@@ -790,28 +802,132 @@ function toggleFavorite(effect, card) {
 
 // ══ RENDER EFFECTS ════════════════════════════════════════════
 
+// ── INVERTED INDEX PRA BUSCA ────────────────────────────────────
+// Pré-construído na carga (1× por sessão). Cada token ≥2 chars vira chave
+// num Map<token, Set<effectIdx>>. Lookup vira O(k) onde k = nº de tokens
+// na query, em vez de O(n) sobre 11k strings.
+var SEARCH_INDEX = null;       // Map<token, Set<effectIdx>>
+var SEARCH_INDEX_NAMES = null; // Array<string lowercased> p/ matching de substring tardio
+
+function buildSearchIndex() {
+  var t0 = performance.now();
+  SEARCH_INDEX = new Map();
+  SEARCH_INDEX_NAMES = new Array(allEffects.length);
+
+  for (var i = 0; i < allEffects.length; i++) {
+    var e = allEffects[i];
+    var blob = (
+      e.name + ' ' + e.category + ' ' +
+      (e.subcategory || '') + ' ' +
+      ((e.path && e.path.join) ? e.path.join(' ') : '') + ' ' +
+      ((e.tags && e.tags.join) ? e.tags.join(' ') : '')
+    ).toLowerCase();
+    SEARCH_INDEX_NAMES[i] = blob;
+
+    // Tokenize por whitespace, hífen, underscore, pontos
+    var tokens = blob.split(/[\s\-_\.\/\\\(\)\[\]\,]+/);
+    var seen = Object.create(null);
+    for (var t = 0; t < tokens.length; t++) {
+      var tok = tokens[t];
+      if (tok.length < 2 || seen[tok]) continue;
+      seen[tok] = 1;
+      var bucket = SEARCH_INDEX.get(tok);
+      if (!bucket) { bucket = new Set(); SEARCH_INDEX.set(tok, bucket); }
+      bucket.add(i);
+      // Também adiciona prefixos curtos pra autocompletar (ws→whoosh)
+      if (tok.length >= 3) {
+        var pref = tok.slice(0, 3);
+        var prefBucket = SEARCH_INDEX.get(pref);
+        if (!prefBucket) { prefBucket = new Set(); SEARCH_INDEX.set(pref, prefBucket); }
+        prefBucket.add(i);
+      }
+    }
+  }
+  console.log('[CinePRO] inverted index: ' + SEARCH_INDEX.size + ' tokens em ' +
+              ((performance.now() - t0) | 0) + 'ms (' + allEffects.length + ' items)');
+}
+
+/**
+ * Busca no índice: AND entre tokens da query.
+ * Tokens curtos (<2) caem em scan linear no NAMES array como fallback.
+ */
+function searchIndices(query) {
+  if (!SEARCH_INDEX || !query) return null;
+  var qTokens = query.split(/[\s\-_\.]+/).filter(function (t) { return t.length >= 2; });
+  if (!qTokens.length) {
+    // query muito curta — scan linear simples
+    var out = [];
+    for (var i = 0; i < SEARCH_INDEX_NAMES.length; i++) {
+      if (SEARCH_INDEX_NAMES[i].indexOf(query) !== -1) out.push(i);
+    }
+    return new Set(out);
+  }
+
+  // AND incremental — começa pelo bucket menor (otimização clássica)
+  var buckets = qTokens.map(function (t) {
+    // Token exato; senão tenta prefixo de 3 chars; senão fallback scan
+    return SEARCH_INDEX.get(t) || SEARCH_INDEX.get(t.slice(0, 3)) || null;
+  });
+  if (buckets.some(function (b) { return b === null; })) {
+    // Algum token não indexado — fallback scan
+    var out2 = [];
+    for (var j = 0; j < SEARCH_INDEX_NAMES.length; j++) {
+      if (qTokens.every(function (qt) { return SEARCH_INDEX_NAMES[j].indexOf(qt) !== -1; })) {
+        out2.push(j);
+      }
+    }
+    return new Set(out2);
+  }
+  buckets.sort(function (a, b) { return a.size - b.size; });
+
+  var result = new Set();
+  var first = buckets[0];
+  first.forEach(function (idx) {
+    for (var k = 1; k < buckets.length; k++) {
+      if (!buckets[k].has(idx)) return;
+    }
+    // Verificação de substring real (índice tem prefixos, refina aqui)
+    var blob = SEARCH_INDEX_NAMES[idx];
+    for (var q = 0; q < qTokens.length; q++) {
+      if (blob.indexOf(qTokens[q]) === -1) return;
+    }
+    result.add(idx);
+  });
+  return result;
+}
+
 function filterEffects(query) {
   var favSet = activeCategory === 'favorites' ? new Set(getFavoriteIds()) : null;
 
-  var filtered = allEffects.filter(function (e) {
+  // Query? Usa inverted index. Sem query, scan direto (rápido pra check de categoria)
+  if (!query) {
+    var filtered = allEffects.filter(function (e) {
+      var inCat = activeCategory === 'all'
+                || (activeCategory === 'favorites' && favSet.has(e.id))
+                || e.category === activeCategory;
+      if (activeSubcategory) inCat = inCat && e.subcategory === activeSubcategory;
+      return inCat;
+    });
+    renderEffects(filtered);
+    return;
+  }
+
+  var matchedIndices = searchIndices(query);
+  if (!matchedIndices) {
+    renderEffects([]);
+    return;
+  }
+  var result = [];
+  matchedIndices.forEach(function (idx) {
+    var e = allEffects[idx];
+    if (!e) return;
     var inCat = activeCategory === 'all'
               || (activeCategory === 'favorites' && favSet.has(e.id))
               || e.category === activeCategory;
-    // Se há subcategoria ativa, restringe mais
-    if (activeSubcategory) {
-      inCat = inCat && e.subcategory === activeSubcategory;
-    }
-    if (!query) return inCat;
-    var haystack = (
-      e.name + ' ' +
-      e.category + ' ' +
-      (e.subcategory || '') + ' ' +
-      (e.path || []).join(' ') + ' ' +
-      (e.tags || []).join(' ')
-    ).toLowerCase();
-    return inCat && haystack.includes(query);
+    if (activeSubcategory) inCat = inCat && e.subcategory === activeSubcategory;
+    if (inCat) result.push(e);
   });
-  renderEffects(filtered);
+  renderEffects(result);
 }
 
 // ── PAGINAÇÃO INTERNA POR CATEGORIA ────────────────────────────
@@ -859,8 +975,15 @@ function renderEffects(effects) {
     total:       effects.length,
   };
 
+  // PERF: primeiro lote SÍNCRONO pra UI ficar instantânea (60 cards <30ms);
+  // se ainda houver mais, próximos lotes via requestIdleCallback (não trava UI)
   renderNextBatch(PAGE_SIZE);
 }
+
+// PERF: agendar próximo trabalho durante idle time do browser
+var scheduleIdle = (typeof requestIdleCallback === 'function')
+  ? function (cb) { return requestIdleCallback(cb, { timeout: 500 }); }
+  : function (cb) { return setTimeout(cb, 0); };
 
 function renderNextBatch(count) {
   if (!renderState) return;
@@ -946,7 +1069,9 @@ function observeScrollSentinel(sentinel) {
       if (e.isIntersecting) {
         SCROLL_OBSERVER.disconnect();
         SCROLL_OBSERVER = null;
-        renderNextBatch(PAGE_STEP);
+        // Idle scheduling: próximo lote roda quando o browser estiver ocioso,
+        // evita stutter no scroll que ainda está acontecendo
+        scheduleIdle(function () { renderNextBatch(PAGE_STEP); });
       }
     });
   }, { rootMargin: '400px' });
@@ -1067,11 +1192,38 @@ function createEffectCard(effect) {
  * Antes: 4-5 listeners × 60 cards = 240+ listeners. Agora: 4 no container.
  */
 var GRID_DELEGATION_BOUND = false;
+var HOVER_PREFETCH_TIMER = null;
+var HOVER_PREFETCH_LAST_ID = null;
 function bindGridDelegation() {
   if (GRID_DELEGATION_BOUND) return;
   GRID_DELEGATION_BOUND = true;
   var grid = document.getElementById('effects-grid');
   if (!grid) return;
+
+  // Hover prefetch: 500ms parado sobre o card dispara download silencioso.
+  // Quando user arrasta depois, arquivo já tá em disco = drag instantâneo.
+  grid.addEventListener('mouseover', function (e) {
+    var card = e.target.closest('.effect-card');
+    if (!card) return;
+    var effectId = card.dataset.id;
+    if (!effectId || effectId === HOVER_PREFETCH_LAST_ID) return;
+    if (effectCache[effectId]) return;  // já tá em cache
+    HOVER_PREFETCH_LAST_ID = effectId;
+    if (HOVER_PREFETCH_TIMER) clearTimeout(HOVER_PREFETCH_TIMER);
+    HOVER_PREFETCH_TIMER = setTimeout(function () {
+      var effect = effectsById[effectId];
+      if (effect) silentPrefetch(effect, card);
+    }, 500);
+  });
+  grid.addEventListener('mouseout', function (e) {
+    var card = e.target.closest('.effect-card');
+    if (!card) return;
+    if (HOVER_PREFETCH_TIMER) {
+      clearTimeout(HOVER_PREFETCH_TIMER);
+      HOVER_PREFETCH_TIMER = null;
+    }
+    HOVER_PREFETCH_LAST_ID = null;
+  });
 
   // Click — apply / fav / preview
   grid.addEventListener('click', function (e) {
