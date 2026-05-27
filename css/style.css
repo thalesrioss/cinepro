@@ -1601,3 +1601,93 @@ body {
   color: var(--text-main, #fff);
   background: var(--surface-2, #222b3a);
 }
+
+/* ═════════════════════════════════════════════════════════════
+   MULTI-SELECT + KEYBOARD FOCUS
+   ═════════════════════════════════════════════════════════════ */
+
+/* Card selecionado — borda ciano + checkmark */
+.effect-card.is-selected {
+  border-color: var(--brand) !important;
+  box-shadow: 0 0 0 1px var(--brand) inset, 0 4px 14px rgba(0, 184, 255, 0.18);
+}
+.effect-card.is-selected::after {
+  content: '✓';
+  position: absolute;
+  top: 8px; right: 8px;
+  width: 20px; height: 20px;
+  border-radius: 50%;
+  background: var(--brand);
+  color: #001722;
+  font-size: 12px;
+  font-weight: 800;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 5;
+  box-shadow: 0 2px 8px rgba(0, 184, 255, 0.4);
+}
+
+/* Card focado pelo teclado — outline ciano fino */
+.effect-card.is-focused {
+  outline: 2px solid var(--brand);
+  outline-offset: 1px;
+}
+
+/* Botão flutuante "Aplicar (N) selecionados" */
+.apply-floating-btn {
+  position: fixed;
+  bottom: 60px;
+  left: 50%;
+  transform: translateX(-50%) translateY(20px);
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  height: 44px;
+  padding: 0 14px 0 12px;
+  background: linear-gradient(135deg, var(--brand) 0%, var(--brand-deep, #0088CC) 100%);
+  border: none;
+  border-radius: 22px;
+  color: #001722;
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: var(--weight-bold, 700);
+  letter-spacing: 0.02em;
+  cursor: pointer;
+  opacity: 0;
+  pointer-events: none;
+  z-index: 100;
+  box-shadow: 0 8px 24px rgba(0, 184, 255, 0.35), 0 2px 6px rgba(0, 0, 0, 0.4);
+  transition: opacity 200ms ease, transform 240ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+.apply-floating-btn.is-visible {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateX(-50%) translateY(0);
+}
+.apply-floating-btn:hover {
+  transform: translateX(-50%) translateY(-2px);
+}
+.apply-floating-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 22px;
+  height: 22px;
+  padding: 0 6px;
+  border-radius: 11px;
+  background: rgba(0, 23, 34, 0.25);
+  color: #001722;
+  font-size: 11px;
+  font-weight: 800;
+}
+.apply-floating-x {
+  margin-left: 4px;
+  padding-left: 10px;
+  border-left: 1px solid rgba(0, 23, 34, 0.2);
+  font-size: 14px;
+  cursor: pointer;
+  opacity: 0.7;
+  transition: opacity 150ms;
+}
+.apply-floating-x:hover { opacity: 1; }

@@ -238,6 +238,7 @@ function showScreen(name) {
 function bindAppUI() {
   document.getElementById('btn-logout').addEventListener('click', doLogout);
   bindGridDelegation();
+  bindKeyboardShortcuts();
   scheduleUpdateCheck();
 
   var input = document.getElementById('search-input');
@@ -658,6 +659,30 @@ function buildSidebarTree() {
     count: getFavoriteIds().length,
   }));
 
+  // ─ Item "Recentes" ─
+  var recentsCount = getRecents().length;
+  if (recentsCount > 0) {
+    tree.appendChild(makeSidebarItem({
+      label: 'Recentes', icon: '◷',
+      dataCat: 'recents', dataSub: '',
+      isActive: activeCategory === 'recents' && !activeSubcategory,
+      onClick: function () { setActiveCategory('recents', null); },
+      count: recentsCount,
+    }));
+  }
+
+  // ─ Item "Mais usados" ─
+  var mostUsedCount = getMostUsedIds(30).length;
+  if (mostUsedCount > 0) {
+    tree.appendChild(makeSidebarItem({
+      label: 'Mais usados', icon: '⚡',
+      dataCat: 'most-used', dataSub: '',
+      isActive: activeCategory === 'most-used' && !activeSubcategory,
+      onClick: function () { setActiveCategory('most-used', null); },
+      count: mostUsedCount,
+    }));
+  }
+
   // ─ Separador ─
   var sep = document.createElement('div');
   sep.className = 'sidebar-sep';
@@ -783,6 +808,46 @@ function countByCategory() {
     counts[e.category] = (counts[e.category] || 0) + 1;
   });
   return counts;
+}
+
+// ══ RECENTES & MAIS USADOS (localStorage) ══════════════════════
+//
+// Recentes: array de IDs em ordem de uso mais recente (max 50)
+// Mais usados: { id: count } — incrementa por uso (apply)
+
+var RECENTS_KEY = 'cinepro_recents_v1';
+var USAGE_KEY   = 'cinepro_usage_v1';
+var RECENTS_MAX = 50;
+
+function getRecents() {
+  try { return JSON.parse(localStorage.getItem(RECENTS_KEY) || '[]'); }
+  catch (e) { return []; }
+}
+function getUsage() {
+  try { return JSON.parse(localStorage.getItem(USAGE_KEY) || '{}'); }
+  catch (e) { return {}; }
+}
+
+function trackUsage(effectId) {
+  // Recentes — push pro topo, dedupe, cap
+  var rec = getRecents();
+  var existing = rec.indexOf(effectId);
+  if (existing !== -1) rec.splice(existing, 1);
+  rec.unshift(effectId);
+  if (rec.length > RECENTS_MAX) rec.length = RECENTS_MAX;
+  try { localStorage.setItem(RECENTS_KEY, JSON.stringify(rec)); } catch (e) {}
+
+  // Usage counter
+  var u = getUsage();
+  u[effectId] = (u[effectId] || 0) + 1;
+  try { localStorage.setItem(USAGE_KEY, JSON.stringify(u)); } catch (e) {}
+}
+
+function getMostUsedIds(limit) {
+  var u = getUsage();
+  return Object.keys(u)
+    .sort(function (a, b) { return u[b] - u[a]; })
+    .slice(0, limit || 30);
 }
 
 // ══ FAVORITOS (localStorage) ════════════════════════════════════
@@ -923,7 +988,12 @@ function searchIndices(query) {
 }
 
 function filterEffects(query) {
+  // Sets pré-computados pra evitar lookup repetido
   var favSet = activeCategory === 'favorites' ? new Set(getFavoriteIds()) : null;
+
+  // "Recentes" e "Mais usados" são virtuais — ordem importa, então construímos lista direto.
+  if (activeCategory === 'recents') return renderEffectsByIdOrder(getRecents(), query);
+  if (activeCategory === 'most-used') return renderEffectsByIdOrder(getMostUsedIds(30), query);
 
   // Query? Usa inverted index. Sem query, scan direto (rápido pra check de categoria)
   if (!query) {
@@ -956,6 +1026,22 @@ function filterEffects(query) {
   renderEffects(result);
 }
 
+/** Renderiza efeitos NA ORDEM dada por uma lista de IDs (recentes/mais usados) */
+function renderEffectsByIdOrder(ids, query) {
+  var qLower = (query || '').toLowerCase();
+  var result = [];
+  for (var i = 0; i < ids.length; i++) {
+    var e = effectsById[ids[i]];
+    if (!e) continue;
+    if (qLower) {
+      var blob = (e.name + ' ' + e.category + ' ' + (e.tags||[]).join(' ')).toLowerCase();
+      if (blob.indexOf(qLower) === -1) continue;
+    }
+    result.push(e);
+  }
+  renderEffects(result);
+}
+
 // ── PAGINAÇÃO INTERNA POR CATEGORIA ────────────────────────────
 // Pra não criar 5000+ DOM nodes de uma vez (causa freeze do CEP),
 // renderiza só BATCH_SIZE itens e exibe um botão "Carregar mais"
@@ -971,6 +1057,10 @@ function renderEffects(effects) {
   if (effects.length === 0) {
     if (activeCategory === 'favorites') {
       renderEmpty('Você ainda não favoritou nada.<br>Passe o mouse num card e clique na ⭐ pra começar.');
+    } else if (activeCategory === 'recents') {
+      renderEmpty('Nenhum efeito usado ainda.<br>Os que você aplicar vão aparecer aqui em ordem.');
+    } else if (activeCategory === 'most-used') {
+      renderEmpty('Nenhum efeito usado ainda.<br>O top dos seus mais usados vai surgir aqui.');
     } else if (activeCategory === 'all') {
       renderEmpty('Clique numa categoria acima pra começar 👆<br>Os arquivos são carregados sob demanda.');
     } else {
@@ -1298,6 +1388,278 @@ function bindGridDelegation() {
     e.preventDefault();
     prepareForDrag(effect, card);
   });
+
+  // Cmd/Ctrl+click ou Shift+click → seleção (em vez de iniciar drag)
+  // Click normal num card vazio não faz nada (drag é via mousedown nativo)
+  grid.addEventListener('click', function (e) {
+    if (e.target.closest('[data-action]')) return;  // botões tratam acima
+    var card = e.target.closest('.effect-card');
+    if (!card) return;
+    if (e.metaKey || e.ctrlKey) {
+      e.preventDefault();
+      toggleCardSelection(card);
+    } else if (e.shiftKey) {
+      e.preventDefault();
+      selectRangeTo(card);
+    } else if (selection.size > 0) {
+      // Click sem modificador com seleção ativa → limpa seleção
+      clearSelection();
+    }
+  });
+}
+
+// ══ MULTI-SELECT ════════════════════════════════════════════════
+// Cmd/Ctrl+click toggle; Shift+click range; Esc limpa.
+// Floating button "Aplicar (N)" aparece quando selection.size > 0.
+
+var selection = new Set();        // effect.id Set
+var lastSelectedId = null;        // pra Shift+click range
+var APPLY_FLOATING_BTN = null;
+
+function toggleCardSelection(card) {
+  var id = card.dataset.id;
+  if (!id) return;
+  if (selection.has(id)) {
+    selection.delete(id);
+    card.classList.remove('is-selected');
+  } else {
+    selection.add(id);
+    card.classList.add('is-selected');
+    lastSelectedId = id;
+  }
+  updateApplyFloating();
+}
+
+function selectRangeTo(card) {
+  var id = card.dataset.id;
+  if (!id) return;
+  if (!lastSelectedId) { toggleCardSelection(card); return; }
+  // Acha índices visíveis dos dois cards
+  var cards = document.querySelectorAll('#effects-grid .effect-card');
+  var a = -1, b = -1;
+  for (var i = 0; i < cards.length; i++) {
+    if (cards[i].dataset.id === lastSelectedId) a = i;
+    if (cards[i].dataset.id === id) b = i;
+  }
+  if (a < 0 || b < 0) { toggleCardSelection(card); return; }
+  var from = Math.min(a, b), to = Math.max(a, b);
+  for (var j = from; j <= to; j++) {
+    var c = cards[j];
+    selection.add(c.dataset.id);
+    c.classList.add('is-selected');
+  }
+  lastSelectedId = id;
+  updateApplyFloating();
+}
+
+function clearSelection() {
+  selection.forEach(function (id) {
+    var el = document.querySelector('.effect-card[data-id="' + cssEscape(id) + '"]');
+    if (el) el.classList.remove('is-selected');
+  });
+  selection.clear();
+  lastSelectedId = null;
+  updateApplyFloating();
+}
+
+function cssEscape(s) {
+  // Drive IDs são alfanum + _- — seguros, mas defensivo
+  return String(s).replace(/[^a-zA-Z0-9_\-]/g, '');
+}
+
+function updateApplyFloating() {
+  var n = selection.size;
+  if (n === 0) {
+    if (APPLY_FLOATING_BTN) APPLY_FLOATING_BTN.classList.remove('is-visible');
+    return;
+  }
+  if (!APPLY_FLOATING_BTN) {
+    APPLY_FLOATING_BTN = document.createElement('button');
+    APPLY_FLOATING_BTN.id = 'apply-floating-btn';
+    APPLY_FLOATING_BTN.className = 'apply-floating-btn';
+    APPLY_FLOATING_BTN.addEventListener('click', applySelection);
+    document.body.appendChild(APPLY_FLOATING_BTN);
+  }
+  APPLY_FLOATING_BTN.innerHTML =
+    '<span class="apply-floating-count">' + n + '</span>' +
+    '<span>Aplicar selecionados</span>' +
+    '<span class="apply-floating-x" title="Limpar seleção (Esc)">✕</span>';
+  // X interno limpa sem aplicar
+  APPLY_FLOATING_BTN.querySelector('.apply-floating-x').onclick = function (ev) {
+    ev.stopPropagation();
+    clearSelection();
+  };
+  APPLY_FLOATING_BTN.classList.add('is-visible');
+}
+
+/**
+ * Aplica todos os selecionados em ORDEM (na fila — sequencial pra evitar
+ * conflito de import no Premiere). Mantém ordem visual da seleção.
+ */
+function applySelection() {
+  if (selection.size === 0) return;
+  // Ordena pela ordem visual atual (mesmo loop usado em selectRangeTo)
+  var cards = Array.prototype.slice.call(document.querySelectorAll('#effects-grid .effect-card'));
+  var ordered = cards.filter(function (c) { return selection.has(c.dataset.id); });
+
+  showToast('Aplicando ' + ordered.length + ' efeito' + (ordered.length > 1 ? 's' : '') + '...', '');
+
+  var queue = ordered.slice();
+  function next() {
+    if (!queue.length) {
+      showToast('✓ ' + ordered.length + ' efeito' + (ordered.length > 1 ? 's aplicados' : ' aplicado'), 'success');
+      clearSelection();
+      return;
+    }
+    var card = queue.shift();
+    var effect = effectsById[card.dataset.id];
+    if (!effect) return next();
+    applyEffectSilent(effect, card).then(next, next);
+  }
+  next();
+}
+
+/** applyEffect sem toast individual (usado em batch). Devolve Promise. */
+function applyEffectSilent(effect, card) {
+  return new Promise(function (resolve, reject) {
+    if (card.classList.contains('downloading')) return resolve();
+    var cachedPath = effectCache[effect.id];
+    var dl = cachedPath ? Promise.resolve(cachedPath)
+                        : downloadEffectFile(effect).then(function (p) { effectCache[effect.id] = p; return p; });
+
+    card.classList.add('downloading');
+    dl.then(function (localPath) {
+      card.classList.remove('downloading');
+      card.classList.add('cached');
+      cs.evalScript(
+        'importFileAtPlayhead("' + escapePath(localPath) + '", "' + effect.ext + '")',
+        function (result) {
+          if (!result || result.startsWith('ERR:')) {
+            console.warn('[CinePRO] batch fail:', effect.name, result);
+            reject(result);
+          } else {
+            trackUsage(effect.id);
+            resolve(result);
+          }
+        }
+      );
+    }).catch(function (err) {
+      card.classList.remove('downloading');
+      console.warn('[CinePRO] batch download fail:', effect.name, err.message);
+      reject(err);
+    });
+  });
+}
+
+// ══ KEYBOARD SHORTCUTS ═════════════════════════════════════════
+// ⌘F busca · ↑↓←→ navega · Enter aplica · Espaço preview
+// ⌘D fav · Esc limpa seleção/busca
+
+var focusedCardEl = null;  // card atualmente "focado" pelo teclado
+
+function setFocusedCard(card) {
+  if (focusedCardEl) focusedCardEl.classList.remove('is-focused');
+  focusedCardEl = card;
+  if (card) {
+    card.classList.add('is-focused');
+    card.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+  }
+}
+
+function moveFocusBy(deltaCol, deltaRow) {
+  var cards = Array.prototype.slice.call(document.querySelectorAll('#effects-grid .effect-card'));
+  if (!cards.length) return;
+  if (!focusedCardEl) { setFocusedCard(cards[0]); return; }
+
+  var idx = cards.indexOf(focusedCardEl);
+  if (idx === -1) { setFocusedCard(cards[0]); return; }
+
+  // Calcula colunas medindo cards na primeira linha
+  var firstTop = cards[0].offsetTop;
+  var cols = 0;
+  for (var i = 0; i < cards.length && cards[i].offsetTop === firstTop; i++) cols++;
+  if (cols < 1) cols = 1;
+
+  var next = idx + deltaCol + (deltaRow * cols);
+  if (next < 0) next = 0;
+  if (next >= cards.length) next = cards.length - 1;
+  setFocusedCard(cards[next]);
+}
+
+function bindKeyboardShortcuts() {
+  document.addEventListener('keydown', function (e) {
+    // Não captura quando user tá digitando num input
+    var t = e.target;
+    var isTyping = t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA');
+    var meta = e.metaKey || e.ctrlKey;
+
+    // ⌘F → foca busca
+    if (meta && (e.key === 'f' || e.key === 'F')) {
+      var input = document.getElementById('search-input');
+      if (input) {
+        e.preventDefault();
+        input.focus();
+        input.select();
+      }
+      return;
+    }
+
+    // Esc → limpa busca / seleção / fecha modais
+    if (e.key === 'Escape') {
+      var modal = document.querySelector('.update-modal.is-open');
+      if (modal) { modal.classList.remove('is-open'); return; }
+      if (isTyping && t.id === 'search-input') {
+        t.value = '';
+        var clear = document.getElementById('search-clear');
+        if (clear) clear.style.display = 'none';
+        filterEffects('');
+        t.blur();
+        return;
+      }
+      if (selection.size > 0) { clearSelection(); return; }
+      if (focusedCardEl) { setFocusedCard(null); return; }
+    }
+
+    if (isTyping) return;  // resto dos atalhos só funcionam fora de input
+
+    // ↑↓←→ navegação no grid
+    if (e.key === 'ArrowRight') { e.preventDefault(); moveFocusBy(1, 0); return; }
+    if (e.key === 'ArrowLeft')  { e.preventDefault(); moveFocusBy(-1, 0); return; }
+    if (e.key === 'ArrowDown')  { e.preventDefault(); moveFocusBy(0, 1); return; }
+    if (e.key === 'ArrowUp')    { e.preventDefault(); moveFocusBy(0, -1); return; }
+
+    // Enter → aplica o focado (ou tudo da seleção se > 0)
+    if (e.key === 'Enter') {
+      if (selection.size > 0) { e.preventDefault(); applySelection(); return; }
+      if (focusedCardEl) {
+        var fx = effectsById[focusedCardEl.dataset.id];
+        if (fx) { e.preventDefault(); applyEffect(fx, focusedCardEl); }
+      }
+      return;
+    }
+
+    // Espaço → preview
+    if (e.key === ' ' && focusedCardEl) {
+      e.preventDefault();
+      var fx2 = effectsById[focusedCardEl.dataset.id];
+      if (fx2) togglePlayInline(fx2, focusedCardEl);
+      return;
+    }
+
+    // ⌘D → favorita o focado
+    if (meta && (e.key === 'd' || e.key === 'D') && focusedCardEl) {
+      e.preventDefault();
+      var fx3 = effectsById[focusedCardEl.dataset.id];
+      if (fx3) toggleFavorite(fx3, focusedCardEl);
+      return;
+    }
+
+    // / sem modificador → foca busca (UX padrão tipo GitHub)
+    if (e.key === '/' && !meta) {
+      var input2 = document.getElementById('search-input');
+      if (input2) { e.preventDefault(); input2.focus(); }
+    }
+  });
 }
 
 // ══ PREVIEW INLINE (sem modal) ══════════════════════════════════
@@ -1618,6 +1980,7 @@ function applyEffect(effect, card) {
           } else {
             setStatus('ok', '"' + effect.name + '" pronto!');
             showToast(successMessage(effect, result), 'success');
+            trackUsage(effect.id);  // Recentes + counter
           }
         }
       );
