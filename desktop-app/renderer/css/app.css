@@ -539,3 +539,41 @@ html, body {
   white-space: nowrap;
   text-overflow: ellipsis;
 }
+
+/* ═══ LOGIN: SUCCESS + FORGOT LINK ═══ */
+.login-success {
+  background: rgba(34, 197, 94, 0.1);
+  border: 1px solid rgba(34, 197, 94, 0.3);
+  border-radius: var(--radius-md);
+  color: var(--success);
+  font-size: var(--text-sm);
+  padding: var(--space-2) var(--space-3);
+  text-align: center;
+  display: none;
+  font-weight: var(--weight-semibold);
+}
+.login-success.visible { display: block; }
+
+.login-forgot {
+  text-align: center;
+  margin-top: var(--space-2);
+}
+.login-forgot a {
+  color: var(--text-muted);
+  text-decoration: none;
+  font-size: var(--text-xs);
+  border-bottom: 1px solid transparent;
+  transition: color var(--duration-base) var(--ease-smooth),
+              border-color var(--duration-base) var(--ease-smooth);
+}
+.login-forgot a:hover {
+  color: var(--brand);
+  border-color: var(--brand);
+}
+
+.login-footer {
+  font-size: var(--text-xs);
+}
+.login-footer span {
+  color: var(--text-muted);
+}

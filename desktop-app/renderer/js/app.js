@@ -46,17 +46,67 @@ function bindLogin() {
     e.preventDefault();
     window.cinepro.openExternal(CINEPRO_CONFIG.TICTO_CHECKOUT_URL);
   });
+  document.getElementById('link-forgot-password').addEventListener('click', function (e) {
+    e.preventDefault();
+    sendPasswordReset();
+  });
+  document.getElementById('link-first-access').addEventListener('click', function (e) {
+    e.preventDefault();
+    sendPasswordReset(); // mesma ação — manda reset email
+  });
+}
+
+function showLoginMessage(type, msg) {
+  var err = document.getElementById('login-error');
+  var ok  = document.getElementById('login-success');
+  if (type === 'error') {
+    err.textContent = msg;
+    err.classList.add('visible');
+    ok.classList.remove('visible');
+  } else if (type === 'success') {
+    ok.textContent = msg;
+    ok.classList.add('visible');
+    err.classList.remove('visible');
+  } else {
+    err.classList.remove('visible');
+    ok.classList.remove('visible');
+  }
+}
+
+function sendPasswordReset() {
+  var email = document.getElementById('login-email').value.trim();
+  if (!email) {
+    showLoginMessage('error', 'Digite seu email primeiro pra eu mandar o link.');
+    return;
+  }
+  if (!auth) {
+    showLoginMessage('error', 'Conexão indisponível. Tente novamente.');
+    return;
+  }
+  showLoginMessage(null);
+  auth.sendPasswordResetEmail(email)
+    .then(function () {
+      showLoginMessage('success', '✓ Link enviado pra ' + email + '. Verifique a caixa de entrada e o spam.');
+    })
+    .catch(function (e) {
+      if (e.code === 'auth/user-not-found') {
+        showLoginMessage('error', 'Email não cadastrado. Verifique se digitou correto.');
+      } else if (e.code === 'auth/invalid-email') {
+        showLoginMessage('error', 'Email inválido.');
+      } else {
+        showLoginMessage('error', e.message);
+      }
+    });
 }
 
 function doLogin() {
   var email = document.getElementById('login-email').value.trim();
   var pass  = document.getElementById('login-password').value;
-  var err   = document.getElementById('login-error');
-  err.classList.remove('visible');
+
+  showLoginMessage(null);
 
   if (!email || !pass) {
-    err.textContent = 'Preencha email e senha.';
-    err.classList.add('visible');
+    showLoginMessage('error', 'Preencha email e senha.');
     return;
   }
 
@@ -70,20 +120,28 @@ function doLogin() {
       checkSubscriptionAndShow();
     })
     .catch(function (e) {
-      err.textContent = humanizeAuthError(e);
-      err.classList.add('visible');
+      var code = e.code || '';
+      // Erros de senha = provavelmente primeiro acesso (Ticto criou conta com pass random)
+      // Mostra mensagem amigável + sugere reset
+      if (code === 'auth/wrong-password' || code === 'auth/invalid-credential') {
+        showLoginMessage('error',
+          'Senha incorreta. Se é seu primeiro acesso após pagar, ' +
+          'use o link "Esqueci minha senha" abaixo pra criar uma.'
+        );
+      } else if (code === 'auth/user-not-found') {
+        showLoginMessage('error',
+          'Email não cadastrado. Após pagar na Ticto, você recebe um email com link de senha.'
+        );
+      } else if (code === 'auth/invalid-email') {
+        showLoginMessage('error', 'Email inválido.');
+      } else if (code === 'auth/too-many-requests') {
+        showLoginMessage('error', 'Muitas tentativas. Tente em alguns minutos.');
+      } else {
+        showLoginMessage('error', e.message || 'Erro ao entrar.');
+      }
       btn.disabled = false;
       btn.textContent = 'Entrar';
     });
-}
-
-function humanizeAuthError(e) {
-  var code = e.code || '';
-  if (code === 'auth/wrong-password' || code === 'auth/invalid-credential') return 'Senha incorreta.';
-  if (code === 'auth/user-not-found')   return 'Usuário não encontrado.';
-  if (code === 'auth/invalid-email')    return 'Email inválido.';
-  if (code === 'auth/too-many-requests') return 'Muitas tentativas. Tente em alguns minutos.';
-  return e.message || 'Erro ao entrar.';
 }
 
 function setLoginStatus(type, msg) {

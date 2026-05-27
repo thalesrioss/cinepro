@@ -40,9 +40,24 @@
       <input type="password" id="login-password" placeholder="••••••••">
     </div>
     <div id="login-error" class="login-error"></div>
+
+    <!-- Sucesso (após enviar reset) -->
+    <div id="login-success" class="login-success"></div>
+
     <button id="btn-login" class="btn btn--primary btn--lg btn--block">Entrar</button>
+
+    <!-- "Esqueci minha senha" / "Primeiro acesso" -->
+    <div class="login-forgot">
+      <a href="#" id="link-forgot-password">Esqueci minha senha</a>
+    </div>
+
     <div class="login-footer">
-      Ainda não tem assinatura?
+      <span>Primeiro acesso?</span>
+      <a href="#" id="link-first-access">Veja seu email pro link de senha</a>
+    </div>
+
+    <div class="login-footer" style="margin-top: 6px;">
+      <span>Ainda não tem assinatura?</span>
       <a href="#" id="link-subscribe-from-login">Assinar agora</a>
     </div>
   </div>

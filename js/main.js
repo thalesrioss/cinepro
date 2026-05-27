@@ -128,6 +128,44 @@ function bindLoginUI() {
   });
 
   document.getElementById('btn-logout-no-access').addEventListener('click', doLogout);
+
+  var forgot = document.getElementById('link-forgot-password');
+  if (forgot) forgot.addEventListener('click', function (e) {
+    e.preventDefault();
+    sendPasswordReset();
+  });
+}
+
+function showLoginSuccess(msg) {
+  var ok  = document.getElementById('login-success');
+  var err = document.getElementById('login-error');
+  if (ok)  { ok.textContent = msg; ok.classList.add('visible'); }
+  if (err) err.classList.remove('visible');
+}
+
+function sendPasswordReset() {
+  var email = document.getElementById('login-email').value.trim();
+  if (!email) {
+    showLoginError('Digite seu email primeiro pra eu mandar o link.');
+    return;
+  }
+  if (!auth) {
+    showLoginError('Conexão indisponível. Tente novamente.');
+    return;
+  }
+  auth.sendPasswordResetEmail(email)
+    .then(function () {
+      showLoginSuccess('✓ Link enviado pra ' + email + '. Verifique seu email.');
+    })
+    .catch(function (e) {
+      if (e.code === 'auth/user-not-found') {
+        showLoginError('Email não cadastrado.');
+      } else if (e.code === 'auth/invalid-email') {
+        showLoginError('Email inválido.');
+      } else {
+        showLoginError(e.message);
+      }
+    });
 }
 
 function doLogin() {
@@ -135,6 +173,7 @@ function doLogin() {
   var pass  = document.getElementById('login-password').value;
   var btn   = document.getElementById('btn-login');
   var errEl = document.getElementById('login-error');
+  var okEl  = document.getElementById('login-success');
 
   if (!email || !pass) {
     showLoginError('Preencha e-mail e senha.');
@@ -142,6 +181,7 @@ function doLogin() {
   }
 
   errEl.classList.remove('visible');
+  if (okEl) okEl.classList.remove('visible');
   btn.disabled    = true;
   btn.textContent = 'Entrando...';
 
@@ -151,11 +191,13 @@ function doLogin() {
       btn.textContent = 'Entrar';
 
       var msg = 'Erro ao fazer login.';
-      if (err.code === 'auth/user-not-found')    msg = 'E-mail não cadastrado.';
-      if (err.code === 'auth/wrong-password')    msg = 'Senha incorreta.';
-      if (err.code === 'auth/invalid-email')     msg = 'E-mail inválido.';
-      if (err.code === 'auth/network-request-failed') msg = 'Sem conexão com internet.';
-      if (err.code === 'auth/too-many-requests') msg = 'Muitas tentativas. Aguarde.';
+      if (err.code === 'auth/user-not-found') {
+        msg = 'Email não cadastrado. Após pagar na Ticto, você recebe link de senha.';
+      } else if (err.code === 'auth/wrong-password' || err.code === 'auth/invalid-credential') {
+        msg = 'Senha incorreta. Primeiro acesso? Use "Esqueci minha senha".';
+      } else if (err.code === 'auth/invalid-email')     msg = 'E-mail inválido.';
+      else if (err.code === 'auth/network-request-failed') msg = 'Sem conexão com internet.';
+      else if (err.code === 'auth/too-many-requests') msg = 'Muitas tentativas. Aguarde.';
 
       showLoginError(msg);
     });
