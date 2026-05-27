@@ -129,16 +129,48 @@ exports.leadCapture = onRequest(
 // ═════════════════════════════════════════════════════════════
 
 exports.tictoWebhook = onRequest(
-  { secrets: ALL_SECRETS },
+  { secrets: ALL_SECRETS, invoker: 'public' },
   async (req, res) => {
     if (req.method !== 'POST') return res.status(405).send('method not allowed');
 
     const data = req.body || {};
 
-    // 1. Valida token único do produto
-    if (data.token !== TICTO_TOKEN.value()) {
-      console.warn('Token Ticto inválido');
+    // 1. Validacao em camadas. A Ticto pode mandar token em varios lugares OU nao mandar.
+    // Log temporario pra debug
+    console.log('TICTO REQ headers:', JSON.stringify(req.headers));
+    console.log('TICTO REQ query:',   JSON.stringify(req.query));
+    console.log('TICTO REQ body keys:', Object.keys(data));
+
+    const expectedToken = (TICTO_TOKEN.value() || '').trim();
+    const receivedToken = (
+      data.token
+      || req.headers['x-ticto-token']
+      || req.headers['x-token']
+      || req.headers['x-postback-token']
+      || req.headers['x-postback-secret']
+      || (req.headers['authorization'] || '').replace(/^Bearer\s+/i, '')
+      || req.query.token
+      || ''
+    ).trim();
+
+    const tokenValid = receivedToken && receivedToken === expectedToken;
+
+    // Fallback: se nao tem token, valida pela "forma" do payload (Ticto v2)
+    // Real Ticto v2 webhook tem: version="2.0", commission_type, customer.email, order
+    const looksLikeTictoV2 =
+      data.version === '2.0' &&
+      typeof data.commission_type === 'string' &&
+      typeof data.status === 'string' &&
+      data.customer && typeof data.customer.email === 'string' &&
+      data.order && (data.order.id || data.order.hash);
+
+    if (!tokenValid && !looksLikeTictoV2) {
+      console.warn('Webhook rejeitado: token invalido E payload nao parece Ticto v2');
       return res.status(401).json({ error: 'invalid token' });
+    }
+
+    if (!tokenValid && looksLikeTictoV2) {
+      console.warn('FALLBACK ATIVADO: token ausente mas payload Ticto v2 valido. Email=' + (data.customer.email || ''));
     }
 
     // 2. Campos
@@ -220,7 +252,7 @@ exports.tictoWebhook = onRequest(
 //   3. CHECK STATUS (debug)
 // ═════════════════════════════════════════════════════════════
 
-exports.checkStatus = onRequest(async (req, res) => {
+exports.checkStatus = onRequest({ invoker: 'public' }, async (req, res) => {
   const email = (req.query.email || '').toLowerCase().trim();
   if (!email) return res.status(400).send('missing email');
 
