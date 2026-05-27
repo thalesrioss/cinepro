@@ -101,6 +101,9 @@ function getPlayheadTime() {
   }
 }
 
+// Extensões puramente de áudio — vão em audioTracks[0], não videoTracks
+var AUDIO_EXTS = { mp3:1, wav:1, m4a:1, aac:1, ogg:1, aif:1, aiff:1 };
+
 /**
  * Importa um arquivo na posição do playhead da sequência ativa.
  * Suporta: .mogrt, .mp4, .mov, .prproj (como bin), etc.
@@ -113,13 +116,15 @@ function importFileAtPlayhead(filePath, fileType) {
     var file = new File(filePath);
     if (!file.exists) return 'ERR:FILE_NOT_FOUND:' + filePath;
 
+    var lowerType = (fileType || '').toLowerCase();
+
     // Presets (.prfpset) — importa pra janela de Efeitos, não pra timeline
-    if (fileType === 'prfpset') {
+    if (lowerType === 'prfpset') {
       return importPreset(filePath);
     }
 
     // LUTs (.cube/.3dl) — copia pra pasta de LUTs do Premiere
-    if (fileType === 'cube' || fileType === '3dl') {
+    if (lowerType === 'cube' || lowerType === '3dl') {
       return installLUT(filePath);
     }
 
@@ -127,11 +132,16 @@ function importFileAtPlayhead(filePath, fileType) {
     if (!seq) return 'ERR:NO_SEQUENCE';
 
     // MOGRT — Motion Graphics Template
-    if (fileType === 'mogrt') {
+    if (lowerType === 'mogrt') {
       return importMogrtAtPlayhead(filePath, seq);
     }
 
-    // Mídia comum (mp4, mov, mp3, wav, png, gif...)
+    // Áudio puro (mp3, wav, m4a, etc.) — track de áudio, não de vídeo!
+    if (AUDIO_EXTS[lowerType]) {
+      return importAudioAtPlayhead(filePath, seq);
+    }
+
+    // Mídia visual (mp4, mov, png, gif, jpg...) — track de vídeo
     return importClipAtPlayhead(filePath, seq);
 
   } catch (e) {
@@ -221,6 +231,42 @@ function importMogrtAtPlayhead(filePath, seq) {
 
   } catch (e) {
     return 'ERR:MOGRT:' + e.toString();
+  }
+}
+
+/**
+ * Importa um arquivo de áudio puro (.wav, .mp3, .m4a) e insere
+ * em audioTracks[0] do sequence. Premiere falha silenciosamente se
+ * tentamos enfiar áudio em videoTracks.
+ */
+function importAudioAtPlayhead(filePath, seq) {
+  try {
+    var bin = app.project.rootItem;
+    app.project.importFiles([filePath], true, bin, false);
+
+    // Acha o item recém-importado (último com o nome do arquivo)
+    var fileName = filePath.split('/').pop().split('\\').pop();
+    var importedItem = null;
+    // Itera de trás pra frente — o item recém-importado é o último
+    for (var i = bin.children.numItems - 1; i >= 0; i--) {
+      if (bin.children[i].name === fileName) {
+        importedItem = bin.children[i];
+        break;
+      }
+    }
+    if (!importedItem) return 'WARN:IMPORTED_BUT_NOT_FOUND';
+
+    var cti = seq.getPlayerPosition();
+
+    // Tenta audioTracks[0]; se não existir, cria via fallback
+    var audioTrack = seq.audioTracks[0];
+    if (!audioTrack) return 'ERR:NO_AUDIO_TRACK';
+
+    audioTrack.insertClip(importedItem, cti.seconds);
+    return 'OK:AUDIO_INSERTED';
+
+  } catch (e) {
+    return 'ERR:AUDIO:' + e.toString();
   }
 }
 

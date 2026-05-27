@@ -1333,9 +1333,19 @@ function togglePlayInline(effect, card) {
 
   if (effect.kind === 'audio') {
     var audio = new Audio(url);
-    audio.play().catch(function(){});
+    audio.crossOrigin = 'anonymous';
     card._audio = audio;
     audio.addEventListener('ended', function () { stopInline(card); });
+    audio.addEventListener('error', function () {
+      console.warn('[CinePRO] preview falhou:', effect.name, audio.error && audio.error.code);
+      showToast('Preview indisponível pra "' + effect.name + '". Use Aplicar.', 'error');
+      stopInline(card);
+    });
+    audio.play().catch(function (err) {
+      console.warn('[CinePRO] play falhou:', effect.name, err && err.message);
+      showToast('Preview falhou: ' + (err && err.message || 'erro desconhecido'), 'error');
+      stopInline(card);
+    });
   } else if (effect.kind === 'video' || effect.kind === 'image') {
     // Pra vídeo: cria um <video> sobre o thumb e toca
     var thumb = card.querySelector('.effect-thumb');
@@ -1350,6 +1360,11 @@ function togglePlayInline(effect, card) {
       v.muted = false;
       v.playsInline = true;
       v.controls = false;
+      v.addEventListener('error', function () {
+        console.warn('[CinePRO] preview video falhou:', effect.name, v.error && v.error.code);
+        showToast('Preview indisponível pra "' + effect.name + '". Use Aplicar.', 'error');
+        stopInline(card);
+      });
       thumb.appendChild(v);
       card._video = v;
     }
@@ -1907,11 +1922,15 @@ function openURL(url) {
 
 function humanizeError(err) {
   if (!err) return 'Erro desconhecido';
-  if (err.includes('NO_SEQUENCE'))    return 'Abra uma sequência no Premiere primeiro.';
-  if (err.includes('FILE_NOT_FOUND')) return 'Arquivo não encontrado.';
-  if (err.includes('NO_VIDEO_TRACK')) return 'Crie uma trilha de vídeo na timeline.';
-  if (err.includes('PRESET'))         return 'Falha ao importar o preset.';
-  if (err.includes('LUT'))            return 'Falha ao instalar o LUT.';
+  if (err.indexOf('NO_SEQUENCE')    !== -1) return 'Abra uma sequência no Premiere primeiro.';
+  if (err.indexOf('FILE_NOT_FOUND') !== -1) return 'Arquivo não encontrado no cache.';
+  if (err.indexOf('NO_VIDEO_TRACK') !== -1) return 'Crie uma trilha de vídeo na timeline.';
+  if (err.indexOf('NO_AUDIO_TRACK') !== -1) return 'Crie uma trilha de áudio na timeline.';
+  if (err.indexOf('AUDIO:')         !== -1) return 'Falha ao inserir áudio: ' + err.replace('AUDIO:', '').trim();
+  if (err.indexOf('CLIP:')          !== -1) return 'Falha ao inserir clip: ' + err.replace('CLIP:', '').trim();
+  if (err.indexOf('PRESET')         !== -1) return 'Falha ao importar o preset.';
+  if (err.indexOf('LUT')            !== -1) return 'Falha ao instalar o LUT.';
+  if (err.indexOf('MOGRT')          !== -1) return 'Falha ao importar o MOGRT.';
   return err;
 }
 
