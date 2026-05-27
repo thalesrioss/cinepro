@@ -29,11 +29,31 @@ const CINEPRO_CONFIG = {
   TICTO_CHECKOUT_URL: 'https://checkout.ticto.app/O292AD8B4',
 
   // -- App --
-  PLUGIN_VERSION: '1.0.7',
+  PLUGIN_VERSION: '1.0.8',
 
   // -- Admins (acesso vitalício, ignora assinatura) --
   // Coloque aqui os emails que sempre terão acesso, mesmo sem comprar
   ADMIN_EMAILS: [
     'thales.rioss@gmail.com',
+  ],
+
+  // -- Branding de Categorias --
+  // Renomeia pastas raiz do Drive pra rótulos branded CinePRO na sidebar.
+  // Avaliado em ordem: primeira regex que casar vence. Subpastas NÃO são renomeadas.
+  // Os arquivos no Drive ficam intocados — só muda o rótulo no plugin.
+  CATEGORY_RENAMES: [
+    { match: /ocular|sound\s*lib/i,            to: 'CinePRO Sound Library' },
+    { match: /mister\s*horse/i,                to: 'CinePRO Motion' },
+    { match: /sfx|sound\s*effect/i,            to: 'CinePRO SFX' },
+    { match: /\bfoley\b/i,                     to: 'CinePRO Foley' },
+    { match: /music|soundtrack|trilha/i,       to: 'CinePRO Music' },
+    { match: /preset|prfpset/i,                to: 'CinePRO Presets' },
+    { match: /\blut\b|color\s*grading|look/i,  to: 'CinePRO Looks' },
+    { match: /transi/i,                        to: 'CinePRO Transitions' },
+    { match: /overlay/i,                       to: 'CinePRO Overlays' },
+    { match: /template|mogrt|motion\s*graph/i, to: 'CinePRO Templates' },
+    { match: /\bmotion\b|animac/i,             to: 'CinePRO Motion' },
+    { match: /visual|vfx|efeito\s*visual/i,    to: 'CinePRO Visual' },
+    { match: /^geral$/i,                       to: 'CinePRO Essentials' },
   ],
 };

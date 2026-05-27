@@ -333,22 +333,28 @@ function loadEffectsFromDrive() {
       var rootFolders = rootItems.filter(isFolder).filter(function (f) { return !shouldSkipFolder(f.name); });
       var rootFiles   = rootItems.filter(notFolder).filter(function (f) { return !shouldSkipFile(f.name); });
 
-      // Arquivos soltos na raiz vão pra categoria "Geral"
+      // Arquivos soltos na raiz vão pra uma categoria "Essentials" branded
+      var rootBucket = brandCategoryName('Geral');
       rootFiles.forEach(function (f) {
-        allEffects.push(driveFileToEffect(f, 'Geral', null, []));
+        allEffects.push(driveFileToEffect(f, rootBucket, null, []));
       });
       if (rootFiles.length) {
-        driveCategories.push({ id: null, name: 'Geral', loaded: true });
-        driveLoadedCats['Geral'] = true;
+        driveCategories.push({ id: null, name: rootBucket, loaded: true });
+        driveLoadedCats[rootBucket] = true;
       }
 
-      // Cada subpasta vira uma categoria (lazy)
+      // Cada subpasta vira uma categoria (lazy) — nome passa pelo branding.
+      // Se 2+ pastas do Drive mapeiam pro mesmo nome branded, mescla numa só.
       rootFolders.forEach(function (cat) {
-        driveCategories.push({
-          id:     cat.id,
-          name:   cleanCategoryName(cat.name),
-          loaded: false,
-        });
+        var branded = brandCategoryName(cat.name);
+        var existing = driveCategories.find(function (c) { return c.name === branded; });
+        if (existing) {
+          // anexa o folder id extra pra walker visitar os dois
+          existing.extraIds = existing.extraIds || [];
+          existing.extraIds.push(cat.id);
+        } else {
+          driveCategories.push({ id: cat.id, name: branded, loaded: false });
+        }
       });
     })
     .then(function () {
@@ -375,7 +381,12 @@ function loadCategoryDeep(categoryName) {
 
   setStatus('loading', 'Carregando "' + categoryName + '"...');
 
-  return walkFolder(cat.id, categoryName, [], 0)
+  // Lista de root ids dessa categoria (mescla pastas com mesmo brand name)
+  var rootIds = [cat.id].concat(cat.extraIds || []);
+
+  return Promise.all(rootIds.map(function (rid) {
+    return walkFolder(rid, categoryName, [], 0);
+  }))
     .then(function () {
       driveLoadedCats[categoryName] = true;
       cat.loaded = true;
@@ -423,6 +434,21 @@ function notFolder(i)   { return i.mimeType !== 'application/vnd.google-apps.fol
 /** Remove prefixos como "01 - ", "02 -" do nome da pasta */
 function cleanCategoryName(name) {
   return name.replace(/^\d+\s*[-_.]\s*/, '').trim();
+}
+
+/**
+ * BRANDING: pega o nome de uma pasta RAIZ do Drive e aplica o mapa de
+ * renames do config (regex-based). Subpastas NÃO passam por aqui —
+ * mantêm o nome original do Drive pra continuarem descritivas.
+ */
+function brandCategoryName(name) {
+  var clean = cleanCategoryName(name);
+  var renames = (window.CINEPRO_CONFIG && CINEPRO_CONFIG.CATEGORY_RENAMES) || [];
+  for (var i = 0; i < renames.length; i++) {
+    var r = renames[i];
+    if (r && r.match && r.match.test(clean)) return r.to;
+  }
+  return clean;
 }
 
 /**
