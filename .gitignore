@@ -58,3 +58,15 @@ __pycache__/
 
 # Claude Code local config
 .claude/
+
+# Drive audit — credentials e dumps grandes (não commitar)
+audit/node_modules/
+audit/oauth-client.json
+audit/.oauth-token.json
+audit/trash-logs/
+audit/drive-audit-full.csv
+audit/drive-audit-trash.csv
+audit/drive-delete-list.csv
+
+# Manifest builder — só não commita node_modules; o manifest.json em si VAI commitar
+manifest/node_modules/

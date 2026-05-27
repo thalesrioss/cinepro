@@ -68,6 +68,9 @@ rsync -a \
   --exclude='/firebase' \
   --exclude='/.claude' \
   --exclude='/.github' \
+  --exclude='/audit' \
+  --exclude='/manifest' \
+  --exclude='/landing-page' \
   --exclude='/node_modules' \
   --exclude='*.log' \
   --exclude='.DS_Store' \
@@ -75,6 +78,15 @@ rsync -a \
   --exclude='INICIO_RAPIDO.md' \
   --exclude='serve.py' \
   "$ROOT/" "$PLUGIN_DEST/"
+
+# Bundle do manifest pré-gerado (boot offline-safe)
+if [ -f "$ROOT/manifest/dist/manifest.json" ]; then
+  echo "→ Bundling manifest pré-gerado..."
+  cp "$ROOT/manifest/dist/manifest.json" "$PLUGIN_DEST/manifest.json"
+  echo "  ✓ Manifest: $(du -h "$PLUGIN_DEST/manifest.json" | cut -f1)"
+else
+  echo "⚠️  manifest.json não encontrado — plugin vai usar fallback live ou CDN"
+fi
 
 echo "  ✓ Plugin: $(du -sh "$PLUGIN_DEST" | cut -f1)"
 echo "  ✓ Payload total: $(du -sh "$PAYLOAD" | cut -f1)"

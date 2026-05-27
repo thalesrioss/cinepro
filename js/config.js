@@ -29,7 +29,7 @@ const CINEPRO_CONFIG = {
   TICTO_CHECKOUT_URL: 'https://checkout.ticto.app/O292AD8B4',
 
   // -- App --
-  PLUGIN_VERSION: '1.0.8',
+  PLUGIN_VERSION: '1.0.9',
 
   // -- Admins (acesso vitalício, ignora assinatura) --
   // Coloque aqui os emails que sempre terão acesso, mesmo sem comprar
@@ -44,7 +44,7 @@ const CINEPRO_CONFIG = {
   CATEGORY_RENAMES: [
     { match: /ocular|sound\s*lib/i,            to: 'CinePRO Sound Library' },
     { match: /mister\s*horse/i,                to: 'CinePRO Motion' },
-    { match: /sfx|sound\s*effect/i,            to: 'CinePRO SFX' },
+    { match: /sfx|sound\s*(effect|design)/i,   to: 'CinePRO Sound Design' },
     { match: /\bfoley\b/i,                     to: 'CinePRO Foley' },
     { match: /music|soundtrack|trilha/i,       to: 'CinePRO Music' },
     { match: /preset|prfpset/i,                to: 'CinePRO Presets' },

@@ -1,0 +1,51 @@
+name: Build Manifest
+
+# Rebuilda o manifest do Drive semanalmente (sábados 03:00 UTC) e quando
+# o builder ou regras de branding mudam.
+on:
+  schedule:
+    - cron: '0 3 * * 6'        # sábado 03:00 UTC
+  workflow_dispatch:             # botão manual
+  push:
+    branches: [main]
+    paths:
+      - 'manifest/build-manifest.js'
+      - 'manifest/package.json'
+      - '.github/workflows/build-manifest.yml'
+
+permissions:
+  contents: write                # pra commitar o manifest atualizado
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install deps
+        working-directory: manifest
+        run: npm install
+
+      - name: Build manifest
+        working-directory: manifest
+        env:
+          CINEPRO_OAUTH_CLIENT: ${{ secrets.CINEPRO_OAUTH_CLIENT }}
+          CINEPRO_OAUTH_TOKEN:  ${{ secrets.CINEPRO_OAUTH_TOKEN }}
+        run: node build-manifest.js
+
+      - name: Commit manifest if changed
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          if [ -n "$(git status --porcelain manifest/dist/)" ]; then
+            git add manifest/dist/manifest.json manifest/dist/manifest.json.gz
+            git commit -m "chore(manifest): rebuild $(date -u +%Y-%m-%dT%H:%MZ)"
+            git push
+            echo "Manifest atualizado e commitado."
+          else
+            echo "Nenhuma mudança no manifest."
+          fi

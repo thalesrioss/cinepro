@@ -59,6 +59,8 @@ Source: "..\..\css\*";      DestDir: "{userappdata}\Adobe\CEP\extensions\CinePRO
 Source: "..\..\js\*";       DestDir: "{userappdata}\Adobe\CEP\extensions\CinePRO\js";    Flags: ignoreversion recursesubdirs createallsubdirs
 Source: "..\..\jsx\*";      DestDir: "{userappdata}\Adobe\CEP\extensions\CinePRO\jsx";   Flags: ignoreversion recursesubdirs createallsubdirs
 Source: "..\..\icons\*";    DestDir: "{userappdata}\Adobe\CEP\extensions\CinePRO\icons"; Flags: ignoreversion recursesubdirs createallsubdirs
+; Manifest pré-gerado (boot offline-safe)
+Source: "..\..\manifest\dist\manifest.json"; DestDir: "{userappdata}\Adobe\CEP\extensions\CinePRO"; Flags: ignoreversion skipifsourcedoesntexist
 
 [Icons]
 ; Atalho no menu Iniciar + Desktop pra desktop app

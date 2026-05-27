@@ -1,0 +1,68 @@
+═══════════════════════════════════════════════════════════
+  CinePRO — Drive Audit Summary
+  2026-05-27T18:01:03.741Z
+═══════════════════════════════════════════════════════════
+
+Pastas visitadas:    962
+Arquivos no Drive:   13506
+Tamanho total:       99.82 GB
+Candidatos a apagar: 2704
+Espaço a recuperar:  16.83 GB
+
+───────────────────────────────────────────────────────────
+  Por classificação
+───────────────────────────────────────────────────────────
+
+[UNKNOWN_EXT]  1458 arquivos · 77.3 MB
+  · 02 - VISUAL DESIGN / _Mister Horse Previews / Transição / MESCLAGEM + WIPES / Retro/Chemistry 3.mp4.webp (7.9 KB)
+  · 02 - VISUAL DESIGN / _Mister Horse Previews / Transição / MESCLAGEM + WIPES / Retro/Chemistry 1.mp4.webp (5.3 KB)
+  · 02 - VISUAL DESIGN / _Mister Horse Previews / Transição / MESCLAGEM + WIPES / Retro/Chemistry 2.mp4.webp (11.3 KB)
+  · 02 - VISUAL DESIGN / _Mister Horse Previews / Transição / MESCLAGEM + WIPES / Transição de Plastico/10.mp4.webp (52.1 KB)
+  · 02 - VISUAL DESIGN / _Mister Horse Previews / Transição / MESCLAGEM + WIPES / Transição de Plastico/08.mp4.webp (46.2 KB)
+
+[SKIPPED_FOLDER]  1445 arquivos · 5.8 MB
+  · 02 - VISUAL DESIGN / _Mister Horse Previews / Transição / MESCLAGEM + WIPES / Retro/Chemistry 3.mp4.webp (7.9 KB)
+  · 02 - VISUAL DESIGN / _Mister Horse Previews / Transição / MESCLAGEM + WIPES / Retro/Chemistry 1.mp4.webp (5.3 KB)
+  · 02 - VISUAL DESIGN / _Mister Horse Previews / Transição / MESCLAGEM + WIPES / Retro/Chemistry 2.mp4.webp (11.3 KB)
+  · 02 - VISUAL DESIGN / _Mister Horse Previews / Transição / MESCLAGEM + WIPES / Transição de Plastico/10.mp4.webp (52.1 KB)
+  · 02 - VISUAL DESIGN / _Mister Horse Previews / Transição / MESCLAGEM + WIPES / Transição de Plastico/08.mp4.webp (46.2 KB)
+
+[DUPLICATE]  1423 arquivos · 5.93 GB
+  · 02 - VISUAL DESIGN / _Mister Horse Previews / Overlay / Film Overlay/Purple Cinemarker.mp4.webp (38.5 KB)
+  · 02 - VISUAL DESIGN / _Mister Horse Previews / Overlay / Film Overlay/10.mp4.webp (8.2 KB)
+  · 02 - VISUAL DESIGN / _Mister Horse Previews / Overlay / Grain Estilizar / RABISCO DE LÁPIS / Hand-drawn-marker Geral / Hand-Drawn Smart Marker Pack / Arrows/Arrow 1.mov.webp (0 B)
+  · 02 - VISUAL DESIGN / _Mister Horse Previews / Overlay / Grain Estilizar / RABISCO DE LÁPIS / Hand-drawn-marker Geral / Hand-Drawn Smart Marker Pack / Arrows/Arrow 2.mov.webp (0 B)
+  · 02 - VISUAL DESIGN / _Mister Horse Previews / Overlay / Grain Estilizar / RABISCO DE LÁPIS / Hand-drawn-marker Geral / Hand-Drawn Smart Marker Pack / Arrows/Arrow 4.mov.webp (0 B)
+
+[EMPTY]  926 arquivos · 0 B
+  · 02 - VISUAL DESIGN / _Mister Horse Previews / Transição / MESCLAGEM + WIPES / Light Transição / Lears/Light Transitions 14 HD.mov.webp (0 B)
+  · 02 - VISUAL DESIGN / _Mister Horse Previews / Transição / MESCLAGEM + WIPES / Light Transição / Lears/Light Transitions 06 HD.mov.webp (0 B)
+  · 02 - VISUAL DESIGN / _Mister Horse Previews / Transição / MESCLAGEM + WIPES / Light Transição / Lears/Light Transitions 05 HD.mov.webp (0 B)
+  · 02 - VISUAL DESIGN / _Mister Horse Previews / Transição / MESCLAGEM + WIPES / Light Transição / Lears/Light Transitions 04 HD.mov.webp (0 B)
+  · 02 - VISUAL DESIGN / _Mister Horse Previews / Transição / MESCLAGEM + WIPES / Light Transição / Lears/Light Transitions 07 HD.mov.webp (0 B)
+
+[HUGE]  20 arquivos · 11.91 GB
+  · 02 - VISUAL DESIGN / Overlay / Grain Estilizar / Ultimate 35mm Package / Gates/35mm Gate 1.mov (503.5 MB)
+  · 02 - VISUAL DESIGN / Overlay / Grain Estilizar / Ultimate 35mm Package / Gates/35mm Gate 2.mov (516.4 MB)
+  · 02 - VISUAL DESIGN / Overlay / Grain Estilizar / Ultimate 35mm Package / Grains/50D.mov (529.5 MB)
+  · 02 - VISUAL DESIGN / Overlay / Grain Estilizar / Ultimate 35mm Package / Grains/250D.mov (534.7 MB)
+  · 02 - VISUAL DESIGN / Overlay / Grain Estilizar / Ultimate 35mm Package / Grains/200T.mov (509.7 MB)
+
+───────────────────────────────────────────────────────────
+  Extensões desconhecidas (UNKNOWN_EXT)
+───────────────────────────────────────────────────────────
+  .webp      1445 arquivos · 5.8 MB
+  .pdf          5 arquivos · 6.5 MB
+  .rtf          2 arquivos · 31.2 KB
+  .txt          2 arquivos · 101 B
+  .zip          2 arquivos · 59.1 MB
+  .aif          1 arquivos · 2.6 MB
+  .3gp          1 arquivos · 3.2 MB
+
+───────────────────────────────────────────────────────────
+  Arquivos:
+───────────────────────────────────────────────────────────
+  drive-audit-full.csv   — tudo (13506 linhas)
+  drive-audit-trash.csv  — só os candidatos a apagar (2704 linhas)
+
+Tempo: 448.9s

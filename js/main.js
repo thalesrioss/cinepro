@@ -81,7 +81,7 @@ function checkSubscription(user) {
   if (CINEPRO_CONFIG.ADMIN_EMAILS && CINEPRO_CONFIG.ADMIN_EMAILS.indexOf((user.email || '').toLowerCase()) !== -1) {
     showScreen('app');
     setUserBadge(user.email + ' (ADM)');
-    loadEffectsFromDrive();
+    loadEffects();
     return;
   }
 
@@ -92,7 +92,7 @@ function checkSubscription(user) {
         showScreen('app');
         var badge = user.email + (doc.data().admin === true ? ' (ADM)' : '');
         setUserBadge(badge);
-        loadEffectsFromDrive();
+        loadEffects();
       } else {
         showScreen('no-access');
       }
@@ -322,13 +322,90 @@ var driveLoadedCats = {};     // { categoryName: true } — categorias já total
 var MAX_DEPTH = 6;   // Drive tem até 8 níveis; 6 cobre tudo que importa
 var DRIVE_PAGE_SIZE = 1000;   // máx da API
 
-function loadEffectsFromDrive() {
-  setStatus('loading', 'Carregando categorias...');
+// ── MANIFEST PRE-GERADO ─────────────────────────────────────────
+// Boot rápido: tenta carregar manifest JSON pré-gerado (1 HTTP call em
+// vez de 962 chamadas pro Drive). Fallback pra Drive walk se manifest
+// indisponível.
+var MANIFEST_URLS = [
+  // 1. CDN público via jsDelivr (cacheado globalmente, atualiza semanal)
+  'https://cdn.jsdelivr.net/gh/thalesrioss/cinepro@main/manifest/dist/manifest.json',
+  // 2. Bundled junto com o plugin (offline-safe)
+  './manifest.json',
+];
+
+function loadEffects() {
+  setStatus('loading', 'Carregando biblioteca...');
   allEffects = [];
   driveCategories = [];
   driveLoadedCats = {};
 
-  listDriveFolderAll(CINEPRO_CONFIG.GOOGLE_DRIVE_FOLDER_ID)
+  return tryManifest(MANIFEST_URLS.slice())
+    .then(function (manifest) {
+      if (manifest) {
+        applyManifest(manifest);
+        var ageHours = ((Date.now() - new Date(manifest.builtAt).getTime()) / 3600000).toFixed(0);
+        setStatus('ok', allEffects.length + ' efeitos prontos (manifest ' + ageHours + 'h atrás)');
+        return;
+      }
+      console.warn('[CinePRO] Manifest indisponível, fallback pra Drive walk');
+      return loadEffectsFromDriveLive();
+    })
+    .catch(function (err) {
+      console.error('[CinePRO] loadEffects falhou:', err);
+      return loadEffectsFromDriveLive();
+    });
+}
+
+function tryManifest(urls) {
+  if (!urls.length) return Promise.resolve(null);
+  var url = urls.shift();
+  return fetch(url, { cache: 'force-cache' })
+    .then(function (r) {
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      return r.json();
+    })
+    .then(function (m) {
+      if (!m || !m.files || !Array.isArray(m.files)) throw new Error('manifest inválido');
+      console.log('[CinePRO] Manifest carregado de:', url, '· ' + m.files.length + ' arquivos · built ' + m.builtAt);
+      return m;
+    })
+    .catch(function (e) {
+      console.warn('[CinePRO] manifest miss em ' + url + ':', e.message);
+      return tryManifest(urls);
+    });
+}
+
+function applyManifest(manifest) {
+  // Popula allEffects direto do manifest
+  allEffects = manifest.files;
+
+  // Reconstrói driveCategories a partir da lista de categorias do manifest
+  var seenCats = {};
+  driveCategories = [];
+  manifest.categories.forEach(function (catName) {
+    if (seenCats[catName]) return;
+    seenCats[catName] = true;
+    driveCategories.push({ id: null, name: catName, loaded: true });
+    driveLoadedCats[catName] = true;
+  });
+  // Garante categorias presentes nos files mas não no array (paranoia)
+  allEffects.forEach(function (e) {
+    if (!seenCats[e.category]) {
+      seenCats[e.category] = true;
+      driveCategories.push({ id: null, name: e.category, loaded: true });
+      driveLoadedCats[e.category] = true;
+    }
+  });
+
+  buildCategoryTabs();
+  renderEffects(allEffects);
+}
+
+// ── FALLBACK: Drive walk live (caso manifest off) ────────────────
+function loadEffectsFromDriveLive() {
+  setStatus('loading', 'Carregando categorias (modo lento)...');
+
+  return listDriveFolderAll(CINEPRO_CONFIG.GOOGLE_DRIVE_FOLDER_ID)
     .then(function (rootItems) {
       var rootFolders = rootItems.filter(isFolder).filter(function (f) { return !shouldSkipFolder(f.name); });
       var rootFiles   = rootItems.filter(notFolder).filter(function (f) { return !shouldSkipFile(f.name); });
@@ -440,6 +517,9 @@ function cleanCategoryName(name) {
  * BRANDING: pega o nome de uma pasta RAIZ do Drive e aplica o mapa de
  * renames do config (regex-based). Subpastas NÃO passam por aqui —
  * mantêm o nome original do Drive pra continuarem descritivas.
+ *
+ * Catch-all: se nenhuma regex bater, prefixa "CinePRO " — garante que
+ * nenhuma categoria raiz escape do branding.
  */
 function brandCategoryName(name) {
   var clean = cleanCategoryName(name);
@@ -448,7 +528,9 @@ function brandCategoryName(name) {
     var r = renames[i];
     if (r && r.match && r.match.test(clean)) return r.to;
   }
-  return clean;
+  // Fallback: já começa com CinePRO? mantém. Senão, prefixa.
+  if (/^cinepro/i.test(clean)) return clean;
+  return 'CinePRO ' + clean;
 }
 
 /**
