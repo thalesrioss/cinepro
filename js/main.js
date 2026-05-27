@@ -559,7 +559,7 @@ function listDriveFolder(folderId, pageToken) {
     + (pageToken ? '&pageToken=' + encodeURIComponent(pageToken) : '')
     + '&key=' + CINEPRO_CONFIG.GOOGLE_DRIVE_API_KEY;
 
-  return fetch(url)
+  return fetchWithRetry(url)
     .then(function (r) {
       if (!r.ok) throw new Error('Drive API status ' + r.status);
       return r.json();
@@ -1357,23 +1357,38 @@ function formatBytes(bytes) {
 
 // (modal preview foi removido — preview agora é inline no card)
 
-// ══ WAVEFORM (renderização sob demanda) ════════════════════════
-// Decodifica o áudio via WebAudio, desenha waveform num canvas,
-// salva como data URL no localStorage pra reuso.
+// ══ WAVEFORM (Web Worker + IndexedDB) ══════════════════════════
+// v1.0.12: decode em Worker (UI nunca trava); cache persistente
+// em IndexedDB (sobrevive a restart do Premiere).
 
-var WAVEFORM_CACHE_KEY = 'cinepro_waveforms_v1';
-var WAVEFORM_PENDING = {};   // id → Promise (deduplica)
-var WAVEFORM_QUEUE = [];     // throttling de processamento
+var WAVEFORM_PENDING = {};   // id → [thumbEl, thumbEl...] (deduplica + multi-target)
+var WAVEFORM_QUEUE = [];     // throttling
 var WAVEFORM_PROCESSING = 0;
-var WAVEFORM_MAX_CONCURRENT = 2;  // 2 em paralelo — mais throughput sem travar UI
+var WAVEFORM_MAX_CONCURRENT = 3;  // worker offload permite mais paralelo
 
-function getWaveformCache() {
-  try { return JSON.parse(sessionStorage.getItem(WAVEFORM_CACHE_KEY) || '{}'); }
-  catch (e) { return {}; }
-}
-function saveWaveformCache(c) {
-  try { sessionStorage.setItem(WAVEFORM_CACHE_KEY, JSON.stringify(c)); }
-  catch (e) {/* quota — ignora */}
+// Worker compartilhado (criado sob demanda)
+var WAVEFORM_WORKER = null;
+var WAVEFORM_WORKER_CALLBACKS = {};  // id → { resolve, reject }
+function getWaveformWorker() {
+  if (WAVEFORM_WORKER || typeof Worker === 'undefined') return WAVEFORM_WORKER;
+  try {
+    WAVEFORM_WORKER = new Worker('js/waveform-worker.js');
+    WAVEFORM_WORKER.onmessage = function (e) {
+      var data = e.data || {};
+      var cb = WAVEFORM_WORKER_CALLBACKS[data.id];
+      if (!cb) return;
+      delete WAVEFORM_WORKER_CALLBACKS[data.id];
+      if (data.error) cb.reject(new Error(data.error));
+      else cb.resolve(data);
+    };
+    WAVEFORM_WORKER.onerror = function (err) {
+      console.warn('[CinePRO] waveform worker erro:', err.message);
+    };
+  } catch (e) {
+    console.warn('[CinePRO] Worker indisponível, fallback main thread');
+    WAVEFORM_WORKER = false;  // marca como tentado
+  }
+  return WAVEFORM_WORKER;
 }
 
 function requestWaveform(effect, card) {
@@ -1382,23 +1397,23 @@ function requestWaveform(effect, card) {
   var thumbEl = card.querySelector('.effect-thumb-placeholder');
   if (!thumbEl) return;
 
-  var cache = getWaveformCache();
-  if (cache[effect.id]) {
-    renderWaveformImg(thumbEl, cache[effect.id]);
-    return;
-  }
+  // Cache hit em IndexedDB? (assíncrono mas geralmente instantâneo)
+  idbGet('waveform:' + effect.id).then(function (cached) {
+    if (cached) {
+      renderWaveformImg(thumbEl, cached);
+      return;
+    }
+    // Já tem renderização nesse card? (re-render de categoria)
+    if (thumbEl.querySelector('.waveform-img')) return;
 
-  // Já tem renderização nesse card? (re-render de categoria)
-  if (thumbEl.querySelector('.waveform-img')) return;
-
-  if (WAVEFORM_PENDING[effect.id]) {
-    // já tá processando — só anexa o novo elemento alvo
-    WAVEFORM_PENDING[effect.id].push(thumbEl);
-    return;
-  }
-  WAVEFORM_PENDING[effect.id] = [thumbEl];
-  WAVEFORM_QUEUE.push({ effect: effect, thumbEl: thumbEl });
-  pumpWaveformQueue();
+    if (WAVEFORM_PENDING[effect.id]) {
+      WAVEFORM_PENDING[effect.id].push(thumbEl);
+      return;
+    }
+    WAVEFORM_PENDING[effect.id] = [thumbEl];
+    WAVEFORM_QUEUE.push({ effect: effect, thumbEl: thumbEl });
+    pumpWaveformQueue();
+  });
 }
 
 function pumpWaveformQueue() {
@@ -1408,10 +1423,8 @@ function pumpWaveformQueue() {
       WAVEFORM_PROCESSING++;
       generateWaveform(task.effect).then(function (dataUrl) {
         if (dataUrl) {
-          var c = getWaveformCache();
-          c[task.effect.id] = dataUrl;
-          saveWaveformCache(c);
-          // renderiza em TODOS os thumbs pendentes pra esse id (várias views)
+          // Persiste no IndexedDB (não bloqueia)
+          idbSet('waveform:' + task.effect.id, dataUrl);
           var targets = WAVEFORM_PENDING[task.effect.id] || [task.thumbEl];
           targets.forEach(function (t) { renderWaveformImg(t, dataUrl); });
         }
@@ -1430,11 +1443,36 @@ function renderWaveformImg(thumbEl, dataUrl) {
   thumbEl.innerHTML = '<img class="waveform-img" src="' + dataUrl + '" alt="">';
 }
 
+/**
+ * Tenta Worker primeiro (UI nunca trava); se Worker indisponível,
+ * decoda no main thread como fallback.
+ */
 function generateWaveform(effect) {
   var url = 'https://www.googleapis.com/drive/v3/files/' + effect.id
           + '?alt=media&key=' + CINEPRO_CONFIG.GOOGLE_DRIVE_API_KEY;
 
-  return fetch(url)
+  var worker = getWaveformWorker();
+  if (worker) {
+    return new Promise(function (resolve, reject) {
+      WAVEFORM_WORKER_CALLBACKS[effect.id] = { resolve: function (data) {
+        // Worker mandou amps normalizadas → desenha no main (canvas precisa DOM)
+        try { resolve(drawWaveformFromAmps(data.amps, data.width)); }
+        catch (e) { reject(e); }
+      }, reject: reject };
+      worker.postMessage({ id: effect.id, url: url });
+      // timeout 30s
+      setTimeout(function () {
+        if (WAVEFORM_WORKER_CALLBACKS[effect.id]) {
+          var cb = WAVEFORM_WORKER_CALLBACKS[effect.id];
+          delete WAVEFORM_WORKER_CALLBACKS[effect.id];
+          cb.reject(new Error('worker timeout'));
+        }
+      }, 30000);
+    });
+  }
+
+  // Fallback: main thread (legado)
+  return fetchWithRetry(url)
     .then(function (r) { return r.arrayBuffer(); })
     .then(function (buf) {
       var AC = window.AudioContext || window.webkitAudioContext;
@@ -1442,53 +1480,51 @@ function generateWaveform(effect) {
       var ctx = new AC();
       return ctx.decodeAudioData(buf).then(function (audioBuffer) {
         ctx.close();
-        return drawWaveform(audioBuffer);
+        return drawWaveformFromBuffer(audioBuffer);
       });
     });
 }
 
-function drawWaveform(audioBuffer) {
+/** Desenha waveform a partir de array de amps já normalizadas (vindo do Worker) */
+function drawWaveformFromAmps(amps, width) {
+  var W = width || 320, H = 64;
   var canvas = document.createElement('canvas');
-  var W = 320, H = 64;
-  canvas.width = W;
-  canvas.height = H;
+  canvas.width = W; canvas.height = H;
   var g = canvas.getContext('2d');
-
-  var data = audioBuffer.getChannelData(0);
-  var step = Math.floor(data.length / W);
-  var amps = new Float32Array(W);
-  for (var i = 0; i < W; i++) {
-    var sum = 0;
-    for (var j = 0; j < step; j++) {
-      sum += Math.abs(data[i * step + j] || 0);
-    }
-    amps[i] = sum / step;
-  }
-  // Normaliza
-  var max = 0;
-  for (var k = 0; k < W; k++) if (amps[k] > max) max = amps[k];
-  if (max === 0) max = 1;
-  for (var k2 = 0; k2 < W; k2++) amps[k2] /= max;
-
-  // Desenha
   var gradient = g.createLinearGradient(0, 0, 0, H);
   gradient.addColorStop(0, '#4DD2FF');
   gradient.addColorStop(1, '#0088CC');
   g.fillStyle = gradient;
-
-  var barW = 2;
-  var gap  = 1;
+  var barW = 2, gap = 1;
   var count = Math.floor(W / (barW + gap));
   for (var b = 0; b < count; b++) {
     var idx = Math.floor((b / count) * W);
-    var amp = amps[idx];
+    var amp = amps[idx] || 0;
     var barH = Math.max(2, amp * H * 0.9);
     var x = b * (barW + gap);
     var y = (H - barH) / 2;
     g.fillRect(x, y, barW, barH);
   }
-
   return canvas.toDataURL('image/png');
+}
+
+/** Fallback: extrai amps de AudioBuffer no main thread + desenha */
+function drawWaveformFromBuffer(audioBuffer) {
+  var W = 320;
+  var data = audioBuffer.getChannelData(0);
+  var step = Math.floor(data.length / W);
+  if (step < 1) step = 1;
+  var amps = new Float32Array(W);
+  for (var i = 0; i < W; i++) {
+    var sum = 0;
+    var base = i * step;
+    for (var j = 0; j < step; j++) sum += Math.abs(data[base + j] || 0);
+    amps[i] = sum / step;
+  }
+  var max = 0;
+  for (var k = 0; k < W; k++) if (amps[k] > max) max = amps[k];
+  if (max > 0) for (var n = 0; n < W; n++) amps[n] /= max;
+  return drawWaveformFromAmps(amps, W);
 }
 
 function thumbForKind(kind) {
@@ -1652,23 +1688,42 @@ function fileExistsLocal(path) {
  * Persiste entre reinicializações do Premiere.
  */
 function downloadEffectFile(effect) {
-  return new Promise(function (resolve, reject) {
-    // 1. Checa índice de cache
-    var idx = getCacheIndex();
-    var cachedPath = idx[effect.id];
-    if (cachedPath && fileExistsLocal(cachedPath)) {
-      return resolve(cachedPath);
-    }
+  // 1. Checa índice de cache (sync)
+  var idx = getCacheIndex();
+  var cachedPath = idx[effect.id];
+  if (cachedPath && fileExistsLocal(cachedPath)) {
+    return Promise.resolve(cachedPath);
+  }
 
-    // 2. Não tá no cache — busca pasta e baixa
+  var downloadUrl = 'https://www.googleapis.com/drive/v3/files/' + effect.id
+    + '?alt=media&key=' + CINEPRO_CONFIG.GOOGLE_DRIVE_API_KEY;
+
+  // 2. Retry com backoff exponencial — até 3 tentativas em 5xx/network
+  return _downloadWithRetry(effect, downloadUrl, 3);
+}
+
+function _downloadWithRetry(effect, downloadUrl, attempts) {
+  var delay = 800;
+  function attempt(n) {
+    return _downloadOnce(effect, downloadUrl).catch(function (err) {
+      // Não retry em 4xx
+      if (err && err.code === 'CLIENT_ERROR') throw err;
+      if (n + 1 >= attempts) throw err;
+      var wait = delay * Math.pow(2, n);
+      console.warn('[CinePRO] download retry em ' + wait + 'ms (' + (n+1) + '/' + attempts + '): ' + (err && err.message));
+      return new Promise(function (r) { setTimeout(r, wait); }).then(function () { return attempt(n + 1); });
+    });
+  }
+  return attempt(0);
+}
+
+function _downloadOnce(effect, downloadUrl) {
+  return new Promise(function (resolve, reject) {
     getCacheDir().then(function (cacheDir) {
       var safeName = effect.name.replace(/[^a-zA-Z0-9_\-\.]/g, '_') + '.' + effect.ext;
       var localPath = cacheDir + '/' + effect.id.slice(0, 8) + '_' + safeName;
+      var tmpPath   = localPath + '.tmp';
 
-      var downloadUrl = 'https://www.googleapis.com/drive/v3/files/' + effect.id
-        + '?alt=media&key=' + CINEPRO_CONFIG.GOOGLE_DRIVE_API_KEY;
-
-      // Usa XMLHttpRequest com arraybuffer (disponível no CEP/Chromium)
       var xhr = new XMLHttpRequest();
       xhr.open('GET', downloadUrl, true);
       xhr.responseType = 'arraybuffer';
@@ -1676,36 +1731,112 @@ function downloadEffectFile(effect) {
       xhr.onload = function () {
         if (xhr.status === 200) {
           try {
-            // Escreve o arquivo via Node.js (disponível no CEP com --enable-nodejs)
-            var buffer = xhr.response;
             var nodeFs = window.require ? window.require('fs') : null;
+            if (!nodeFs) return reject(new Error('Node.js não disponível no CEP'));
 
-            if (nodeFs) {
-              var bytes = new Uint8Array(buffer);
-              nodeFs.writeFileSync(localPath, Buffer.from(bytes));
-              // Atualiza o índice de cache persistente
-              var idx2 = getCacheIndex();
-              idx2[effect.id] = localPath;
-              saveCacheIndex(idx2);
-              resolve(localPath);
-            } else {
-              reject(new Error('Node.js não disponível no CEP'));
-            }
+            // Escreve em .tmp, depois renomeia atomicamente
+            var bytes = new Uint8Array(xhr.response);
+            nodeFs.writeFileSync(tmpPath, Buffer.from(bytes));
+            nodeFs.renameSync(tmpPath, localPath);
+
+            var idx2 = getCacheIndex();
+            idx2[effect.id] = localPath;
+            saveCacheIndex(idx2);
+            resolve(localPath);
           } catch (e) {
             reject(e);
           }
+        } else if (xhr.status >= 400 && xhr.status < 500) {
+          var err = new Error('HTTP ' + xhr.status);
+          err.code = 'CLIENT_ERROR';
+          reject(err);
         } else {
-          reject(new Error('HTTP ' + xhr.status + ' ao baixar arquivo'));
+          reject(new Error('HTTP ' + xhr.status));
         }
       };
-
-      xhr.onerror = function () {
-        reject(new Error('Falha de rede ao baixar arquivo'));
-      };
-
+      xhr.onerror = function () { reject(new Error('Falha de rede')); };
+      xhr.ontimeout = function () { reject(new Error('Timeout')); };
+      xhr.timeout = 60000;
       xhr.send();
     });
   });
+}
+
+// ══ INDEXED DB ════════════════════════════════════════════════
+// Wrapper minimalista. 1 store key-value pra waveforms e qualquer
+// outro cache pesado. Sobrevive a restart do Premiere (≠ sessionStorage).
+var IDB_DB_NAME = 'cinepro';
+var IDB_STORE   = 'cache';
+var IDB_VERSION = 1;
+var idbPromise = null;
+
+function idb() {
+  if (idbPromise) return idbPromise;
+  if (typeof indexedDB === 'undefined') {
+    idbPromise = Promise.reject(new Error('IndexedDB indisponível'));
+    return idbPromise;
+  }
+  idbPromise = new Promise(function (resolve, reject) {
+    var req = indexedDB.open(IDB_DB_NAME, IDB_VERSION);
+    req.onupgradeneeded = function () {
+      var db = req.result;
+      if (!db.objectStoreNames.contains(IDB_STORE)) {
+        db.createObjectStore(IDB_STORE);
+      }
+    };
+    req.onsuccess = function () { resolve(req.result); };
+    req.onerror = function () { reject(req.error); };
+  });
+  return idbPromise;
+}
+
+function idbGet(key) {
+  return idb().then(function (db) {
+    return new Promise(function (resolve) {
+      try {
+        var tx = db.transaction(IDB_STORE, 'readonly');
+        var req = tx.objectStore(IDB_STORE).get(key);
+        req.onsuccess = function () { resolve(req.result || null); };
+        req.onerror   = function () { resolve(null); };
+      } catch (e) { resolve(null); }
+    });
+  }).catch(function () { return null; });
+}
+
+function idbSet(key, value) {
+  return idb().then(function (db) {
+    return new Promise(function (resolve) {
+      try {
+        var tx = db.transaction(IDB_STORE, 'readwrite');
+        tx.objectStore(IDB_STORE).put(value, key);
+        tx.oncomplete = function () { resolve(true); };
+        tx.onerror    = function () { resolve(false); };
+      } catch (e) { resolve(false); }
+    });
+  }).catch(function () { return false; });
+}
+
+// ── FETCH com retry exponential backoff ─────────────────────────
+// Útil pra qualquer chamada flaky (Drive API às vezes dá 5xx).
+// Retry apenas em 5xx + erro de rede. 4xx não — falha de input.
+function fetchWithRetry(url, opts, attempts) {
+  opts = opts || {};
+  attempts = attempts || 3;
+  var delay = 800;
+  function attempt(n) {
+    return fetch(url, opts).then(function (r) {
+      if (r.ok) return r;
+      if (r.status >= 400 && r.status < 500) return r;  // não retry 4xx
+      if (n + 1 >= attempts) return r;
+      return new Promise(function (resolve) { setTimeout(resolve, delay * Math.pow(2, n)); })
+        .then(function () { return attempt(n + 1); });
+    }).catch(function (err) {
+      if (n + 1 >= attempts) throw err;
+      return new Promise(function (resolve) { setTimeout(resolve, delay * Math.pow(2, n)); })
+        .then(function () { return attempt(n + 1); });
+    });
+  }
+  return attempt(0);
 }
 
 // ══ UTILITIES ═════════════════════════════════════════════════
