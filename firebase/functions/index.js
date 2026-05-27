@@ -3,6 +3,8 @@
 //  • tictoWebhook  — recebe Ticto v2 e atualiza Firestore + Sheets
 //  • leadCapture   — LP chama após signup, registra no Sheets "Leads"
 //  • checkStatus   — debug HTTP de status de assinatura por email
+//
+//  ⚙ Deploy automático via GitHub Actions ao push em main.
 // =============================================================
 
 const { onRequest } = require('firebase-functions/v2/https');
