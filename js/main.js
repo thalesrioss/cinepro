@@ -618,6 +618,13 @@ function getSubcategoriesFor(categoryName) {
 function setActiveCategory(cat, sub) {
   activeCategory    = cat;
   activeSubcategory = sub;
+  // PERF: limpa observer e fila de waveform — descarta trabalho da view antiga,
+  // assim a nova view (qualquer categoria, não só "Geral") recebe waveform também.
+  WAVEFORM_QUEUE = [];
+  if (WAVEFORM_OBSERVER) {
+    WAVEFORM_OBSERVER.disconnect();
+    WAVEFORM_OBSERVER = null;
+  }
   var search = document.getElementById('search-input').value.trim().toLowerCase();
   buildSidebarTree();
   filterEffects(search);
@@ -702,8 +709,8 @@ function filterEffects(query) {
 // Pra não criar 5000+ DOM nodes de uma vez (causa freeze do CEP),
 // renderiza só BATCH_SIZE itens e exibe um botão "Carregar mais"
 // que renderiza o próximo lote em rAF (sem travar a UI).
-var PAGE_SIZE = 80;     // primeiro lote
-var PAGE_STEP = 80;     // cada "carregar mais"
+var PAGE_SIZE = 60;     // primeiro lote — menor pra UI ficar responsiva
+var PAGE_STEP = 60;     // cada "carregar mais"
 var renderState = null; // { effects, groups, labels, rendered }
 
 function renderEffects(effects) {
@@ -961,8 +968,18 @@ function togglePlayInline(effect, card) {
     stopInline(currentlyPlaying);
   }
 
-  var url = 'https://www.googleapis.com/drive/v3/files/' + effect.id
-          + '?alt=media&key=' + CINEPRO_CONFIG.GOOGLE_DRIVE_API_KEY;
+  // PERF: se já temos o arquivo em cache local, toca por file:// (instantâneo).
+  // Senão, stream do Drive E dispara prefetch silencioso pra próxima play ser instantânea.
+  var url;
+  var localPath = effectCache[effect.id];
+  if (localPath) {
+    url = 'file://' + localPath.split('/').map(encodeURIComponent).join('/');
+  } else {
+    url = 'https://www.googleapis.com/drive/v3/files/' + effect.id
+        + '?alt=media&key=' + CINEPRO_CONFIG.GOOGLE_DRIVE_API_KEY;
+    // background — não bloqueia o play atual
+    silentPrefetch(effect, card);
+  }
 
   if (effect.kind === 'audio') {
     var audio = new Audio(url);
@@ -1024,7 +1041,7 @@ var WAVEFORM_CACHE_KEY = 'cinepro_waveforms_v1';
 var WAVEFORM_PENDING = {};   // id → Promise (deduplica)
 var WAVEFORM_QUEUE = [];     // throttling de processamento
 var WAVEFORM_PROCESSING = 0;
-var WAVEFORM_MAX_CONCURRENT = 1;  // 1 por vez pra não saturar (CEP é apertado)
+var WAVEFORM_MAX_CONCURRENT = 2;  // 2 em paralelo — mais throughput sem travar UI
 
 function getWaveformCache() {
   try { return JSON.parse(sessionStorage.getItem(WAVEFORM_CACHE_KEY) || '{}'); }
@@ -1047,29 +1064,41 @@ function requestWaveform(effect, card) {
     return;
   }
 
-  if (WAVEFORM_PENDING[effect.id]) return;
-  WAVEFORM_PENDING[effect.id] = true;
+  // Já tem renderização nesse card? (re-render de categoria)
+  if (thumbEl.querySelector('.waveform-img')) return;
+
+  if (WAVEFORM_PENDING[effect.id]) {
+    // já tá processando — só anexa o novo elemento alvo
+    WAVEFORM_PENDING[effect.id].push(thumbEl);
+    return;
+  }
+  WAVEFORM_PENDING[effect.id] = [thumbEl];
   WAVEFORM_QUEUE.push({ effect: effect, thumbEl: thumbEl });
   pumpWaveformQueue();
 }
 
 function pumpWaveformQueue() {
   while (WAVEFORM_PROCESSING < WAVEFORM_MAX_CONCURRENT && WAVEFORM_QUEUE.length) {
-    var task = WAVEFORM_QUEUE.shift();
-    WAVEFORM_PROCESSING++;
-    generateWaveform(task.effect).then(function (dataUrl) {
-      if (dataUrl) {
-        var c = getWaveformCache();
-        c[task.effect.id] = dataUrl;
-        saveWaveformCache(c);
-        renderWaveformImg(task.thumbEl, dataUrl);
-      }
-    }).catch(function () {/* falha silenciosa */})
-      .then(function () {
+    (function () {
+      var task = WAVEFORM_QUEUE.shift();
+      WAVEFORM_PROCESSING++;
+      generateWaveform(task.effect).then(function (dataUrl) {
+        if (dataUrl) {
+          var c = getWaveformCache();
+          c[task.effect.id] = dataUrl;
+          saveWaveformCache(c);
+          // renderiza em TODOS os thumbs pendentes pra esse id (várias views)
+          var targets = WAVEFORM_PENDING[task.effect.id] || [task.thumbEl];
+          targets.forEach(function (t) { renderWaveformImg(t, dataUrl); });
+        }
+      }).catch(function (err) {
+        console.warn('[CinePRO] waveform falhou:', task.effect.name, err && err.message);
+      }).then(function () {
         delete WAVEFORM_PENDING[task.effect.id];
         WAVEFORM_PROCESSING--;
         pumpWaveformQueue();
       });
+    })();
   }
 }
 
@@ -1139,15 +1168,20 @@ function drawWaveform(audioBuffer) {
 }
 
 function thumbForKind(kind) {
-  switch (kind) {
-    case 'audio':   return '🎵';
-    case 'video':   return '🎬';
-    case 'image':   return '🖼';
-    case 'mogrt':   return '📝';
-    case 'preset':  return '✨';
-    case 'lut':     return '🎨';
-    default:        return '🎞';
-  }
+  // SVGs limpos — sem emoji. Estilo line-icon consistente com o resto da UI.
+  var common = 'viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"';
+  var icons = {
+    audio:  '<svg ' + common + '><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>',
+    video:  '<svg ' + common + '><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg>',
+    image:  '<svg ' + common + '><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg>',
+    mogrt:  '<svg ' + common + '><path d="M4 4h16v16H4z"/><path d="M4 9h16"/><path d="M9 4v16"/></svg>',
+    preset: '<svg ' + common + '><path d="M12 2l2.4 6.9L21 9.3l-5.4 4.6L17.4 21 12 17.3 6.6 21l1.8-7.1L3 9.3l6.6-.4z"/></svg>',
+    lut:    '<svg ' + common + '><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3v18"/></svg>',
+    ae:     '<svg ' + common + '><circle cx="12" cy="12" r="9"/><path d="M9 16l3-9 3 9M10 13h4"/></svg>',
+    project:'<svg ' + common + '><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>',
+    lumetri:'<svg ' + common + '><circle cx="12" cy="12" r="9"/><path d="M3 12a9 9 0 0 1 18 0"/></svg>',
+  };
+  return icons[kind] || icons.video;
 }
 
 // ══ APPLY / DRAG ══════════════════════════════════════════════

@@ -530,6 +530,16 @@ body {
   color: var(--text-dim);
   font-size: 20px;
 }
+.effect-thumb-placeholder svg {
+  width: 28px;
+  height: 28px;
+  opacity: 0.55;
+  transition: opacity var(--duration-fast, 150ms) ease, color var(--duration-fast, 150ms) ease;
+}
+.effect-card:hover .effect-thumb-placeholder svg {
+  opacity: 0.85;
+  color: var(--brand, #00B8FF);
+}
 
 .effect-card-body {
   padding: 8px 10px 10px;
