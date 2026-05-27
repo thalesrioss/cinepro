@@ -61,6 +61,8 @@ Source: "..\..\jsx\*";      DestDir: "{userappdata}\Adobe\CEP\extensions\CinePRO
 Source: "..\..\icons\*";    DestDir: "{userappdata}\Adobe\CEP\extensions\CinePRO\icons"; Flags: ignoreversion recursesubdirs createallsubdirs
 ; Manifest pré-gerado (boot offline-safe)
 Source: "..\..\manifest\dist\manifest.json"; DestDir: "{userappdata}\Adobe\CEP\extensions\CinePRO"; Flags: ignoreversion skipifsourcedoesntexist
+; v1.3: Bundled Essentials — assets universais (~400MB)
+Source: "..\..\bundle\dist\*"; DestDir: "{userappdata}\CinePRO\bundle"; Flags: ignoreversion recursesubdirs createallsubdirs skipifsourcedoesntexist
 
 [Icons]
 ; Atalho no menu Iniciar + Desktop pra desktop app

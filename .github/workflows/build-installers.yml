@@ -12,15 +12,53 @@ on:
       - 'v*'
 
 jobs:
+  # ──────────────── Bundled Essentials (~400MB) ────────────────
+  # Gera o pack de assets uma vez e compartilha entre Mac/Windows
+  build-bundle:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install deps
+        working-directory: bundle
+        run: npm install --no-audit --no-fund
+
+      - name: Build bundle (download ~400MB from Drive)
+        working-directory: bundle
+        env:
+          CINEPRO_OAUTH_CLIENT: ${{ secrets.CINEPRO_OAUTH_CLIENT }}
+          CINEPRO_OAUTH_TOKEN:  ${{ secrets.CINEPRO_OAUTH_TOKEN }}
+        run: node build-bundle.js
+
+      - name: Upload bundle artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: cinepro-bundle
+          path: bundle/dist
+          retention-days: 7
+          if-no-files-found: error
+
   # ──────────────── macOS .pkg ────────────────
   build-mac:
     runs-on: macos-latest
+    needs: build-bundle
+    if: ${{ always() }}   # roda mesmo se bundle falhar (sem bundle = .pkg/.exe menor)
     steps:
       - uses: actions/checkout@v4
 
       - uses: actions/setup-node@v4
         with:
           node-version: 22
+
+      - name: Download bundle artifact (opcional — pula se bundle job falhou)
+        uses: actions/download-artifact@v4
+        continue-on-error: true
+        with:
+          name: cinepro-bundle
+          path: bundle/dist
 
       - name: Calcular versão limpa (sem prefixo "v")
         id: ver
@@ -44,12 +82,21 @@ jobs:
   # ──────────────── Windows .exe ────────────────
   build-windows:
     runs-on: windows-latest
+    needs: build-bundle
+    if: ${{ always() }}   # roda mesmo se bundle falhar (sem bundle = .pkg/.exe menor)
     steps:
       - uses: actions/checkout@v4
 
       - uses: actions/setup-node@v4
         with:
           node-version: 22
+
+      - name: Download bundle artifact (opcional — pula se bundle job falhou)
+        uses: actions/download-artifact@v4
+        continue-on-error: true
+        with:
+          name: cinepro-bundle
+          path: bundle/dist
 
       - name: Build Electron desktop app
         shell: pwsh

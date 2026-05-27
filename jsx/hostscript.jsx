@@ -42,6 +42,33 @@ function getCacheDir() {
 }
 
 /**
+ * v1.3: pasta onde o instalador colocou os Bundled Essentials.
+ * macOS:   /Library/Application Support/CinePRO/bundle   (compartilhado)
+ * Windows: %APPDATA%/CinePRO/bundle
+ *
+ * Retorna string vazia se a pasta não existir (plugin então usa Drive).
+ */
+function getBundleDir() {
+  try {
+    var base;
+    if ($.os.indexOf('Windows') !== -1) {
+      base = Folder(Folder.appData.fsName + '/CinePRO/bundle');
+    } else {
+      // /Library (sem ~) — instalado pelo .pkg em escopo system
+      base = Folder('/Library/Application Support/CinePRO/bundle');
+      if (!base.exists) {
+        // Fallback: user-local (se .pkg foi instalado em escopo user)
+        base = Folder('~/Library/Application Support/CinePRO/bundle');
+      }
+    }
+    if (!base.exists) return '';
+    return base.fsName;
+  } catch (e) {
+    return '';
+  }
+}
+
+/**
  * Verifica se um arquivo existe (usado pra checar cache antes de baixar)
  */
 function fileExists(path) {

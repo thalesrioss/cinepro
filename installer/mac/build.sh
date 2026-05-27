@@ -88,6 +88,18 @@ else
   echo "⚠️  manifest.json não encontrado — plugin vai usar fallback live ou CDN"
 fi
 
+# v1.3: Bundled Essentials — ~750 assets universais em /Library/Application Support/CinePRO/bundle
+BUNDLE_SRC="$ROOT/bundle/dist"
+BUNDLE_DEST="$PAYLOAD/Library/Application Support/CinePRO/bundle"
+if [ -d "$BUNDLE_SRC" ] && [ -f "$BUNDLE_SRC/manifest-bundle.json" ]; then
+  echo "→ Bundling Essentials Pack (assets universais)..."
+  mkdir -p "$BUNDLE_DEST"
+  rsync -a "$BUNDLE_SRC/" "$BUNDLE_DEST/"
+  echo "  ✓ Bundle: $(du -sh "$BUNDLE_DEST" | cut -f1) ($(find "$BUNDLE_DEST" -type f | wc -l | tr -d ' ') arquivos)"
+else
+  echo "ℹ️  Bundle Essentials não encontrado em $BUNDLE_SRC — instalador vai sem essa otimização"
+fi
+
 echo "  ✓ Plugin: $(du -sh "$PLUGIN_DEST" | cut -f1)"
 echo "  ✓ Payload total: $(du -sh "$PAYLOAD" | cut -f1)"
 

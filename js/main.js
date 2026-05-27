@@ -240,6 +240,8 @@ function bindAppUI() {
   bindGridDelegation();
   bindKeyboardShortcuts();
   scheduleUpdateCheck();
+  // v1.3: carrega bundle manifest (assets pre-instalados)
+  initBundleLookup();
   // v1.2 A5: pre-warm ExtendScript (primeira chamada demora 30-100ms)
   // Faz o Premiere já compilar o host script, deixando o primeiro apply rápido
   scheduleIdle(function () {
@@ -1402,8 +1404,12 @@ function createEffectCard(effect) {
   card.dataset.kind = effect.kind || '';
 
   var thumbHtml;
-  if (effect.thumb) {
-    // Lazy: começa SEM src — observer popula quando entra na viewport.
+  // v1.3: prefere thumb do bundle (instantâneo, nunca expira)
+  var bundleThumb = getBundleThumbPath(effect.id);
+  if (bundleThumb) {
+    var fileUrl = 'file://' + bundleThumb.split('/').map(encodeURIComponent).join('/');
+    thumbHtml = '<img class="thumb-img" data-src="' + fileUrl + '" alt="" decoding="async">';
+  } else if (effect.thumb) {
     thumbHtml = '<img class="thumb-img" data-src="' + effect.thumb + '" alt="" decoding="async" fetchpriority="low">';
   } else {
     thumbHtml = '<div class="effect-thumb-placeholder">' + thumbForKind(effect.kind) + '</div>';
@@ -2255,7 +2261,11 @@ function fileExistsLocal(path) {
  * Persiste entre reinicializações do Premiere.
  */
 function downloadEffectFile(effect) {
-  // 1. Checa índice de cache (sync)
+  // 0. v1.3: checa bundle (assets pre-instalados via .pkg/.exe)
+  var bundlePath = getBundleFilePath(effect.id, effect.ext);
+  if (bundlePath) return Promise.resolve(bundlePath);
+
+  // 1. Checa índice de cache (sync) — arquivos baixados em sessões anteriores
   var idx = getCacheIndex();
   var cachedPath = idx[effect.id];
   if (cachedPath && fileExistsLocal(cachedPath)) {
@@ -2267,6 +2277,56 @@ function downloadEffectFile(effect) {
 
   // 2. Retry com backoff exponencial — até 3 tentativas em 5xx/network
   return _downloadWithRetry(effect, downloadUrl, 3);
+}
+
+// ── BUNDLE LOOKUP (v1.3) ─────────────────────────────────────────
+// O instalador coloca ~750 arquivos universais + thumbs em:
+//   macOS:   /Library/Application Support/CinePRO/bundle/
+//   Windows: %APPDATA%/CinePRO/bundle/
+//
+// Plugin carrega manifest-bundle.json no boot e usa essa lookup
+// pra retornar caminho local SEM passar por Drive.
+
+var BUNDLE_MANIFEST = null;        // { files: {id: relPath}, thumbs: {id: relPath} }
+var BUNDLE_ROOT_PATH = null;       // resolvido via hostscript getBundleDir()
+
+function initBundleLookup() {
+  // Pergunta ao hostscript onde está o bundle local
+  cs.evalScript('getBundleDir()', function (dir) {
+    if (!dir || dir === 'undefined') { console.log('[CinePRO] bundle indisponível'); return; }
+    BUNDLE_ROOT_PATH = dir;
+    var manifestPath = dir + '/manifest-bundle.json';
+    if (!fileExistsLocal(manifestPath)) {
+      console.log('[CinePRO] bundle dir existe mas sem manifest:', dir);
+      return;
+    }
+    try {
+      var nodeFs = window.require ? window.require('fs') : null;
+      if (!nodeFs) return;
+      BUNDLE_MANIFEST = JSON.parse(nodeFs.readFileSync(manifestPath, 'utf8'));
+      var fileCount = Object.keys(BUNDLE_MANIFEST.files || {}).length;
+      var thumbCount = Object.keys(BUNDLE_MANIFEST.thumbs || {}).length;
+      console.log('[CinePRO] bundle carregado: ' + fileCount + ' arquivos + ' + thumbCount + ' thumbs');
+    } catch (e) {
+      console.warn('[CinePRO] bundle manifest inválido:', e.message);
+    }
+  });
+}
+
+function getBundleFilePath(effectId, ext) {
+  if (!BUNDLE_MANIFEST || !BUNDLE_ROOT_PATH) return null;
+  var rel = BUNDLE_MANIFEST.files && BUNDLE_MANIFEST.files[effectId];
+  if (!rel) return null;
+  var full = BUNDLE_ROOT_PATH + '/' + rel;
+  if (!fileExistsLocal(full)) return null;
+  return full;
+}
+
+function getBundleThumbPath(effectId) {
+  if (!BUNDLE_MANIFEST || !BUNDLE_ROOT_PATH) return null;
+  var rel = BUNDLE_MANIFEST.thumbs && BUNDLE_MANIFEST.thumbs[effectId];
+  if (!rel) return null;
+  return BUNDLE_ROOT_PATH + '/' + rel;
 }
 
 function _downloadWithRetry(effect, downloadUrl, attempts) {

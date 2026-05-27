@@ -70,3 +70,7 @@ audit/drive-delete-list.csv
 
 # Manifest builder — só não commita node_modules; o manifest.json em si VAI commitar
 manifest/node_modules/
+
+# Bundle builder — ~400MB de assets; NÃO commitar. CI baixa fresh a cada release.
+bundle/node_modules/
+bundle/dist/
