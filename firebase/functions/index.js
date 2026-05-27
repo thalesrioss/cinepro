@@ -237,11 +237,17 @@ exports.tictoWebhook = onRequest(
       }, { merge: true });
 
       if (isNewUser && active) {
-        const link = await admin.auth().generatePasswordResetLink(email);
-        console.log(`[NOVO USUARIO] ${email} - link senha: ${link}`);
-        // Manda email de boas-vindas com o link de senha (best-effort)
-        await sendWelcomeEmail(email, name, link).catch(function (e) {
-          console.error('Falha ao enviar welcome email:', e.message);
+        // Dispara o email de "definir senha" via Firebase Auth (próprio servico,
+        // sem precisar de Resend ou domínio verificado).
+        await triggerFirebasePasswordReset(email).catch(function (e) {
+          console.error('Falha ao disparar email Firebase:', e.message);
+          // Fallback: tenta Resend se estiver configurado
+          return admin.auth().generatePasswordResetLink(email).then(function (link) {
+            console.log(`[fallback] ${email} - link manual: ${link}`);
+            return sendWelcomeEmail(email, name, link).catch(function (e2) {
+              console.error('Resend fallback tambem falhou:', e2.message);
+            });
+          });
         });
       }
 
@@ -277,7 +283,32 @@ exports.checkStatus = onRequest({ invoker: 'public' }, async (req, res) => {
 });
 
 // ═════════════════════════════════════════════════════════════
-//   WELCOME EMAIL (Resend)
+//   PASSWORD RESET via Firebase Auth (built-in, sem precisar dominio)
+// ═════════════════════════════════════════════════════════════
+
+// Firebase Web API key — publica por design (Identity Toolkit a aceita)
+const FIREBASE_WEB_API_KEY = 'AIzaSyAN3Ggu6G4baVygJHWX9XyatfpgeP8rUiE';
+
+async function triggerFirebasePasswordReset(email) {
+  const url = 'https://identitytoolkit.googleapis.com/v1/accounts:sendOobCode?key=' + FIREBASE_WEB_API_KEY;
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      requestType: 'PASSWORD_RESET',
+      email: email,
+    }),
+  });
+  const data = await res.json();
+  if (!res.ok) {
+    throw new Error('Firebase sendOobCode HTTP ' + res.status + ': ' + JSON.stringify(data));
+  }
+  console.log('Email de reset disparado pelo Firebase Auth pra:', email);
+  return data;
+}
+
+// ═════════════════════════════════════════════════════════════
+//   WELCOME EMAIL (Resend) — fallback opcional, requer dominio verificado
 // ═════════════════════════════════════════════════════════════
 
 async function sendWelcomeEmail(email, name, passwordResetLink) {
