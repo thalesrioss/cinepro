@@ -294,11 +294,17 @@ function loadLibrarySamples() {
     + '&fields=files(id,name)'
     + '&pageSize=20&key=' + apiKey;
 
+  // Categorias que NAO aparecem no preview pra nao usar marcas de terceiros
+  // como sales pitch. Plugin no Premiere continua mostrando tudo pra clientes ativos.
+  var EXCLUDE_FROM_PREVIEW = /ocular|mister\s*horse/i;
+
   fetch(url)
     .then(function (r) { return r.json(); })
     .then(function (data) {
       var folders = (data.files || []).filter(function (f) {
-        return !f.name.startsWith('_') && !/leia/i.test(f.name);
+        return !f.name.startsWith('_')
+          && !/leia/i.test(f.name)
+          && !EXCLUDE_FROM_PREVIEW.test(f.name);
       });
       LIBRARY_SAMPLE_CACHE = folders.slice(0, 6);
       renderLibrarySamples(LIBRARY_SAMPLE_CACHE);
