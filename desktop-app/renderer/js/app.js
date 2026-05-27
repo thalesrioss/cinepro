@@ -279,6 +279,19 @@ function hideLibraryPreview() {
   if (el) el.classList.add('hidden');
 }
 
+// Categorias filtradas do preview (sem marcas de terceiros)
+var EXCLUDE_FROM_PREVIEW = /ocular|mister\s*horse/i;
+var PREVIEW_TARGET = 9;  // qtd de arquivos pra mostrar no grid
+
+function driveListFolder(folderId) {
+  var apiKey = CINEPRO_CONFIG.GOOGLE_DRIVE_API_KEY;
+  var url = 'https://www.googleapis.com/drive/v3/files'
+    + '?q=' + encodeURIComponent("'" + folderId + "' in parents and trashed=false")
+    + '&fields=files(id,name,mimeType,thumbnailLink,hasThumbnail)'
+    + '&pageSize=100&key=' + apiKey;
+  return fetch(url).then(function (r) { return r.json(); });
+}
+
 function loadLibrarySamples() {
   if (LIBRARY_SAMPLE_CACHE) {
     renderLibrarySamples(LIBRARY_SAMPLE_CACHE);
@@ -286,28 +299,59 @@ function loadLibrarySamples() {
   }
 
   var rootId = CINEPRO_CONFIG.GOOGLE_DRIVE_FOLDER_ID;
-  var apiKey = CINEPRO_CONFIG.GOOGLE_DRIVE_API_KEY;
 
-  // Lista as 6 categorias top-level
-  var url = 'https://www.googleapis.com/drive/v3/files'
-    + '?q=' + encodeURIComponent("'" + rootId + "' in parents and mimeType='application/vnd.google-apps.folder' and trashed=false")
-    + '&fields=files(id,name)'
-    + '&pageSize=20&key=' + apiKey;
-
-  // Categorias que NAO aparecem no preview pra nao usar marcas de terceiros
-  // como sales pitch. Plugin no Premiere continua mostrando tudo pra clientes ativos.
-  var EXCLUDE_FROM_PREVIEW = /ocular|mister\s*horse/i;
-
-  fetch(url)
-    .then(function (r) { return r.json(); })
+  // 1. Pega categorias top-level permitidas
+  driveListFolder(rootId)
     .then(function (data) {
       var folders = (data.files || []).filter(function (f) {
-        return !f.name.startsWith('_')
+        return f.mimeType === 'application/vnd.google-apps.folder'
+          && !f.name.startsWith('_')
           && !/leia/i.test(f.name)
           && !EXCLUDE_FROM_PREVIEW.test(f.name);
       });
-      LIBRARY_SAMPLE_CACHE = folders.slice(0, 6);
-      renderLibrarySamples(LIBRARY_SAMPLE_CACHE);
+
+      // 2. Pra cada categoria, busca conteúdo (1 nível extra dentro pra pegar arquivos reais)
+      return Promise.all(folders.map(function (cat) {
+        return driveListFolder(cat.id).then(function (sub) {
+          var items = sub.files || [];
+          var files = items.filter(function (f) { return f.mimeType !== 'application/vnd.google-apps.folder'; });
+          var subfolders = items.filter(function (f) {
+            return f.mimeType === 'application/vnd.google-apps.folder'
+              && !f.name.startsWith('_')
+              && !EXCLUDE_FROM_PREVIEW.test(f.name);
+          });
+
+          // Se tem arquivos direto, usa esses
+          if (files.length >= 3) {
+            return files.slice(0, 6).map(function (f) { return tagFile(f, cat.name); });
+          }
+
+          // Senão, entra na primeira subpasta com conteúdo
+          if (subfolders.length === 0) return [];
+          return driveListFolder(subfolders[0].id).then(function (sub2) {
+            return (sub2.files || [])
+              .filter(function (f) { return f.mimeType !== 'application/vnd.google-apps.folder'; })
+              .slice(0, 6)
+              .map(function (f) { return tagFile(f, cat.name); });
+          });
+        }).catch(function () { return []; });
+      }));
+    })
+    .then(function (chunks) {
+      // Embaralha e pega N items priorizando os com thumbnail
+      var all = [].concat.apply([], chunks);
+      var withThumb = all.filter(function (f) { return f.hasThumbnail; });
+      var withoutThumb = all.filter(function (f) { return !f.hasThumbnail; });
+      shuffle(withThumb);
+      shuffle(withoutThumb);
+      // 2/3 com thumb + 1/3 sem (variedade visual)
+      var nThumb = Math.min(withThumb.length, Math.ceil(PREVIEW_TARGET * 0.66));
+      var nNo = PREVIEW_TARGET - nThumb;
+      var samples = withThumb.slice(0, nThumb).concat(withoutThumb.slice(0, nNo));
+      shuffle(samples);
+
+      LIBRARY_SAMPLE_CACHE = samples;
+      renderLibrarySamples(samples);
     })
     .catch(function (e) {
       var grid = document.getElementById('library-preview-grid');
@@ -315,39 +359,70 @@ function loadLibrarySamples() {
     });
 }
 
-function renderLibrarySamples(folders) {
+// Anexa metadados úteis ao arquivo
+function tagFile(file, categoryName) {
+  var ext = (file.name.split('.').pop() || '').toLowerCase();
+  var kind = /mp4|mov|webm|gif/.test(ext) ? 'video'
+           : /mp3|wav|m4a/.test(ext)       ? 'audio'
+           : /png|jpe?g|tif/.test(ext)     ? 'image'
+           : /mogrt/.test(ext)             ? 'mogrt'
+           : /prfpset/.test(ext)           ? 'preset'
+           : /cube|3dl/.test(ext)          ? 'lut'
+           : 'file';
+  return {
+    id:       file.id,
+    name:     file.name.replace(/\.[^.]+$/, ''),
+    ext:      ext,
+    kind:     kind,
+    thumb:    file.thumbnailLink,
+    hasThumbnail: !!file.hasThumbnail && !!file.thumbnailLink,
+    category: categoryName.replace(/^\d+\s*[-_.]\s*/, ''),
+  };
+}
+
+function shuffle(arr) {
+  for (var i = arr.length - 1; i > 0; i--) {
+    var j = Math.floor(Math.random() * (i + 1));
+    var t = arr[i]; arr[i] = arr[j]; arr[j] = t;
+  }
+}
+
+function kindIcon(kind) {
+  return ({
+    audio: '🎵', video: '🎬', image: '🖼',
+    mogrt: '📝', preset: '✨', lut: '🎨',
+  }[kind]) || '📄';
+}
+
+function kindColor(kind) {
+  return ({
+    audio: 'cyan', video: 'purple', image: 'blue',
+    mogrt: 'green', preset: 'gold', lut: 'red',
+  }[kind]) || 'blue';
+}
+
+function renderLibrarySamples(samples) {
   var grid = document.getElementById('library-preview-grid');
   var count = document.getElementById('library-preview-count');
   if (!grid) return;
 
-  // Mapeamento de cor + ícone por nome (mesma identidade da LP)
-  var palette = {
-    '01': { color: 'gold',   icon: '🎨', desc: 'Presets de efeito Premiere' },
-    '02': { color: 'purple', icon: '🖼',  desc: 'Overlays, transições, LUTs' },
-    '03': { color: 'cyan',   icon: '🎵', desc: 'SFX e trilhas premium' },
-    '04': { color: 'red',    icon: '👁',  desc: 'Som cinematográfico Ocular' },
-    '05': { color: 'green',  icon: '🎬', desc: 'Mister Horse Previews' },
-  };
-
   grid.innerHTML = '';
-  folders.forEach(function (folder, i) {
-    var prefix = (folder.name.match(/^(\d+)/) || [])[1];
-    var meta = palette[prefix] || { color: 'blue', icon: '✨', desc: 'Atualizações contínuas' };
-    var cleanName = folder.name.replace(/^\d+\s*[-_.]\s*/, '');
-
+  samples.forEach(function (f) {
     var card = document.createElement('div');
     card.className = 'lib-card';
+    var thumbHtml = f.hasThumbnail
+      ? '<img src="' + f.thumb.replace(/=s\d+$/, '=s320') + '" alt="" referrerpolicy="no-referrer">'
+      : '<span>' + kindIcon(f.kind) + '</span>';
     card.innerHTML =
-      '<div class="lib-card-thumb ' + meta.color + '"><span>' + meta.icon + '</span></div>' +
+      '<div class="lib-card-thumb ' + (f.hasThumbnail ? 'has-thumb' : kindColor(f.kind)) + '">' + thumbHtml + '</div>' +
       '<div class="lib-card-meta">' +
-        '<div class="lib-card-num">0' + (i + 1) + '</div>' +
-        '<div class="lib-card-name">' + cleanName + '</div>' +
-        '<div class="lib-card-desc">' + meta.desc + '</div>' +
+        '<div class="lib-card-num">' + (f.category || '').toUpperCase() + ' · ' + f.ext.toUpperCase() + '</div>' +
+        '<div class="lib-card-name">' + f.name + '</div>' +
       '</div>';
     grid.appendChild(card);
   });
 
-  if (count) count.textContent = folders.length + ' categorias · 12.000 efeitos no total';
+  if (count) count.textContent = 'Amostra · 12.000 efeitos no total';
 }
 
 // Bind extra dos botoes do preview
