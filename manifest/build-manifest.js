@@ -15,6 +15,7 @@
 const fs   = require('fs');
 const path = require('path');
 const { google } = require('googleapis');
+const CONCEPTS = require('./concepts.js');
 
 // ── Config ───────────────────────────────────────────────────────
 const ROOT_ID = '16nWLu5vz2AB9LjuvwNp3vJP57UHBWfEz';
@@ -82,6 +83,32 @@ function shouldSkipFile(name) {
 function extractTags(name) {
   const low = (name || '').toLowerCase();
   return AUTO_TAGS.filter(t => low.indexOf(t) !== -1);
+}
+
+/**
+ * v1.2 Parte C: computa embed sparse pra busca semântica.
+ * Retorna { conceptIdx: count } só pra conceitos que aparecem.
+ * Tamanho médio: 2-5 entries por effect.
+ */
+function computeEmbed(name, category, subcategory, pathArr, tags) {
+  const blob = (
+    name + ' ' + category + ' ' +
+    (subcategory || '') + ' ' +
+    (pathArr || []).join(' ') + ' ' +
+    (tags || []).join(' ')
+  ).toLowerCase();
+
+  const out = {};
+  for (let i = 0; i < CONCEPTS.length; i++) {
+    let count = 0;
+    const keys = CONCEPTS[i].keys;
+    for (let k = 0; k < keys.length; k++) {
+      // Match por substring (mais permissivo que palavra inteira)
+      if (blob.indexOf(keys[k]) !== -1) count++;
+    }
+    if (count > 0) out[i] = count;
+  }
+  return out;
 }
 
 // ── Auth ─────────────────────────────────────────────────────────
@@ -160,6 +187,8 @@ async function walkCategory(drive, folderId, categoryName, pathParts, depth) {
       if (shouldSkipFile(it.name)) continue;
       const ext = (it.name.split('.').pop() || '').toLowerCase();
       const cleanName = it.name.replace(/\.[^.]+$/, '');
+      const sub = pathParts.length > 0 ? cleanCategoryName(pathParts[0]) : null;
+      const tagList = extractTags(cleanName);
       out.push({
         id: it.id,
         name: cleanName,
@@ -167,10 +196,11 @@ async function walkCategory(drive, folderId, categoryName, pathParts, depth) {
         kind: VALID_EXTS[ext],
         thumb: it.thumbnailLink || null,
         category: categoryName,
-        subcategory: pathParts.length > 0 ? cleanCategoryName(pathParts[0]) : null,
+        subcategory: sub,
         path: pathParts,
-        tags: extractTags(cleanName),
+        tags: tagList,
         size: parseInt(it.size || 0, 10),
+        embed: computeEmbed(cleanName, categoryName, sub, pathParts, tagList),
       });
       totalScanned++;
       if (totalScanned % 250 === 0) process.stdout.write(`\r  ${totalScanned} arquivos...`);
@@ -211,11 +241,13 @@ async function walkCategory(drive, folderId, categoryName, pathParts, depth) {
       if (shouldSkipFile(f.name)) continue;
       const ext = (f.name.split('.').pop() || '').toLowerCase();
       const cleanName = f.name.replace(/\.[^.]+$/, '');
+      const tagList = extractTags(cleanName);
       allFiles.push({
         id: f.id, name: cleanName, ext, kind: VALID_EXTS[ext],
         thumb: f.thumbnailLink || null,
         category: essentialsName, subcategory: null, path: [],
-        tags: extractTags(cleanName), size: parseInt(f.size || 0, 10),
+        tags: tagList, size: parseInt(f.size || 0, 10),
+        embed: computeEmbed(cleanName, essentialsName, null, [], tagList),
       });
     }
   }
@@ -237,7 +269,7 @@ async function walkCategory(drive, folderId, categoryName, pathParts, depth) {
 
   // Output
   const manifest = {
-    version: 2,
+    version: 3,                            // v3 = inclui embed pra busca semântica
     builtAt: new Date().toISOString(),
     rootId: ROOT_ID,
     counts: {
@@ -245,6 +277,7 @@ async function walkCategory(drive, folderId, categoryName, pathParts, depth) {
       byCategory: stats,
     },
     categories: Array.from(catGroups.keys()).concat(rootFiles.length ? [brandCategoryName('Geral')] : []),
+    concepts: CONCEPTS.map(c => ({ name: c.name, keys: c.keys })),  // embeddings dict
     files: allFiles,
   };
 

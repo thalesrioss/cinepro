@@ -168,6 +168,109 @@ function importPreset(filePath) {
 }
 
 /**
+ * v1.2 Parte B: aplica um arquivo nos clips SELECIONADOS na timeline.
+ * Premissas:
+ *   - Pra .prfpset: importa o preset no projeto (vira disponível em Effects panel)
+ *   - Pra .cube/.3dl: instala como LUT (já cobre seleção via Lumetri)
+ *   - Pra mídia comum: se há seleção, insere no IN POINT do primeiro clip
+ *     selecionado; senão, comportamento clássico (playhead)
+ *
+ * Retorna 'OK:APPLIED_TO_N' onde N é o número de clips afetados,
+ * ou faz fallback pra importFileAtPlayhead quando sem seleção.
+ */
+function applyEffectToSelection(filePath, fileType) {
+  try {
+    var file = new File(filePath);
+    if (!file.exists) return 'ERR:FILE_NOT_FOUND:' + filePath;
+
+    var lowerType = (fileType || '').toLowerCase();
+
+    // Presets/LUTs não precisam de seleção pra serem instalados
+    if (lowerType === 'prfpset') return importPreset(filePath);
+    if (lowerType === 'cube' || lowerType === '3dl') return installLUT(filePath);
+
+    var seq = app.project.activeSequence;
+    if (!seq) return 'ERR:NO_SEQUENCE';
+
+    // Conta clips selecionados em todas as tracks
+    var selectedClips = collectSelectedClips(seq);
+    if (selectedClips.length === 0) {
+      // Sem seleção — comportamento padrão (playhead)
+      return importFileAtPlayhead(filePath, fileType);
+    }
+
+    // Importa o arquivo uma vez
+    var bin = app.project.rootItem;
+    app.project.importFiles([filePath], true, bin, false);
+    var fileName = filePath.split('/').pop().split('\\').pop();
+    var importedItem = null;
+    for (var i = bin.children.numItems - 1; i >= 0; i--) {
+      if (bin.children[i].name === fileName) { importedItem = bin.children[i]; break; }
+    }
+    if (!importedItem) return 'WARN:IMPORTED_BUT_NOT_FOUND';
+
+    // Insere no IN POINT de cada clip selecionado
+    var inserted = 0;
+    for (var j = 0; j < selectedClips.length; j++) {
+      var clip = selectedClips[j];
+      var startTime = clip.start && clip.start.seconds;
+      if (startTime == null) continue;
+
+      // Áudio em audio track; resto em video track
+      var trackList = (AUDIO_EXTS[lowerType]) ? seq.audioTracks : seq.videoTracks;
+      if (!trackList || !trackList[0]) continue;
+      try {
+        trackList[0].insertClip(importedItem, startTime);
+        inserted++;
+      } catch (e) {/* ignora — clip de track travada, etc. */}
+    }
+
+    if (inserted === 0) return 'WARN:NO_CLIPS_INSERTED';
+    return 'OK:APPLIED_TO_' + inserted;
+
+  } catch (e) {
+    return 'ERR:SELECTION:' + e.toString();
+  }
+}
+
+/**
+ * Coleta todos os clips selecionados em todas as tracks de uma sequência.
+ * Retorna array de TrackItem (.start, .end, .projectItem, etc.).
+ */
+function collectSelectedClips(seq) {
+  var out = [];
+  try {
+    var v;
+    for (v = 0; v < seq.videoTracks.numTracks; v++) {
+      var vt = seq.videoTracks[v];
+      for (var i = 0; i < vt.clips.numItems; i++) {
+        if (vt.clips[i].isSelected && vt.clips[i].isSelected()) out.push(vt.clips[i]);
+      }
+    }
+    for (v = 0; v < seq.audioTracks.numTracks; v++) {
+      var at = seq.audioTracks[v];
+      for (var k = 0; k < at.clips.numItems; k++) {
+        if (at.clips[k].isSelected && at.clips[k].isSelected()) out.push(at.clips[k]);
+      }
+    }
+  } catch (e) {/* defensivo */}
+  return out;
+}
+
+/**
+ * Conta clips selecionados na sequência ativa.
+ * Usado pelo plugin pra decidir UI (botão "Aplicar em N selecionados" vs
+ * "Aplicar no playhead").
+ */
+function countSelectedClips() {
+  try {
+    var seq = app.project.activeSequence;
+    if (!seq) return '0';
+    return String(collectSelectedClips(seq).length);
+  } catch (e) { return '0'; }
+}
+
+/**
  * Copia um arquivo de LUT pra pasta de LUTs do usuário no Premiere
  */
 function installLUT(filePath) {

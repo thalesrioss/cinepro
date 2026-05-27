@@ -240,6 +240,11 @@ function bindAppUI() {
   bindGridDelegation();
   bindKeyboardShortcuts();
   scheduleUpdateCheck();
+  // v1.2 A5: pre-warm ExtendScript (primeira chamada demora 30-100ms)
+  // Faz o Premiere já compilar o host script, deixando o primeiro apply rápido
+  scheduleIdle(function () {
+    try { cs.evalScript('hasActiveSequence()', function () {}); } catch (e) {}
+  });
 
   var input = document.getElementById('search-input');
   var clear = document.getElementById('search-clear');
@@ -406,6 +411,8 @@ function tryManifest(urls) {
 function applyManifest(manifest) {
   // Popula allEffects direto do manifest
   allEffects = manifest.files;
+  // v1.2 Parte C: guarda dicionário de conceitos pra busca semântica
+  CINEPRO_CONCEPTS_DICT = manifest.concepts || null;
 
   // Reconstrói driveCategories a partir da lista de categorias do manifest
   var seenCats = {};
@@ -987,6 +994,68 @@ function searchIndices(query) {
   return result;
 }
 
+// v1.2 Parte C — dicionário de conceitos vindo do manifest
+var CINEPRO_CONCEPTS_DICT = null;
+
+/**
+ * Embed da query: mesmo algoritmo do builder, sparse { idx → count }.
+ */
+function embedQuery(query) {
+  if (!CINEPRO_CONCEPTS_DICT) return null;
+  var q = (query || '').toLowerCase();
+  var out = {};
+  for (var i = 0; i < CINEPRO_CONCEPTS_DICT.length; i++) {
+    var keys = CINEPRO_CONCEPTS_DICT[i].keys || [];
+    var count = 0;
+    for (var k = 0; k < keys.length; k++) {
+      if (q.indexOf(keys[k]) !== -1) count++;
+    }
+    if (count > 0) out[i] = count;
+  }
+  return out;
+}
+
+/**
+ * Cosine similarity entre dois sparse vectors. Retorna 0..1.
+ */
+function cosineSparse(a, b) {
+  if (!a || !b) return 0;
+  var aKeys = Object.keys(a);
+  var bKeys = Object.keys(b);
+  if (aKeys.length === 0 || bKeys.length === 0) return 0;
+  var dot = 0, magA = 0, magB = 0;
+  for (var i = 0; i < aKeys.length; i++) {
+    var k = aKeys[i];
+    var av = a[k];
+    magA += av * av;
+    if (b[k] !== undefined) dot += av * b[k];
+  }
+  for (var j = 0; j < bKeys.length; j++) magB += b[bKeys[j]] * b[bKeys[j]];
+  var denom = Math.sqrt(magA) * Math.sqrt(magB);
+  return denom > 0 ? dot / denom : 0;
+}
+
+/**
+ * Busca semântica: scan O(n) com cosine similarity. Retorna top-K
+ * (idx, score) ordenado por score desc. Threshold mínimo: 0.15
+ * (filtra ruído sem perder hits relevantes).
+ */
+function semanticSearch(query, limit) {
+  var qEmbed = embedQuery(query);
+  if (!qEmbed || Object.keys(qEmbed).length === 0) return [];
+  limit = limit || 60;
+
+  var results = [];
+  for (var i = 0; i < allEffects.length; i++) {
+    var e = allEffects[i];
+    if (!e.embed) continue;
+    var score = cosineSparse(qEmbed, e.embed);
+    if (score >= 0.15) results.push({ idx: i, score: score });
+  }
+  results.sort(function (a, b) { return b.score - a.score; });
+  return results.slice(0, limit);
+}
+
 function filterEffects(query) {
   // Sets pré-computados pra evitar lookup repetido
   var favSet = activeCategory === 'favorites' ? new Set(getFavoriteIds()) : null;
@@ -1008,21 +1077,46 @@ function filterEffects(query) {
     return;
   }
 
-  var matchedIndices = searchIndices(query);
-  if (!matchedIndices) {
-    renderEffects([]);
-    return;
-  }
+  // ── Híbrido textual + semântico ─────────────────────────
+  // 1. Roda busca textual normal (inverted index)
+  // 2. Se <5 resultados textuais, complementa com busca semântica
+  // 3. Categoria/sub continuam filtrando ambos
+  var textualIndices = searchIndices(query) || new Set();
+  var seen = new Set();
   var result = [];
-  matchedIndices.forEach(function (idx) {
+
+  textualIndices.forEach(function (idx) {
     var e = allEffects[idx];
     if (!e) return;
     var inCat = activeCategory === 'all'
               || (activeCategory === 'favorites' && favSet.has(e.id))
               || e.category === activeCategory;
     if (activeSubcategory) inCat = inCat && e.subcategory === activeSubcategory;
-    if (inCat) result.push(e);
+    if (inCat && !seen.has(idx)) {
+      seen.add(idx);
+      result.push(e);
+    }
   });
+
+  // Complementa com semântica quando textual rasa
+  var TEXTUAL_THRESHOLD = 5;
+  if (result.length < TEXTUAL_THRESHOLD * 3 && CINEPRO_CONCEPTS_DICT) {
+    var semResults = semanticSearch(query, 60);
+    for (var s = 0; s < semResults.length && result.length < 120; s++) {
+      if (seen.has(semResults[s].idx)) continue;
+      var e2 = allEffects[semResults[s].idx];
+      if (!e2) continue;
+      var inCat2 = activeCategory === 'all'
+                 || (activeCategory === 'favorites' && favSet.has(e2.id))
+                 || e2.category === activeCategory;
+      if (activeSubcategory) inCat2 = inCat2 && e2.subcategory === activeSubcategory;
+      if (inCat2) {
+        seen.add(semResults[s].idx);
+        result.push(e2);
+      }
+    }
+  }
+
   renderEffects(result);
 }
 
@@ -1091,9 +1185,26 @@ function renderEffects(effects) {
     total:       effects.length,
   };
 
-  // PERF: primeiro lote SÍNCRONO pra UI ficar instantânea (60 cards <30ms);
-  // se ainda houver mais, próximos lotes via requestIdleCallback (não trava UI)
-  renderNextBatch(PAGE_SIZE);
+  // PERF v1.2: primeiro batch SUB-divido em micro-chunks de 12 cards por frame
+  // (60fps). UI nunca trava — antes era ~80-120ms síncrono pra 60 cards.
+  renderInChunks(PAGE_SIZE, 12);
+}
+
+// Renderiza `target` cards distribuídos em frames de `perFrame` cada.
+// Frame 1 é síncrono pra ter feedback imediato; resto via rAF.
+function renderInChunks(target, perFrame) {
+  if (!renderState) return;
+  var firstChunk = Math.min(perFrame, target);
+  renderNextBatch(firstChunk);
+  if (renderState.rendered >= target || renderState.rendered >= renderState.total) return;
+  requestAnimationFrame(function loop() {
+    if (!renderState) return;
+    if (renderState.rendered >= target || renderState.rendered >= renderState.total) return;
+    renderNextBatch(Math.min(perFrame, target - renderState.rendered));
+    if (renderState.rendered < target && renderState.rendered < renderState.total) {
+      requestAnimationFrame(loop);
+    }
+  });
 }
 
 // PERF: agendar próximo trabalho durante idle time do browser
@@ -1177,19 +1288,25 @@ function renderNextBatch(count) {
 
 // Observer global do scroll infinito — recriado a cada batch porque sentinela muda.
 var SCROLL_OBSERVER = null;
+var SCROLL_DEBOUNCE_TS = 0;
 function observeScrollSentinel(sentinel) {
   if (!('IntersectionObserver' in window)) return;  // botão fallback funciona
   if (SCROLL_OBSERVER) SCROLL_OBSERVER.disconnect();
   SCROLL_OBSERVER = new IntersectionObserver(function (entries) {
-    entries.forEach(function (e) {
-      if (e.isIntersecting) {
-        SCROLL_OBSERVER.disconnect();
-        SCROLL_OBSERVER = null;
-        // Idle scheduling: próximo lote roda quando o browser estiver ocioso,
-        // evita stutter no scroll que ainda está acontecendo
-        scheduleIdle(function () { renderNextBatch(PAGE_STEP); });
-      }
-    });
+    if (!entries[0] || !entries[0].isIntersecting) return;
+    // v1.2 A3: debounce — coalesce triggers se observer disparar mais de 1×
+    // num scroll rápido. 200ms cooldown.
+    var now = Date.now();
+    if (now - SCROLL_DEBOUNCE_TS < 200) return;
+    SCROLL_DEBOUNCE_TS = now;
+
+    if (SCROLL_OBSERVER) {
+      SCROLL_OBSERVER.disconnect();
+      SCROLL_OBSERVER = null;
+    }
+    // Idle scheduling: próximo lote roda quando o browser estiver ocioso,
+    // evita stutter no scroll que ainda está acontecendo
+    scheduleIdle(function () { renderNextBatch(PAGE_STEP); });
   }, { rootMargin: '400px' });
   SCROLL_OBSERVER.observe(sentinel);
 }
@@ -1249,6 +1366,24 @@ function ensureThumbObserver() {
 }
 
 /**
+ * v1.2 A2: fallback automático quando thumb do Drive expira.
+ * O thumbnailLink tem token que expira em ~horas. Quando manifest está velho
+ * (entre rebuilds semanais), muitos thumbs voltam 403/404. Fallback usa o
+ * endpoint público de thumb do Drive baseado no ID (sempre válido).
+ */
+function attachThumbErrorFallback(imgEl, effectId) {
+  imgEl.addEventListener('error', function () {
+    if (imgEl.dataset.refreshed) {
+      // Já tentou fallback — não há mais nada a fazer, esconde o broken icon
+      imgEl.style.opacity = '0';
+      return;
+    }
+    imgEl.dataset.refreshed = '1';
+    imgEl.src = 'https://drive.google.com/thumbnail?id=' + encodeURIComponent(effectId) + '&sz=w320';
+  }, { once: false });
+}
+
+/**
  * Card slim — DOM minimalista (6 nodes vs 16 antes).
  * SEM listeners individuais: tudo via delegation no grid (ver bindGridDelegation).
  */
@@ -1286,15 +1421,16 @@ function createEffectCard(effect) {
       '</svg>' +
     '</button>' +
     '<div class="effect-thumb">' + thumbHtml + previewBtn + '<span class="drag-hint">' + (cached ? '⇲ arrastar' : '⇩ preparar') + '</span></div>' +
-    '<div class="download-overlay"><div class="download-spinner"></div><div class="download-label">Baixando...</div></div>' +
+    /* v1.2 A4: download-overlay agora é lazy — só injetado quando download começa */
     '<div class="effect-card-body">' +
       '<div class="effect-name" title="' + effect.name + '">' + effect.name + '</div>' +
       '<div class="effect-meta">' + typeBadge + '<button class="btn btn--soft btn--xs btn-apply" data-action="apply">Aplicar</button></div>' +
     '</div>';
 
-  // Lazy thumb observer
+  // Lazy thumb observer + fallback on-error pra thumbs expirados
   if (effect.thumb) {
     var imgEl = card.querySelector('.thumb-img');
+    attachThumbErrorFallback(imgEl, effect.id);
     var obs = ensureThumbObserver();
     if (obs) obs.observe(imgEl);
     else imgEl.src = effect.thumb;  // fallback sem observer
@@ -1528,11 +1664,13 @@ function applyEffectSilent(effect, card) {
                         : downloadEffectFile(effect).then(function (p) { effectCache[effect.id] = p; return p; });
 
     card.classList.add('downloading');
+  ensureDownloadOverlay(card);
     dl.then(function (localPath) {
       card.classList.remove('downloading');
+      removeDownloadOverlay(card);
       card.classList.add('cached');
       cs.evalScript(
-        'importFileAtPlayhead("' + escapePath(localPath) + '", "' + effect.ext + '")',
+        'applyEffectToSelection("' + escapePath(localPath) + '", "' + effect.ext + '")',
         function (result) {
           if (!result || result.startsWith('ERR:')) {
             console.warn('[CinePRO] batch fail:', effect.name, result);
@@ -1545,6 +1683,7 @@ function applyEffectSilent(effect, card) {
       );
     }).catch(function (err) {
       card.classList.remove('downloading');
+      removeDownloadOverlay(card);
       console.warn('[CinePRO] batch download fail:', effect.name, err.message);
       reject(err);
     });
@@ -1952,6 +2091,21 @@ function thumbForKind(kind) {
 /**
  * Baixa o arquivo para temp e o insere na timeline via ExtendScript
  */
+// v1.2 A4: injeta overlay de download sob demanda (era estático no DOM)
+function ensureDownloadOverlay(card) {
+  var existing = card.querySelector('.download-overlay');
+  if (existing) return existing;
+  var ov = document.createElement('div');
+  ov.className = 'download-overlay';
+  ov.innerHTML = '<div class="download-spinner"></div><div class="download-label">Baixando...</div>';
+  card.appendChild(ov);
+  return ov;
+}
+function removeDownloadOverlay(card) {
+  var ov = card.querySelector('.download-overlay');
+  if (ov) ov.remove();
+}
+
 function applyEffect(effect, card) {
   if (card.classList.contains('downloading')) return;
 
@@ -1962,16 +2116,21 @@ function applyEffect(effect, card) {
     : downloadEffectFile(effect).then(function (p) { effectCache[effect.id] = p; return p; });
 
   card.classList.add('downloading');
+  ensureDownloadOverlay(card);
   setStatus('loading', cachedPath ? 'Inserindo...' : 'Baixando "' + effect.name + '"...');
 
   downloadPromise
     .then(function (localPath) {
       card.classList.remove('downloading');
+      removeDownloadOverlay(card);
       card.classList.add('cached');
       setStatus('loading', 'Inserindo na timeline...');
 
+      // v1.2 Parte B: applyEffectToSelection é smart — se há clips selecionados,
+      // aplica no IN POINT deles; senão, fallback pra playhead. Função única
+      // cobre os dois casos sem duplicar lógica.
       cs.evalScript(
-        'importFileAtPlayhead("' + escapePath(localPath) + '", "' + effect.ext + '")',
+        'applyEffectToSelection("' + escapePath(localPath) + '", "' + effect.ext + '")',
         function (result) {
           if (!result || result.startsWith('ERR:')) {
             var msg = result ? result.replace('ERR:', '') : 'Erro desconhecido';
@@ -1987,6 +2146,7 @@ function applyEffect(effect, card) {
     })
     .catch(function (err) {
       card.classList.remove('downloading');
+      removeDownloadOverlay(card);
       setStatus('error', 'Erro no download');
       showToast('Falha ao baixar: ' + err.message, 'error');
     });
@@ -2036,12 +2196,14 @@ function prepareForDrag(effect, card) {
   if (effectCache[effect.id]) return;  // já tá pronto
 
   card.classList.add('downloading');
+  ensureDownloadOverlay(card);
   setStatus('loading', 'Preparando "' + effect.name + '"...');
 
   downloadEffectFile(effect)
     .then(function (localPath) {
       effectCache[effect.id] = localPath;
       card.classList.remove('downloading');
+      removeDownloadOverlay(card);
       card.classList.add('cached');
       card.querySelector('.drag-hint').textContent = '⇲ arrastar';
       setStatus('ok', '✓ Pronto');
@@ -2049,6 +2211,7 @@ function prepareForDrag(effect, card) {
     })
     .catch(function (err) {
       card.classList.remove('downloading');
+      removeDownloadOverlay(card);
       showToast('Falha ao preparar: ' + err.message, 'error');
     });
 }
@@ -2299,9 +2462,15 @@ function humanizeError(err) {
 
 /** Mensagem amigável de sucesso por tipo */
 function successMessage(effect, result) {
-  if (result.includes('PRESET_IMPORTED'))
+  if (result.indexOf('PRESET_IMPORTED') !== -1)
     return '"' + effect.name + '" adicionado em Efeitos → Predefinições';
-  if (result.includes('LUT_INSTALLED'))
+  if (result.indexOf('LUT_INSTALLED') !== -1)
     return '"' + effect.name + '" instalado em Lumetri Color';
+  if (result.indexOf('APPLIED_TO_') !== -1) {
+    var n = result.replace(/.*APPLIED_TO_/, '').trim();
+    return '"' + effect.name + '" aplicado em ' + n + ' clip' + (n === '1' ? '' : 's') + ' selecionado' + (n === '1' ? '' : 's');
+  }
+  if (result.indexOf('AUDIO_INSERTED') !== -1)
+    return '"' + effect.name + '" adicionado à trilha de áudio ✓';
   return '"' + effect.name + '" adicionado à timeline ✓';
 }
