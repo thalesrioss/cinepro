@@ -94,6 +94,33 @@
       </div>
     </div>
 
+    <!-- Preview da biblioteca — só aparece quando sub inativa -->
+    <div class="library-preview hidden" id="library-preview">
+      <div class="library-preview-header">
+        <div>
+          <div class="library-preview-eyebrow">Biblioteca</div>
+          <h2 class="library-preview-title">O que está incluído</h2>
+          <p class="library-preview-desc">12.000 efeitos profissionais em 6 categorias. Acesso liberado após início da avaliação.</p>
+        </div>
+        <button id="btn-refresh-preview" class="btn btn--ghost btn--md">Atualizar</button>
+      </div>
+
+      <div class="library-preview-grid" id="library-preview-grid">
+        <!-- Cards de preview gerados via JS -->
+        <div class="library-preview-skeleton"></div>
+        <div class="library-preview-skeleton"></div>
+        <div class="library-preview-skeleton"></div>
+        <div class="library-preview-skeleton"></div>
+        <div class="library-preview-skeleton"></div>
+        <div class="library-preview-skeleton"></div>
+      </div>
+
+      <div class="library-preview-footer">
+        <span id="library-preview-count">Carregando amostras...</span>
+        <button id="btn-subscribe-2" class="btn btn--primary-gradient btn--md">Iniciar avaliação</button>
+      </div>
+    </div>
+
     <!-- Grid de ações -->
     <div class="action-grid">
 

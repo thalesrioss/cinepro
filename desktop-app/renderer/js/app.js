@@ -139,6 +139,7 @@ function refreshSubscription() {
                            (data.lastEventAt ? 'Última atualização: ' + data.lastEventAt : '');
         btnSub.classList.add('hidden');
         btnMgmt.classList.remove('hidden');
+        hideLibraryPreview();
       } else {
         pill.className = 'status-pill inactive';
         text.textContent = 'Assinatura inativa';
@@ -148,6 +149,7 @@ function refreshSubscription() {
         btnSub.textContent = data && data.lastStatus ? 'Reativar assinatura' : 'Começar trial grátis';
         btnSub.classList.remove('hidden');
         btnMgmt.classList.add('hidden');
+        showLibraryPreview();
       }
     })
     .catch(function (e) {
@@ -258,3 +260,99 @@ function showToast(msg, type) {
     setTimeout(function () { t.classList.remove('visible'); }, 3500);
   });
 }
+
+// ════════════════ LIBRARY PREVIEW ════════════════════════════════
+// Quando o usuario nao tem sub ativa, mostra um grid de samples do Drive
+// pra cria desejo + contexto antes de assinar.
+
+var LIBRARY_SAMPLE_CACHE = null;  // cache em memoria pra evitar re-fetch
+
+function showLibraryPreview() {
+  var el = document.getElementById('library-preview');
+  if (!el) return;
+  el.classList.remove('hidden');
+  loadLibrarySamples();
+}
+
+function hideLibraryPreview() {
+  var el = document.getElementById('library-preview');
+  if (el) el.classList.add('hidden');
+}
+
+function loadLibrarySamples() {
+  if (LIBRARY_SAMPLE_CACHE) {
+    renderLibrarySamples(LIBRARY_SAMPLE_CACHE);
+    return;
+  }
+
+  var rootId = CINEPRO_CONFIG.GOOGLE_DRIVE_FOLDER_ID;
+  var apiKey = CINEPRO_CONFIG.GOOGLE_DRIVE_API_KEY;
+
+  // Lista as 6 categorias top-level
+  var url = 'https://www.googleapis.com/drive/v3/files'
+    + '?q=' + encodeURIComponent("'" + rootId + "' in parents and mimeType='application/vnd.google-apps.folder' and trashed=false")
+    + '&fields=files(id,name)'
+    + '&pageSize=20&key=' + apiKey;
+
+  fetch(url)
+    .then(function (r) { return r.json(); })
+    .then(function (data) {
+      var folders = (data.files || []).filter(function (f) {
+        return !f.name.startsWith('_') && !/leia/i.test(f.name);
+      });
+      LIBRARY_SAMPLE_CACHE = folders.slice(0, 6);
+      renderLibrarySamples(LIBRARY_SAMPLE_CACHE);
+    })
+    .catch(function (e) {
+      var grid = document.getElementById('library-preview-grid');
+      if (grid) grid.innerHTML = '<div class="library-preview-error">Não foi possível carregar a prévia. Verifique sua conexão.</div>';
+    });
+}
+
+function renderLibrarySamples(folders) {
+  var grid = document.getElementById('library-preview-grid');
+  var count = document.getElementById('library-preview-count');
+  if (!grid) return;
+
+  // Mapeamento de cor + ícone por nome (mesma identidade da LP)
+  var palette = {
+    '01': { color: 'gold',   icon: '🎨', desc: 'Presets de efeito Premiere' },
+    '02': { color: 'purple', icon: '🖼',  desc: 'Overlays, transições, LUTs' },
+    '03': { color: 'cyan',   icon: '🎵', desc: 'SFX e trilhas premium' },
+    '04': { color: 'red',    icon: '👁',  desc: 'Som cinematográfico Ocular' },
+    '05': { color: 'green',  icon: '🎬', desc: 'Mister Horse Previews' },
+  };
+
+  grid.innerHTML = '';
+  folders.forEach(function (folder, i) {
+    var prefix = (folder.name.match(/^(\d+)/) || [])[1];
+    var meta = palette[prefix] || { color: 'blue', icon: '✨', desc: 'Atualizações contínuas' };
+    var cleanName = folder.name.replace(/^\d+\s*[-_.]\s*/, '');
+
+    var card = document.createElement('div');
+    card.className = 'lib-card';
+    card.innerHTML =
+      '<div class="lib-card-thumb ' + meta.color + '"><span>' + meta.icon + '</span></div>' +
+      '<div class="lib-card-meta">' +
+        '<div class="lib-card-num">0' + (i + 1) + '</div>' +
+        '<div class="lib-card-name">' + cleanName + '</div>' +
+        '<div class="lib-card-desc">' + meta.desc + '</div>' +
+      '</div>';
+    grid.appendChild(card);
+  });
+
+  if (count) count.textContent = folders.length + ' categorias · 12.000 efeitos no total';
+}
+
+// Bind extra dos botoes do preview
+document.addEventListener('DOMContentLoaded', function () {
+  var refresh = document.getElementById('btn-refresh-preview');
+  if (refresh) refresh.addEventListener('click', function () {
+    LIBRARY_SAMPLE_CACHE = null;
+    loadLibrarySamples();
+  });
+  var sub2 = document.getElementById('btn-subscribe-2');
+  if (sub2) sub2.addEventListener('click', function () {
+    window.cinepro.openExternal(CINEPRO_CONFIG.TICTO_CHECKOUT_URL);
+  });
+});

@@ -199,13 +199,20 @@ function bindAppUI() {
   var input = document.getElementById('search-input');
   var clear = document.getElementById('search-clear');
 
+  // Debounce — só filtra 200ms depois da última tecla. Evita rodar
+  // filtro em 12k items a cada caractere digitado.
+  var searchTimer = null;
   input.addEventListener('input', function (e) {
     var val = e.target.value.trim();
     clear.style.display = val ? 'flex' : 'none';
-    filterEffects(val.toLowerCase());
+    if (searchTimer) clearTimeout(searchTimer);
+    searchTimer = setTimeout(function () {
+      filterEffects(val.toLowerCase());
+    }, 200);
   });
 
   clear.addEventListener('click', function () {
+    if (searchTimer) clearTimeout(searchTimer);
     input.value = '';
     clear.style.display = 'none';
     filterEffects('');
@@ -649,6 +656,14 @@ function filterEffects(query) {
   renderEffects(filtered);
 }
 
+// ── PAGINAÇÃO INTERNA POR CATEGORIA ────────────────────────────
+// Pra não criar 5000+ DOM nodes de uma vez (causa freeze do CEP),
+// renderiza só BATCH_SIZE itens e exibe um botão "Carregar mais"
+// que renderiza o próximo lote em rAF (sem travar a UI).
+var PAGE_SIZE = 80;     // primeiro lote
+var PAGE_STEP = 80;     // cada "carregar mais"
+var renderState = null; // { effects, groups, labels, rendered }
+
 function renderEffects(effects) {
   var grid = document.getElementById('effects-grid');
   grid.innerHTML = '';
@@ -664,8 +679,8 @@ function renderEffects(effects) {
     return;
   }
 
-  // Agrupa pela categoria original quando estamos vendo "Favoritos" ou "Todos";
-  // numa categoria específica, agrupa pela subcategoria pra dar profundidade.
+  // Agrupa pela categoria original em "Favoritos"/"Todos";
+  // numa categoria, agrupa por subcategoria.
   var groups = {};
   var groupByCat = (activeCategory === 'favorites' || activeCategory === 'all');
   effects.forEach(function (e) {
@@ -676,25 +691,79 @@ function renderEffects(effects) {
     groups[label].push(e);
   });
 
-  var labels = Object.keys(groups);
-  labels.forEach(function (label) {
-    if (labels.length > 1) {
+  // Estado pro lazy render
+  renderState = {
+    groups:   groups,
+    labels:   Object.keys(groups),
+    cursorLabel: 0,   // qual label tá renderizando
+    cursorItem:  0,   // qual item dentro da label
+    rendered:    0,   // total renderizado
+    total:       effects.length,
+  };
+
+  renderNextBatch(PAGE_SIZE);
+}
+
+function renderNextBatch(count) {
+  if (!renderState) return;
+  var grid = document.getElementById('effects-grid');
+  var moreBtn = document.getElementById('load-more-btn');
+  if (moreBtn) moreBtn.remove();
+
+  var groups = renderState.groups;
+  var labels = renderState.labels;
+  var batchDone = 0;
+
+  // Usa DocumentFragment pra batch insertion (1 reflow em vez de N)
+  var frag = document.createDocumentFragment();
+
+  while (batchDone < count && renderState.cursorLabel < labels.length) {
+    var label = labels[renderState.cursorLabel];
+    var items = groups[label];
+
+    // Se é o primeiro item desse label, insere o title
+    if (renderState.cursorItem === 0 && labels.length > 1) {
       var title = document.createElement('div');
       title.className = 'section-title';
       title.style.gridColumn = '1 / -1';
-      title.innerHTML = '<span class="section-bullet"></span>' + label + ' <span class="section-count">' + groups[label].length + '</span>';
-      grid.appendChild(title);
+      title.innerHTML = '<span class="section-bullet"></span>' + label + ' <span class="section-count">' + items.length + '</span>';
+      frag.appendChild(title);
     }
-    groups[label].forEach(function (effect) {
-      var card = createEffectCard(effect);
-      grid.appendChild(card);
 
-      // Pra cards de áudio, dispara geração de waveform lazy (quando entra no viewport)
+    while (renderState.cursorItem < items.length && batchDone < count) {
+      var effect = items[renderState.cursorItem];
+      var card = createEffectCard(effect);
+      frag.appendChild(card);
+
       if (effect.kind === 'audio' && card.querySelector('.effect-thumb-placeholder')) {
         observeForWaveform(card, effect);
       }
-    });
-  });
+
+      renderState.cursorItem++;
+      renderState.rendered++;
+      batchDone++;
+    }
+
+    // Acabou esse label?
+    if (renderState.cursorItem >= items.length) {
+      renderState.cursorLabel++;
+      renderState.cursorItem = 0;
+    }
+  }
+
+  grid.appendChild(frag);
+
+  // Se tem mais, adiciona botão "Carregar mais"
+  if (renderState.rendered < renderState.total) {
+    var btn = document.createElement('button');
+    btn.id = 'load-more-btn';
+    btn.className = 'load-more-btn';
+    btn.style.gridColumn = '1 / -1';
+    btn.innerHTML = '↓ Carregar mais <span style="opacity:0.6">(' +
+                    (renderState.total - renderState.rendered) + ' restantes)</span>';
+    btn.addEventListener('click', function () { renderNextBatch(PAGE_STEP); });
+    grid.appendChild(btn);
+  }
 }
 
 // IntersectionObserver compartilhado pra waveform lazy
@@ -913,7 +982,7 @@ var WAVEFORM_CACHE_KEY = 'cinepro_waveforms_v1';
 var WAVEFORM_PENDING = {};   // id → Promise (deduplica)
 var WAVEFORM_QUEUE = [];     // throttling de processamento
 var WAVEFORM_PROCESSING = 0;
-var WAVEFORM_MAX_CONCURRENT = 2;
+var WAVEFORM_MAX_CONCURRENT = 1;  // 1 por vez pra não saturar (CEP é apertado)
 
 function getWaveformCache() {
   try { return JSON.parse(sessionStorage.getItem(WAVEFORM_CACHE_KEY) || '{}'); }

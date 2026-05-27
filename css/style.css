@@ -1325,3 +1325,26 @@ body {
 
 /* Esconde as abas horizontais antigas (substituídas pela sidebar) */
 .category-tabs { display: none !important; }
+
+/* ── BOTÃO CARREGAR MAIS ──────────────────────────────────── */
+.load-more-btn {
+  background: var(--surface-1);
+  border: 1px dashed var(--border-brand);
+  color: var(--brand);
+  font-family: inherit;
+  font-size: var(--text-xs);
+  font-weight: var(--weight-semibold);
+  padding: 14px;
+  margin: var(--space-3) 0;
+  cursor: pointer;
+  border-radius: var(--radius-md);
+  transition: background var(--duration-base) var(--ease-smooth),
+              border-color var(--duration-base) var(--ease-smooth);
+  text-align: center;
+}
+.load-more-btn:hover {
+  background: var(--brand-glow-2);
+  border-color: var(--brand);
+  border-style: solid;
+}
+.load-more-btn:active { transform: scale(0.98); }
