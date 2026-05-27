@@ -494,4 +494,20 @@ document.addEventListener('DOMContentLoaded', function () {
   if (sub2) sub2.addEventListener('click', function () {
     window.cinepro.openExternal(CINEPRO_CONFIG.TICTO_CHECKOUT_URL);
   });
+
+  // ── Update notification (GitHub Releases check 24h) ──
+  if (window.CinePROUpdateChecker) {
+    var current = (window.CINEPRO_CONFIG && CINEPRO_CONFIG.PLUGIN_VERSION) || '0.0.0';
+    var defer = window.requestIdleCallback || function (cb) { return setTimeout(cb, 1500); };
+    defer(function () {
+      window.CinePROUpdateChecker.check(current, function (release) {
+        if (!release) return;
+        var slot = document.getElementById('update-pill-slot');
+        window.CinePROUpdateChecker.render(release, {
+          pillHost: slot || document.body,
+          modalHost: document.body,
+        });
+      });
+    });
+  }
 });

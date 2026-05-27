@@ -238,6 +238,7 @@ function showScreen(name) {
 function bindAppUI() {
   document.getElementById('btn-logout').addEventListener('click', doLogout);
   bindGridDelegation();
+  scheduleUpdateCheck();
 
   var input = document.getElementById('search-input');
   var clear = document.getElementById('search-clear');
@@ -261,6 +262,31 @@ function bindAppUI() {
     filterEffects('');
     input.focus();
   });
+}
+
+/**
+ * Dispara check de update no GitHub Releases em background (idle).
+ * Cache de 24h + dismiss de 7d gerenciados internamente pelo módulo.
+ */
+function scheduleUpdateCheck() {
+  if (!global_CinePROUpdateChecker_available()) return;
+  var current = (window.CINEPRO_CONFIG && CINEPRO_CONFIG.PLUGIN_VERSION) || '0.0.0';
+  scheduleIdle(function () {
+    window.CinePROUpdateChecker.check(current, function (release) {
+      if (!release) return;
+      var slot = document.getElementById('update-pill-slot');
+      window.CinePROUpdateChecker.render(release, {
+        pillHost:  slot || document.body,
+        modalHost: document.body,
+      });
+      console.log('[CinePRO] update disponível:', release.tag);
+    });
+  });
+}
+
+function global_CinePROUpdateChecker_available() {
+  return typeof window.CinePROUpdateChecker === 'object' &&
+         typeof window.CinePROUpdateChecker.check === 'function';
 }
 
 function setUserBadge(email) {

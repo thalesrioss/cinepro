@@ -1412,3 +1412,192 @@ body {
   color: var(--brand);
   border-color: var(--brand);
 }
+
+/* ═════════════════════════════════════════════════════════════
+   UPDATE NOTIFICATION (pill + modal)
+   ═════════════════════════════════════════════════════════════ */
+
+.update-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 24px;
+  padding: 0 10px;
+  border: 1px solid var(--border-brand, var(--brand));
+  border-radius: 999px;
+  background: var(--brand-glow-2, rgba(0, 184, 255, 0.08));
+  color: var(--brand);
+  font-family: inherit;
+  font-size: 10px;
+  font-weight: var(--weight-semibold, 600);
+  letter-spacing: 0.02em;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background var(--duration-base, 200ms) ease, transform 120ms ease;
+  animation: update-pill-pulse 2.4s ease-in-out infinite;
+}
+.update-pill:hover {
+  background: var(--brand);
+  color: #fff;
+  transform: translateY(-1px);
+}
+.update-pill-icon {
+  display: inline-block;
+  transform: rotate(0);
+  transition: transform 400ms ease;
+}
+.update-pill:hover .update-pill-icon { transform: rotate(180deg); }
+
+@keyframes update-pill-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(0, 184, 255, 0.3); }
+  50%      { box-shadow: 0 0 0 6px rgba(0, 184, 255, 0); }
+}
+
+/* ─ Modal ─ */
+.update-modal {
+  position: fixed;
+  inset: 0;
+  z-index: var(--z-modal, 9000);
+  display: none;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
+.update-modal.is-open { display: flex; }
+
+.update-modal-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.65);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  cursor: pointer;
+}
+.update-modal-box {
+  position: relative;
+  width: 100%;
+  max-width: 420px;
+  max-height: 80vh;
+  overflow-y: auto;
+  background: var(--surface-1, #1a2230);
+  border: 1px solid var(--border, #2a3340);
+  border-radius: var(--radius-lg, 12px);
+  padding: 24px 22px 20px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.6);
+  animation: update-modal-enter 250ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+@keyframes update-modal-enter {
+  from { opacity: 0; transform: translateY(8px) scale(0.98); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+.update-modal-x {
+  position: absolute;
+  top: 12px; right: 14px;
+  width: 26px; height: 26px;
+  background: transparent;
+  border: none;
+  color: var(--text-dim, #889);
+  font-size: 14px;
+  cursor: pointer;
+  border-radius: 6px;
+  transition: background 150ms;
+}
+.update-modal-x:hover { background: var(--surface-2, #222b3a); color: var(--text-main, #fff); }
+
+.update-modal-eyebrow {
+  font-size: 9px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--brand);
+  font-weight: var(--weight-semibold, 600);
+  margin-bottom: 4px;
+}
+.update-modal-title {
+  font-size: 18px;
+  font-weight: var(--weight-bold, 700);
+  color: var(--text-main, #fff);
+  margin: 0 0 4px 0;
+}
+.update-modal-meta {
+  font-size: 11px;
+  color: var(--text-dim, #889);
+  margin-bottom: 14px;
+}
+
+.update-modal-body {
+  font-size: 12px;
+  line-height: 1.55;
+  color: var(--text-soft, #ccd);
+  margin: 14px 0 18px 0;
+}
+.update-modal-body h3 {
+  font-size: 13px;
+  color: var(--text-main, #fff);
+  margin: 14px 0 6px 0;
+}
+.update-modal-body h4 {
+  font-size: 12px;
+  color: var(--brand);
+  margin: 12px 0 4px 0;
+}
+.update-modal-body p { margin: 0 0 8px 0; }
+.update-modal-body ul { padding-left: 18px; margin: 0 0 10px 0; }
+.update-modal-body li { margin-bottom: 3px; }
+.update-modal-body code {
+  background: var(--surface-2, #1f2734);
+  padding: 1px 5px;
+  border-radius: 3px;
+  font-size: 11px;
+  color: var(--brand);
+}
+.update-modal-body a {
+  color: var(--brand);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.update-empty {
+  color: var(--text-dim, #889);
+  font-style: italic;
+}
+
+.update-modal-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 8px;
+}
+.update-dl {
+  display: flex !important;
+  align-items: center;
+  justify-content: space-between !important;
+  text-align: left !important;
+  gap: 8px;
+}
+.update-dl small {
+  font-size: 10px;
+  opacity: 0.7;
+  font-weight: normal;
+}
+.update-dl.is-recommended {
+  outline: 2px solid var(--brand);
+  outline-offset: 2px;
+}
+
+.update-modal-dismiss {
+  margin-top: 12px;
+  background: transparent;
+  border: none;
+  color: var(--text-dim, #889);
+  font-family: inherit;
+  font-size: 11px;
+  cursor: pointer;
+  padding: 6px 10px;
+  width: 100%;
+  border-radius: 6px;
+  transition: color 150ms, background 150ms;
+}
+.update-modal-dismiss:hover {
+  color: var(--text-main, #fff);
+  background: var(--surface-2, #222b3a);
+}
