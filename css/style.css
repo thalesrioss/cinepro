@@ -427,6 +427,12 @@ body {
   transition: border-color 0.2s, transform 0.15s;
   position: relative;
   user-select: none;
+  /* PERF: containment isola layout/paint do card. content-visibility:auto
+     faz o browser PULAR completamente render/paint quando fora da viewport.
+     contain-intrinsic-size dá hint de altura pra scrollHeight ficar correto. */
+  contain: layout style paint;
+  content-visibility: auto;
+  contain-intrinsic-size: 0 168px;
 }
 
 .effect-card:hover {
@@ -514,11 +520,16 @@ body {
   position: relative;
 }
 
-.effect-thumb img {
+.effect-thumb img,
+.effect-thumb .thumb-img {
   width: 100%;
   height: 100%;
   object-fit: cover;
   display: block;
+}
+/* Placeholder enquanto thumb não carrega — evita flash de fundo */
+.effect-thumb .thumb-img:not([src]) {
+  background: var(--surface-2);
 }
 
 .effect-thumb-placeholder {
@@ -1349,8 +1360,19 @@ body {
   cursor: pointer;
   border-radius: var(--radius-md);
   transition: background var(--duration-base) var(--ease-smooth),
-              border-color var(--duration-base) var(--ease-smooth);
+              border-color var(--duration-base) var(--ease-smooth),
+              opacity var(--duration-base) var(--ease-smooth);
   text-align: center;
+  /* Fica escondido por padrão: scroll infinito (IntersectionObserver) lida
+     com carregamento. Só aparece se viewport for muito grande e o observer
+     não disparar — fallback acessível. */
+  opacity: 0;
+  pointer-events: none;
+}
+.load-more-btn:focus-visible {
+  /* Teclado: tab pra forçar visível e usar como fallback acessível */
+  opacity: 1;
+  pointer-events: auto;
 }
 .load-more-btn:hover {
   background: var(--brand-glow-2);

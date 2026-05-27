@@ -237,6 +237,7 @@ function showScreen(name) {
 
 function bindAppUI() {
   document.getElementById('btn-logout').addEventListener('click', doLogout);
+  bindGridDelegation();
 
   var input = document.getElementById('search-input');
   var clear = document.getElementById('search-clear');
@@ -864,6 +865,9 @@ function renderEffects(effects) {
 function renderNextBatch(count) {
   if (!renderState) return;
   var grid = document.getElementById('effects-grid');
+  // Remove sentinela e botão antigo (recriam depois se ainda há mais)
+  var sentinel = document.getElementById('scroll-sentinel');
+  if (sentinel) sentinel.remove();
   var moreBtn = document.getElementById('load-more-btn');
   if (moreBtn) moreBtn.remove();
 
@@ -910,17 +914,43 @@ function renderNextBatch(count) {
 
   grid.appendChild(frag);
 
-  // Se tem mais, adiciona botão "Carregar mais"
+  // Se tem mais, monta sentinela invisível + botão fallback escondido.
+  // O observer dispara renderNextBatch quando o usuário chega a 400px do fim.
   if (renderState.rendered < renderState.total) {
+    var sentinel = document.createElement('div');
+    sentinel.id = 'scroll-sentinel';
+    sentinel.style.cssText = 'grid-column:1/-1;height:1px;';
+    grid.appendChild(sentinel);
+
+    // Fallback: se observer não disparar (ex: viewport gigante), botão aparece
     var btn = document.createElement('button');
     btn.id = 'load-more-btn';
     btn.className = 'load-more-btn';
-    btn.style.gridColumn = '1 / -1';
+    btn.style.cssText = 'grid-column:1/-1;';
     btn.innerHTML = '↓ Carregar mais <span style="opacity:0.6">(' +
                     (renderState.total - renderState.rendered) + ' restantes)</span>';
     btn.addEventListener('click', function () { renderNextBatch(PAGE_STEP); });
     grid.appendChild(btn);
+
+    observeScrollSentinel(sentinel);
   }
+}
+
+// Observer global do scroll infinito — recriado a cada batch porque sentinela muda.
+var SCROLL_OBSERVER = null;
+function observeScrollSentinel(sentinel) {
+  if (!('IntersectionObserver' in window)) return;  // botão fallback funciona
+  if (SCROLL_OBSERVER) SCROLL_OBSERVER.disconnect();
+  SCROLL_OBSERVER = new IntersectionObserver(function (entries) {
+    entries.forEach(function (e) {
+      if (e.isIntersecting) {
+        SCROLL_OBSERVER.disconnect();
+        SCROLL_OBSERVER = null;
+        renderNextBatch(PAGE_STEP);
+      }
+    });
+  }, { rootMargin: '400px' });
+  SCROLL_OBSERVER.observe(sentinel);
 }
 
 // IntersectionObserver compartilhado pra waveform lazy
@@ -954,108 +984,142 @@ function renderEmpty(msg) {
 // Cache de arquivos já baixados nessa sessão (effect.id → localPath)
 var effectCache = {};
 
+// Índice global pra event delegation conseguir achar o effect a partir do data-id
+var effectsById = Object.create(null);
+
+// IntersectionObserver pra thumbnails lazy (substitui loading="lazy" nativo,
+// que dispara cedo demais com content-visibility:auto)
+var THUMB_OBSERVER = null;
+function ensureThumbObserver() {
+  if (THUMB_OBSERVER || !('IntersectionObserver' in window)) return THUMB_OBSERVER;
+  THUMB_OBSERVER = new IntersectionObserver(function (entries) {
+    entries.forEach(function (entry) {
+      if (!entry.isIntersecting) return;
+      var img = entry.target;
+      var src = img.dataset.src;
+      if (src && !img.src) {
+        img.src = src;
+        img.removeAttribute('data-src');
+      }
+      THUMB_OBSERVER.unobserve(img);
+    });
+  }, { rootMargin: '300px' });
+  return THUMB_OBSERVER;
+}
+
+/**
+ * Card slim — DOM minimalista (6 nodes vs 16 antes).
+ * SEM listeners individuais: tudo via delegation no grid (ver bindGridDelegation).
+ */
 function createEffectCard(effect) {
+  effectsById[effect.id] = effect;
+
   var cached = !!effectCache[effect.id];
   var isFav  = isFavorite(effect.id);
+  var canPreview = (effect.kind === 'audio' || effect.kind === 'video' || effect.kind === 'image');
 
   var card = document.createElement('div');
   card.className  = 'effect-card' + (cached ? ' cached' : '') + (isFav ? ' is-fav' : '');
   card.draggable  = true;
   card.dataset.id   = effect.id;
-  card.dataset.ext  = effect.ext;
-  card.dataset.name = effect.name;
+  card.dataset.ext  = effect.ext || '';
   card.dataset.kind = effect.kind || '';
 
-  var typeBadge = effect.ext ? '<span class="effect-type-badge ' + effect.ext + '">' + effect.ext.toUpperCase() + '</span>' : '';
-  var dragHint  = cached ? '⇲ arrastar' : '⇩ preparar';
-
-  // Preview só pra áudio/vídeo
-  var canPreview = (effect.kind === 'audio' || effect.kind === 'video' || effect.kind === 'image');
-  var previewBtn = canPreview ? '<button class="btn btn--floating btn--icon btn-preview" title="Preview" aria-label="Preview">▶</button>' : '';
-
-  card.innerHTML = [
-    '<button class="btn btn--floating btn--icon btn--sm btn-fav" title="Favoritar" aria-label="Favoritar">',
-      '<svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linejoin="round">',
-        '<polygon points="12 2 15 9 22 9.5 17 14.5 18.5 22 12 18 5.5 22 7 14.5 2 9.5 9 9 12 2"/>',
-      '</svg>',
-    '</button>',
-    '<div class="effect-thumb">',
-      effect.thumb
-        ? '<img src="' + effect.thumb + '" alt="' + effect.name + '" loading="lazy">'
-        : '<div class="effect-thumb-placeholder">' + thumbForKind(effect.kind) + '</div>',
-      previewBtn,
-      '<span class="drag-hint">' + dragHint + '</span>',
-    '</div>',
-    '<div class="download-overlay">',
-      '<div class="download-spinner"></div>',
-      '<div class="download-label">Baixando...</div>',
-    '</div>',
-    '<div class="effect-card-body">',
-      '<div class="effect-name" title="' + effect.name + '">' + effect.name + '</div>',
-      '<div class="effect-meta">',
-        typeBadge,
-        '<button class="btn btn--soft btn--xs btn-apply" data-id="' + effect.id + '">Aplicar</button>',
-      '</div>',
-    '</div>',
-  ].join('');
-
-  // Botão Aplicar
-  card.querySelector('.btn-apply').addEventListener('click', function (e) {
-    e.stopPropagation();
-    e.preventDefault();
-    applyEffect(effect, card);
-  });
-
-  // Botão Favoritar
-  card.querySelector('.btn-fav').addEventListener('click', function (e) {
-    e.stopPropagation();
-    e.preventDefault();
-    toggleFavorite(effect, card);
-  });
-
-  // Botão Preview — abre modal E dispara pré-cache silencioso
-  if (canPreview) {
-    card.querySelector('.btn-preview').addEventListener('click', function (e) {
-      e.stopPropagation();
-      e.preventDefault();
-      togglePlayInline(effect, card);
-    });
+  var thumbHtml;
+  if (effect.thumb) {
+    // Lazy: começa SEM src — observer popula quando entra na viewport.
+    thumbHtml = '<img class="thumb-img" data-src="' + effect.thumb + '" alt="" decoding="async" fetchpriority="low">';
+  } else {
+    thumbHtml = '<div class="effect-thumb-placeholder">' + thumbForKind(effect.kind) + '</div>';
   }
 
-  // ── DRAG-AND-DROP ────────────────────────────────────
-  // CEP só inicia drag externo se chamado SÍNCRONO no mousedown.
-  // Por isso pré-baixamos o arquivo no primeiro clique e armazenamos
-  // no cache. A partir daí, qualquer drag funciona instantâneo.
-  card.addEventListener('mousedown', function (e) {
-    if (e.button !== 0) return;
-    if (e.target.closest('.btn-apply, .btn-fav, .btn-preview')) return;
+  var typeBadge = effect.ext ? '<span class="effect-type-badge ' + effect.ext + '">' + effect.ext.toUpperCase() + '</span>' : '';
+  var previewBtn = canPreview
+    ? '<button class="btn btn--floating btn--icon btn-preview" data-action="preview" title="Preview" aria-label="Preview">▶</button>'
+    : '';
 
-    var path = effectCache[effect.id];
-    if (path && window.__adobe_cep__) {
+  card.innerHTML =
+    '<button class="btn btn--floating btn--icon btn--sm btn-fav" data-action="fav" title="Favoritar" aria-label="Favoritar">' +
+      '<svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linejoin="round">' +
+        '<polygon points="12 2 15 9 22 9.5 17 14.5 18.5 22 12 18 5.5 22 7 14.5 2 9.5 9 9 12 2"/>' +
+      '</svg>' +
+    '</button>' +
+    '<div class="effect-thumb">' + thumbHtml + previewBtn + '<span class="drag-hint">' + (cached ? '⇲ arrastar' : '⇩ preparar') + '</span></div>' +
+    '<div class="download-overlay"><div class="download-spinner"></div><div class="download-label">Baixando...</div></div>' +
+    '<div class="effect-card-body">' +
+      '<div class="effect-name" title="' + effect.name + '">' + effect.name + '</div>' +
+      '<div class="effect-meta">' + typeBadge + '<button class="btn btn--soft btn--xs btn-apply" data-action="apply">Aplicar</button></div>' +
+    '</div>';
+
+  // Lazy thumb observer
+  if (effect.thumb) {
+    var imgEl = card.querySelector('.thumb-img');
+    var obs = ensureThumbObserver();
+    if (obs) obs.observe(imgEl);
+    else imgEl.src = effect.thumb;  // fallback sem observer
+  }
+
+  return card;
+}
+
+/**
+ * Event delegation: UM listener no #effects-grid pra TODOS os cards.
+ * Antes: 4-5 listeners × 60 cards = 240+ listeners. Agora: 4 no container.
+ */
+var GRID_DELEGATION_BOUND = false;
+function bindGridDelegation() {
+  if (GRID_DELEGATION_BOUND) return;
+  GRID_DELEGATION_BOUND = true;
+  var grid = document.getElementById('effects-grid');
+  if (!grid) return;
+
+  // Click — apply / fav / preview
+  grid.addEventListener('click', function (e) {
+    var actionBtn = e.target.closest('[data-action]');
+    if (!actionBtn) return;
+    var card = actionBtn.closest('.effect-card');
+    if (!card) return;
+    var effect = effectsById[card.dataset.id];
+    if (!effect) return;
+    e.stopPropagation();
+    e.preventDefault();
+    switch (actionBtn.dataset.action) {
+      case 'apply':   applyEffect(effect, card); break;
+      case 'fav':     toggleFavorite(effect, card); break;
+      case 'preview': togglePlayInline(effect, card); break;
+    }
+  });
+
+  // Mousedown — drag-to-timeline (precisa ser SÍNCRONO no CEP)
+  grid.addEventListener('mousedown', function (e) {
+    if (e.button !== 0) return;
+    if (e.target.closest('[data-action]')) return;
+    var card = e.target.closest('.effect-card');
+    if (!card) return;
+    var effectId = card.dataset.id;
+    var localPath = effectCache[effectId];
+    if (localPath && window.__adobe_cep__) {
       try {
         window.__adobe_cep__.dispatchEvent({
-          type:   'com.adobe.cep.dragdrop',
-          scope:  'GLOBAL',
-          appId:  'PPRO',
+          type: 'com.adobe.cep.dragdrop', scope: 'GLOBAL', appId: 'PPRO',
         });
-        window.__adobe_cep__.startDragToExternal(path, null, null, null);
+        window.__adobe_cep__.startDragToExternal(localPath, null, null, null);
       } catch (err) {
         console.error('[CinePRO] drag falhou:', err);
       }
     }
   });
 
-  card.addEventListener('dragstart', function (e) {
-    if (effectCache[effect.id]) {
-      // Já tá em cache — deixa o drag nativo rolar
-      return;
-    }
-    // Não tá em cache → previne drag fake e dispara download
+  // Dragstart — fallback pra preparar se não tem cache
+  grid.addEventListener('dragstart', function (e) {
+    var card = e.target.closest('.effect-card');
+    if (!card) return;
+    var effect = effectsById[card.dataset.id];
+    if (!effect) return;
+    if (effectCache[effect.id]) return;  // já tem, deixa drag rolar
     e.preventDefault();
     prepareForDrag(effect, card);
   });
-
-  return card;
 }
 
 // ══ PREVIEW INLINE (sem modal) ══════════════════════════════════
