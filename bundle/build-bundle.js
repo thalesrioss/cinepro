@@ -71,23 +71,48 @@ const KIND_CAPS = {
 
 // ── Auth (mesmo padrão do manifest builder) ─────────────────────
 async function getAuth() {
-  if (process.env.CINEPRO_OAUTH_CLIENT && process.env.CINEPRO_OAUTH_TOKEN) {
-    const client = JSON.parse(process.env.CINEPRO_OAUTH_CLIENT);
-    const cfg = client.installed || client.web;
-    const oAuth2 = new google.auth.OAuth2(cfg.client_id, cfg.client_secret);
-    oAuth2.setCredentials(JSON.parse(process.env.CINEPRO_OAUTH_TOKEN));
-    return oAuth2;
+  // Diagnóstico explícito: mostra exatamente quais env vars estão presentes
+  const clientEnv = process.env.CINEPRO_OAUTH_CLIENT;
+  const tokenEnv = process.env.CINEPRO_OAUTH_TOKEN;
+  console.log('Auth check:');
+  console.log('  CINEPRO_OAUTH_CLIENT:', clientEnv ? ('present (' + clientEnv.length + ' chars)') : 'MISSING');
+  console.log('  CINEPRO_OAUTH_TOKEN: ', tokenEnv ? ('present (' + tokenEnv.length + ' chars)') : 'MISSING');
+
+  if (clientEnv && tokenEnv) {
+    try {
+      const client = JSON.parse(clientEnv);
+      const cfg = client.installed || client.web;
+      if (!cfg || !cfg.client_id) {
+        throw new Error('OAUTH_CLIENT json não tem .installed.client_id nem .web.client_id');
+      }
+      const oAuth2 = new google.auth.OAuth2(cfg.client_id, cfg.client_secret);
+      const tokenObj = JSON.parse(tokenEnv);
+      if (!tokenObj.refresh_token && !tokenObj.access_token) {
+        throw new Error('OAUTH_TOKEN json sem refresh_token nem access_token');
+      }
+      oAuth2.setCredentials(tokenObj);
+      console.log('  ✓ OAuth via env vars (CI mode)');
+      return oAuth2;
+    } catch (e) {
+      console.error('  ✗ Erro parseando secrets: ' + e.message);
+      throw e;
+    }
   }
+
+  // Fallback local: usa arquivos do audit/
   const tokenFile = path.join(ROOT, 'audit', '.oauth-token.json');
   const clientFile = path.join(ROOT, 'audit', 'oauth-client.json');
   if (!fs.existsSync(tokenFile) || !fs.existsSync(clientFile)) {
-    console.error('Sem credenciais OAuth.');
+    console.error('\n❌ SEM CREDENCIAIS OAUTH.');
+    console.error('   No CI: precisa dos secrets CINEPRO_OAUTH_CLIENT e CINEPRO_OAUTH_TOKEN');
+    console.error('   Local: precisa de audit/oauth-client.json e audit/.oauth-token.json');
     process.exit(1);
   }
   const client = JSON.parse(fs.readFileSync(clientFile, 'utf8'));
   const cfg = client.installed || client.web;
   const oAuth2 = new google.auth.OAuth2(cfg.client_id, cfg.client_secret);
   oAuth2.setCredentials(JSON.parse(fs.readFileSync(tokenFile, 'utf8')));
+  console.log('  ✓ OAuth via arquivos locais (audit/)');
   return oAuth2;
 }
 
