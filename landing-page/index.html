@@ -12,6 +12,11 @@
   <link rel="stylesheet" href="css/tokens.css">
   <link rel="stylesheet" href="css/lp.css">
 
+  <!-- Plausible Analytics (gratuito 30d, $9/mês depois — privacy-first, sem cookies) -->
+  <!-- Pra ativar: criar conta em plausible.io, adicionar dominio cinepro-rho.vercel.app -->
+  <script defer data-domain="cinepro-rho.vercel.app" src="https://plausible.io/js/script.outbound-links.tagged-events.js"></script>
+  <script>window.plausible = window.plausible || function() { (window.plausible.q = window.plausible.q || []).push(arguments); }</script>
+
   <!-- Firebase pra criar conta direto na LP -->
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
@@ -28,7 +33,7 @@
     <small>Plugin · Premiere Pro</small>
   </a>
   <div class="nav-actions">
-    <span class="nav-price">R$ 29,97<small>/mês</small></span>
+    <a href="#pricing" class="nav-price-link"><span class="nav-price">R$ 29,97<small>/mês</small></span></a>
     <a href="#signup" class="btn btn--primary">Começar</a>
   </div>
 </nav>
@@ -56,18 +61,22 @@
 
     <div class="hero-cta">
       <a href="#signup" class="btn btn--primary-gradient btn--xl">
-        Testar grátis por 3 dias
+        Começar trial gratuito
       </a>
       <a href="#performance" class="btn btn--ghost btn--xl">
         Como funciona
       </a>
     </div>
 
+    <div class="hero-guarantee">
+      ✓ 3 dias grátis · ✓ Garantia 7 dias · ✓ Cancele online quando quiser
+    </div>
+
     <div class="hero-trust">
       <span>macOS &amp; Windows</span>
       <span>Apple Silicon nativo</span>
       <span>Premiere Pro 2019+</span>
-      <span>Atualizações automáticas</span>
+      <span>Suporte em PT-BR</span>
     </div>
 
     <!-- ── MOCK do painel CinePRO dentro do Premiere ── -->
@@ -304,6 +313,124 @@
           <li>Catálogo atualiza dentro do painel, sem reinstalar nada</li>
           <li>Suporte em português, atendimento em horário comercial BR</li>
         </ul>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ══════════ COMPARATIVO ══════════ -->
+<section class="vs-section" id="compare">
+  <div class="container">
+    <div class="section-header">
+      <div class="section-eyebrow">CinePRO vs Concorrência</div>
+      <h2 class="section-title">Lado a lado com os gringos</h2>
+      <p class="lead">Mister Horse e AEJuice são bons. Mas você paga em dólar, fala inglês no suporte e baixa pack por pack. CinePRO entrega tudo num só painel, em real, em português.</p>
+    </div>
+
+    <div class="vs-table-wrap">
+      <table class="vs-table">
+        <thead>
+          <tr>
+            <th></th>
+            <th class="vs-th-self">CinePRO</th>
+            <th>Mister Horse</th>
+            <th>AEJuice</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Preço</td>
+            <td class="vs-self"><strong>R$ 29,97/mês</strong></td>
+            <td>US$ 25/mês ou US$ 39-99/pack</td>
+            <td>US$ 30/mês</td>
+          </tr>
+          <tr>
+            <td>Biblioteca de efeitos</td>
+            <td class="vs-self"><strong>11.000+ unificados</strong></td>
+            <td>~5.000 (split por pack)</td>
+            <td>~15.000 (split por pack)</td>
+          </tr>
+          <tr>
+            <td>Efeitos no instalador</td>
+            <td class="vs-self"><strong>500 prontos pra usar</strong></td>
+            <td>Download por pack</td>
+            <td>Download por pack</td>
+          </tr>
+          <tr>
+            <td>Busca em português</td>
+            <td class="vs-self">✓ Semântica PT + EN</td>
+            <td>Só inglês</td>
+            <td>Só inglês</td>
+          </tr>
+          <tr>
+            <td>Suporte</td>
+            <td class="vs-self">PT-BR, horário comercial BR</td>
+            <td>Inglês, ticket</td>
+            <td>Inglês, ticket</td>
+          </tr>
+          <tr>
+            <td>Cobrança</td>
+            <td class="vs-self">Em reais, sem IOF</td>
+            <td>Dólar + IOF 6,38%</td>
+            <td>Dólar + IOF 6,38%</td>
+          </tr>
+          <tr>
+            <td>Trial grátis</td>
+            <td class="vs-self">3 dias completos</td>
+            <td>Free tier limitado</td>
+            <td>7 dias</td>
+          </tr>
+          <tr>
+            <td>Apple Silicon nativo</td>
+            <td class="vs-self">✓</td>
+            <td>✓</td>
+            <td>✓</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <p class="vs-note">Comparativo baseado em preços públicos em maio/2026. CinePRO não tem afiliação com Mister Horse ou AEJuice.</p>
+  </div>
+</section>
+
+<!-- ══════════ PRICING ══════════ -->
+<section class="pricing" id="pricing">
+  <div class="container">
+    <div class="section-header">
+      <div class="section-eyebrow">Preço</div>
+      <h2 class="section-title">Uma assinatura. Biblioteca toda. Sem surpresas.</h2>
+    </div>
+
+    <div class="pricing-card">
+      <div class="pricing-badge">Preço de fundador</div>
+
+      <div class="pricing-price">
+        <span class="pricing-currency">R$</span>
+        <span class="pricing-value">29</span><span class="pricing-cents">,97</span>
+        <span class="pricing-period">/mês</span>
+      </div>
+
+      <p class="pricing-note">Cobrado em reais. Sem IOF. Cancele online quando quiser.</p>
+
+      <ul class="pricing-features">
+        <li>Acesso a <strong>11.000+ efeitos</strong> profissionais</li>
+        <li><strong>500 efeitos no instalador</strong> — apply instantâneo</li>
+        <li>Busca semântica em PT + EN</li>
+        <li>Atualizações automáticas do catálogo</li>
+        <li>Suporte em português, horário comercial BR</li>
+        <li><strong>Garantia de 7 dias</strong> — devolução do valor se não gostar</li>
+        <li>Cancelamento online em 1 click</li>
+      </ul>
+
+      <a href="#signup" class="btn btn--primary-gradient btn--xl btn--block">
+        Começar trial gratuito
+      </a>
+
+      <div class="pricing-trust">
+        <span>🇧🇷 Cobrança brasileira via Ticto</span>
+        <span>🔒 Pagamento seguro</span>
+        <span>↩ Cancele a qualquer momento</span>
       </div>
     </div>
   </div>
@@ -553,9 +680,38 @@
         <summary>Como cancelo a assinatura?</summary>
         <p>Pelo app CinePRO no seu computador (Dashboard → Gerenciar assinatura) ou direto no painel da Ticto. Sem ligação.</p>
       </details>
+
+      <details class="faq-item">
+        <summary>Tem garantia? E se eu não gostar?</summary>
+        <p><strong>Garantia incondicional de 7 dias.</strong> Se você assinou e não gostou por qualquer motivo, devolvemos 100% do valor. Sem perguntas, sem letras miúdas.</p>
+        <p>Após os 7 dias, você pode cancelar normalmente quando quiser — só não tem reembolso retroativo.</p>
+      </details>
     </div>
   </div>
 </section>
+
+<!-- ══════════ EXIT-INTENT POPUP ══════════ -->
+<div class="exit-popup" id="exit-popup" aria-hidden="true" role="dialog">
+  <div class="exit-popup-backdrop" data-close="1"></div>
+  <div class="exit-popup-box">
+    <button class="exit-popup-x" type="button" data-close="1" aria-label="Fechar">✕</button>
+    <div class="exit-popup-eyebrow">Espera</div>
+    <h3 class="exit-popup-title">Você tá saindo sem testar?</h3>
+    <p class="exit-popup-desc">
+      O CinePRO custa <strong>menos que um café por mês</strong> e os 500 efeitos
+      no instalador já justificam — apply em &lt;300ms, sem download.
+    </p>
+    <p class="exit-popup-desc">
+      <strong>3 dias grátis + garantia de 7 dias.</strong> Se não amar, devolvemos o valor.
+    </p>
+    <a href="#signup" class="btn btn--primary-gradient btn--lg btn--block" data-close="1">
+      Testar sem compromisso →
+    </a>
+    <button class="exit-popup-dismiss" type="button" data-close="1">
+      Não, obrigado
+    </button>
+  </div>
+</div>
 
 <!-- ══════════ FOOTER ══════════ -->
 <footer class="footer">

@@ -119,6 +119,7 @@ function doSignup() {
   }
   if (!auth) {
     // Sem Firebase, libera download mesmo assim (degrade gracioso)
+    if (window.cineproTrack) window.cineproTrack('Signup Success', { method: 'local' });
     return revealDownloads('Conta criada localmente. Baixa o instalador agora →');
   }
 
@@ -127,6 +128,7 @@ function doSignup() {
   auth.createUserWithEmailAndPassword(c.email, c.pass)
     .then(function (cred) {
       sendLeadToSheets(cred.user.email);
+      if (window.cineproTrack) window.cineproTrack('Signup Success', { method: 'firebase' });
       revealDownloads('Conta criada! Use ' + cred.user.email + ' pra logar no app.');
     })
     .catch(function (e) {
@@ -263,3 +265,86 @@ function revealDownloads(message) {
     dlBlock.scrollIntoView({ behavior: 'smooth', block: 'center' });
   }, 200);
 }
+
+
+// ── EXIT-INTENT POPUP ─────────────────────────────────────────
+// Dispara quando mouse sai da viewport pelo TOPO (intenção de fechar/voltar).
+// 1 por sessão; localStorage flag.
+(function () {
+  var EXIT_KEY = 'cinepro_exit_shown';
+  var SESSION_KEY = 'cinepro_exit_session';
+  var popup = document.getElementById('exit-popup');
+  if (!popup) return;
+
+  // Mostrar só 1× por usuário a cada 7 dias
+  var lastShown = parseInt(localStorage.getItem(EXIT_KEY) || '0', 10);
+  if (Date.now() - lastShown < 7 * 24 * 60 * 60 * 1000) return;
+  // Também não mostra se já mostrou nesta sessão
+  if (sessionStorage.getItem(SESSION_KEY)) return;
+
+  function showExitPopup() {
+    if (popup.classList.contains('is-open')) return;
+    popup.classList.add('is-open');
+    popup.setAttribute('aria-hidden', 'false');
+    localStorage.setItem(EXIT_KEY, String(Date.now()));
+    sessionStorage.setItem(SESSION_KEY, '1');
+    if (window.plausible) window.plausible('Exit Intent Shown');
+  }
+  function closeExitPopup() {
+    popup.classList.remove('is-open');
+    popup.setAttribute('aria-hidden', 'true');
+  }
+
+  // Detecta mouse saindo pelo topo da viewport (clientY < 5)
+  var armed = false;
+  setTimeout(function () { armed = true; }, 5000);  // arma só após 5s na página
+
+  document.addEventListener('mouseleave', function (e) {
+    if (!armed) return;
+    if (e.clientY < 5 && !e.relatedTarget) showExitPopup();
+  });
+
+  // ESC fecha
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape' && popup.classList.contains('is-open')) closeExitPopup();
+  });
+
+  // Clicks nos elementos data-close
+  popup.addEventListener('click', function (e) {
+    if (e.target.dataset.close) closeExitPopup();
+  });
+})();
+
+// ── ANALYTICS EVENTS ──────────────────────────────────────────
+// Tracking de funil pra Plausible (ou qualquer analytics compatível).
+// Eventos: hero_cta_click, pricing_cta_click, signup_started, signup_success
+(function () {
+  function track(name, props) {
+    if (window.plausible) window.plausible(name, props ? { props: props } : undefined);
+    if (window.gtag) window.gtag('event', name, props || {});
+  }
+
+  // Track CTAs de signup (qualquer link/botão #signup)
+  document.querySelectorAll('a[href="#signup"]').forEach(function (a) {
+    a.addEventListener('click', function () {
+      var location = a.closest('section') ? (a.closest('section').id || a.closest('section').className.split(' ')[0]) : 'nav';
+      track('CTA Click', { location: location });
+    });
+  });
+
+  // Track click no pricing
+  document.querySelectorAll('a[href="#pricing"]').forEach(function (a) {
+    a.addEventListener('click', function () { track('Pricing View'); });
+  });
+
+  // Track submissão de signup form
+  var form = document.getElementById('signup-form');
+  if (form) {
+    form.addEventListener('submit', function () {
+      track('Signup Started');
+    });
+  }
+
+  // Expor pra lp.js disparar quando criar conta com sucesso
+  window.cineproTrack = track;
+})();
