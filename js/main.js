@@ -916,12 +916,14 @@ function buildSearchIndex() {
 
   for (var i = 0; i < allEffects.length; i++) {
     var e = allEffects[i];
-    var blob = (
+    // Normaliza acentos no índice → busca textual fica accent-insensitive
+    // ("transição" acha o que tá salvo como "transicao" e vice-versa).
+    var blob = normalizeConceptText(
       e.name + ' ' + e.category + ' ' +
       (e.subcategory || '') + ' ' +
       ((e.path && e.path.join) ? e.path.join(' ') : '') + ' ' +
       ((e.tags && e.tags.join) ? e.tags.join(' ') : '')
-    ).toLowerCase();
+    );
     SEARCH_INDEX_NAMES[i] = blob;
 
     // Tokenize por whitespace, hífen, underscore, pontos
@@ -953,6 +955,8 @@ function buildSearchIndex() {
  */
 function searchIndices(query) {
   if (!SEARCH_INDEX || !query) return null;
+  // Normaliza a query igual ao índice (accent-insensitive)
+  query = normalizeConceptText(query);
   var qTokens = query.split(/[\s\-_\.]+/).filter(function (t) { return t.length >= 2; });
   if (!qTokens.length) {
     // query muito curta — scan linear simples
@@ -999,19 +1003,66 @@ function searchIndices(query) {
 // v1.2 Parte C — dicionário de conceitos vindo do manifest
 var CINEPRO_CONCEPTS_DICT = null;
 
+// ── Matching compartilhado (DEVE ser idêntico ao manifest/concepts.js) ──
+// Se divergir daqui, query e embeds dos arquivos deixam de bater.
+
+// Remove acentos/diacríticos + baixa caixa. "Épico" → "epico".
+function normalizeConceptText(s) {
+  return String(s == null ? '' : s)
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '');
+}
+
+// Tokeniza texto normalizado em array de palavras (>=2 chars).
+function tokenizeNorm(normText) {
+  var out = [];
+  var toks = normText.split(/[^a-z0-9]+/);
+  for (var i = 0; i < toks.length; i++) {
+    if (toks[i] && toks[i].length >= 2) out.push(toks[i]);
+  }
+  return out;
+}
+
+// Conta quantas keys casam com o texto normalizado. Matching POR TOKEN:
+//   - key composta (espaço/hífen): substring na string toda.
+//   - senão: casa se algum token == key, OU (key>=4) o token COMEÇAR com a key
+//     ("epico" startsWith "epic" ✓; "train" NÃO startsWith "rain" ✓).
+// DEVE ser idêntico ao manifest/concepts.js matchKeys.
+function matchConceptKeys(normText, tokens, keys) {
+  var count = 0;
+  for (var k = 0; k < keys.length; k++) {
+    var nk = normalizeConceptText(keys[k]);
+    if (!nk) continue;
+    if (nk.indexOf(' ') !== -1 || nk.indexOf('-') !== -1) {
+      if (normText.indexOf(nk) !== -1) count++;
+      continue;
+    }
+    var matched = false;
+    for (var t = 0; t < tokens.length; t++) {
+      var tok = tokens[t];
+      if (tok === nk || (nk.length >= 4 && tok.length > nk.length && tok.indexOf(nk) === 0)) {
+        matched = true;
+        break;
+      }
+    }
+    if (matched) count++;
+  }
+  return count;
+}
+
 /**
- * Embed da query: mesmo algoritmo do builder, sparse { idx → count }.
+ * Embed da query: MESMO algoritmo do builder (concepts.js), sparse { idx → count }.
+ * Normaliza acentos e usa word-boundary p/ keys curtos.
  */
 function embedQuery(query) {
   if (!CINEPRO_CONCEPTS_DICT) return null;
-  var q = (query || '').toLowerCase();
+  var normText = normalizeConceptText(query);
+  var tokenSet = tokenizeNorm(normText);
   var out = {};
   for (var i = 0; i < CINEPRO_CONCEPTS_DICT.length; i++) {
     var keys = CINEPRO_CONCEPTS_DICT[i].keys || [];
-    var count = 0;
-    for (var k = 0; k < keys.length; k++) {
-      if (q.indexOf(keys[k]) !== -1) count++;
-    }
+    var count = matchConceptKeys(normText, tokenSet, keys);
     if (count > 0) out[i] = count;
   }
   return out;
@@ -1047,12 +1098,28 @@ function semanticSearch(query, limit) {
   if (!qEmbed || Object.keys(qEmbed).length === 0) return [];
   limit = limit || 60;
 
+  // Tokens normalizados da query p/ boost lexical (>=3 chars pra evitar ruído).
+  var qNorm = normalizeConceptText(query);
+  var qTokens = qNorm.split(/[^a-z0-9]+/).filter(function (t) { return t.length >= 3; });
+
   var results = [];
   for (var i = 0; i < allEffects.length; i++) {
     var e = allEffects[i];
     if (!e.embed) continue;
     var score = cosineSparse(qEmbed, e.embed);
-    if (score >= 0.15) results.push({ idx: i, score: score });
+    if (score < 0.15) continue;
+
+    // Boost lexical: se o nome/tags (índice normalizado) contém literalmente
+    // um token da query, é match mais forte que só conceito. Desempata o
+    // "chuva → traz chuva antes de fogo" quando o arquivo é nomeado em PT.
+    var blob = SEARCH_INDEX_NAMES[i] || '';
+    var lexHit = false;
+    for (var t = 0; t < qTokens.length; t++) {
+      if (blob.indexOf(qTokens[t]) !== -1) { lexHit = true; break; }
+    }
+    if (lexHit) score *= 1.6;
+
+    results.push({ idx: i, score: score });
   }
   results.sort(function (a, b) { return b.score - a.score; });
   return results.slice(0, limit);

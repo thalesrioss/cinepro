@@ -15,7 +15,8 @@
 const fs   = require('fs');
 const path = require('path');
 const { google } = require('googleapis');
-const CONCEPTS = require('./concepts.js');
+const CONCEPT_API = require('./concepts.js');
+const CONCEPTS = CONCEPT_API.CONCEPTS;
 
 // ── Config ───────────────────────────────────────────────────────
 const ROOT_ID = '16nWLu5vz2AB9LjuvwNp3vJP57UHBWfEz';
@@ -96,19 +97,10 @@ function computeEmbed(name, category, subcategory, pathArr, tags) {
     (subcategory || '') + ' ' +
     (pathArr || []).join(' ') + ' ' +
     (tags || []).join(' ')
-  ).toLowerCase();
-
-  const out = {};
-  for (let i = 0; i < CONCEPTS.length; i++) {
-    let count = 0;
-    const keys = CONCEPTS[i].keys;
-    for (let k = 0; k < keys.length; k++) {
-      // Match por substring (mais permissivo que palavra inteira)
-      if (blob.indexOf(keys[k]) !== -1) count++;
-    }
-    if (count > 0) out[i] = count;
-  }
-  return out;
+  );
+  // Lógica compartilhada (normalização de acentos + word-boundary p/ keys curtos).
+  // O plugin usa exatamente a mesma função na query → embeds consistentes.
+  return CONCEPT_API.computeEmbedFromText(blob);
 }
 
 // ── Auth ─────────────────────────────────────────────────────────
