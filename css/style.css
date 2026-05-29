@@ -459,6 +459,24 @@ body {
   opacity: 1;
 }
 
+/* Card de arquivo indisponível (4xx escapou do sweep, edge case) */
+.effect-card.errored {
+  border-color: rgba(239,68,68,0.55);
+  opacity: 0.55;
+}
+.effect-card.errored::after {
+  content: '⚠ indisponível';
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  font-size: 10px;
+  padding: 2px 6px;
+  border-radius: 4px;
+  background: rgba(239,68,68,0.9);
+  color: #fff;
+  pointer-events: none;
+}
+
 /* ── BOTÃO FAVORITAR ──────────────────────── */
 .btn-fav {
   position: absolute;

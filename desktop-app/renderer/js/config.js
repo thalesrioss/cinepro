@@ -29,7 +29,7 @@ const CINEPRO_CONFIG = {
   TICTO_CHECKOUT_URL: 'https://checkout.ticto.app/O292AD8B4',
 
   // -- App --
-  PLUGIN_VERSION: '1.3.1',
+  PLUGIN_VERSION: '1.3.2',
 
   // -- Admins (acesso vitalício, ignora assinatura) --
   // Coloque aqui os emails que sempre terão acesso, mesmo sem comprar

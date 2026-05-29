@@ -1646,17 +1646,39 @@ function applySelection() {
 
   showToast('Aplicando ' + ordered.length + ' efeito' + (ordered.length > 1 ? 's' : '') + '...', '');
 
+  var total = ordered.length;
+  var okCount = 0;
+  var failCount = 0;
   var queue = ordered.slice();
-  function next() {
-    if (!queue.length) {
-      showToast('✓ ' + ordered.length + ' efeito' + (ordered.length > 1 ? 's aplicados' : ' aplicado'), 'success');
-      clearSelection();
-      return;
+
+  function finish() {
+    if (failCount === 0) {
+      showToast('✓ ' + okCount + ' efeito' + (okCount > 1 ? 's aplicados' : ' aplicado'), 'success');
+    } else if (okCount === 0) {
+      showToast('✗ Nenhum efeito aplicado (' + failCount + ' falharam)', 'error');
+    } else {
+      showToast('⚠️ ' + okCount + '/' + total + ' aplicados — ' + failCount + ' falhou(aram)', 'error');
     }
+    clearSelection();
+  }
+
+  function next() {
+    if (!queue.length) return finish();
     var card = queue.shift();
     var effect = effectsById[card.dataset.id];
     if (!effect) return next();
-    applyEffectSilent(effect, card).then(next, next);
+    applyEffectSilent(effect, card).then(
+      function () { okCount++; next(); },
+      function (err) {
+        failCount++;
+        // Marca o card como problemático no batch também
+        if (err && (err.code === 'CLIENT_ERROR' || (typeof err === 'string' && /HTTP 4/.test(err)))) {
+          card.classList.add('errored');
+          card.setAttribute('title', 'Arquivo indisponível — pule pra outro');
+        }
+        next();
+      }
+    );
   }
   next();
 }
@@ -2154,7 +2176,13 @@ function applyEffect(effect, card) {
       card.classList.remove('downloading');
       removeDownloadOverlay(card);
       setStatus('error', 'Erro no download');
-      showToast('Falha ao baixar: ' + err.message, 'error');
+      // Marca card como problemático pra usuário identificar e pular
+      if (err && err.code === 'CLIENT_ERROR') {
+        card.classList.add('errored');
+        card.setAttribute('title', 'Arquivo indisponível — pule pra outro');
+        console.warn('[CinePRO] file unavailable (4xx):', effect.id, effect.name);
+      }
+      showToast('Falha ao baixar: ' + humanizeError(err.message || ''), 'error');
     });
 }
 
@@ -2517,6 +2545,13 @@ function humanizeError(err) {
   if (err.indexOf('PRESET')         !== -1) return 'Falha ao importar o preset.';
   if (err.indexOf('LUT')            !== -1) return 'Falha ao instalar o LUT.';
   if (err.indexOf('MOGRT')          !== -1) return 'Falha ao importar o MOGRT.';
+  // Download-side errors
+  if (err.indexOf('HTTP 403')       !== -1) return 'Arquivo indisponível no servidor. Pule pra outro — vamos corrigir.';
+  if (err.indexOf('HTTP 404')       !== -1) return 'Arquivo removido do servidor. Tente outro.';
+  if (err.indexOf('HTTP 401')       !== -1) return 'Acesso ao servidor expirou. Reinicie o Premiere.';
+  if (err.indexOf('HTTP 5')         !== -1) return 'Servidor instável. Tente novamente em alguns segundos.';
+  if (err.indexOf('Timeout')        !== -1) return 'Download lento demais. Verifique sua conexão.';
+  if (err.indexOf('Falha de rede')  !== -1) return 'Sem conexão com o servidor. Verifique sua internet.';
   return err;
 }
 

@@ -74,3 +74,4 @@ manifest/node_modules/
 # Bundle builder — ~400MB de assets; NÃO commitar. CI baixa fresh a cada release.
 bundle/node_modules/
 bundle/dist/
+audit/perm-fix-logs/
