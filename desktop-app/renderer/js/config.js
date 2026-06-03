@@ -35,5 +35,6 @@ const CINEPRO_CONFIG = {
   // Coloque aqui os emails que sempre terão acesso, mesmo sem comprar
   ADMIN_EMAILS: [
     'thales.rioss@gmail.com',
+    'marquesfelipe059@gmail.com',
   ],
 };
