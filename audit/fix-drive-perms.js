@@ -38,8 +38,17 @@ const PROGRESS_EVERY = 50;
 if (!fs.existsSync(LOG_DIR)) fs.mkdirSync(LOG_DIR);
 
 async function getAuth() {
+  // CI: OAuth via env vars (mesmos secrets do build-manifest)
+  if (process.env.CINEPRO_OAUTH_CLIENT && process.env.CINEPRO_OAUTH_TOKEN) {
+    const client = JSON.parse(process.env.CINEPRO_OAUTH_CLIENT);
+    const cfg = client.installed || client.web;
+    const oAuth2 = new google.auth.OAuth2(cfg.client_id, cfg.client_secret);
+    oAuth2.setCredentials(JSON.parse(process.env.CINEPRO_OAUTH_TOKEN));
+    return oAuth2;
+  }
+  // Local: token gerado pelo drive-trash.js
   if (!fs.existsSync(CLIENT_FILE) || !fs.existsSync(TOKEN_FILE)) {
-    console.error('Sem credenciais OAuth. Rode audit/drive-trash.js primeiro pra gerar token.');
+    console.error('Sem credenciais OAuth. Configure CINEPRO_OAUTH_CLIENT + CINEPRO_OAUTH_TOKEN (CI) ou rode audit/drive-trash.js pra gerar token local.');
     process.exit(1);
   }
   const client = JSON.parse(fs.readFileSync(CLIENT_FILE, 'utf8'));

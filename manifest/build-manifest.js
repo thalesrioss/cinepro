@@ -103,6 +103,65 @@ function computeEmbed(name, category, subcategory, pathArr, tags) {
   return CONCEPT_API.computeEmbedFromText(blob);
 }
 
+// ── Permissões: garante "anyone reader" nos arquivos novos ───────
+// Mata o drift que causa HTTP 403: todo arquivo que o builder descobre
+// e que ainda não estava no manifest anterior recebe acesso público de
+// leitura. Como é o MESMO processo que indexa, é impossível indexar um
+// arquivo sem compartilhá-lo → 403 por permissão deixa de existir.
+// Só roda quando a auth é write-capable (OAuth); service-account readonly pula.
+let AUTH_CAN_WRITE = false;
+
+function isTransient(msg) {
+  return /ECONNRESET|ETIMEDOUT|socket hang up|EAI_AGAIN|ENOTFOUND|network|503|429|rateLimit|userRateLimit|backendError|internalError/i.test(msg);
+}
+
+async function withRetry(fn, tries = 4) {
+  let lastErr;
+  for (let i = 0; i < tries; i++) {
+    try { return await fn(); }
+    catch (e) {
+      lastErr = e;
+      const msg = e.message || String(e);
+      if (!isTransient(msg) || i === tries - 1) throw e;
+      const wait = 400 * Math.pow(2, i) + Math.floor(Math.random() * 250);
+      await new Promise(r => setTimeout(r, wait));
+    }
+  }
+  throw lastErr;
+}
+
+// Create-only (idempotente server-side): "already exists" = ok, sem list prévio.
+async function ensureAnyoneReader(drive, fileId) {
+  try {
+    await withRetry(() => drive.permissions.create({
+      fileId,
+      requestBody: { role: 'reader', type: 'anyone' },
+      sendNotificationEmail: false,
+    }));
+    return { ok: true };
+  } catch (e) {
+    const msg = e.message || String(e);
+    if (/already|cannot be granted/i.test(msg)) return { ok: true };
+    return { ok: false, error: msg };
+  }
+}
+
+async function grantPublicReadOnDelta(drive, newIds) {
+  const CONCURRENCY = 8;            // ~8 req/s, bem abaixo do limite do Drive
+  let i = 0, granted = 0, failed = 0;
+  const fails = [];
+  async function worker() {
+    while (i < newIds.length) {
+      const id = newIds[i++];
+      const r = await ensureAnyoneReader(drive, id);
+      if (r.ok) granted++;
+      else { failed++; if (fails.length < 5) fails.push(r.error); }
+    }
+  }
+  await Promise.all(Array.from({ length: CONCURRENCY }, () => worker()));
+  return { granted, failed, fails };
+}
+
 // ── Auth ─────────────────────────────────────────────────────────
 async function getAuth() {
   // 1. CI: OAuth via env vars (refresh_token flow, sem login interativo)
@@ -111,6 +170,7 @@ async function getAuth() {
     const cfg = client.installed || client.web;
     const oAuth2 = new google.auth.OAuth2(cfg.client_id, cfg.client_secret);
     oAuth2.setCredentials(JSON.parse(process.env.CINEPRO_OAUTH_TOKEN));
+    AUTH_CAN_WRITE = true;
     return oAuth2;
   }
   // 2. CI: service account JSON em $GOOGLE_APPLICATION_CREDENTIALS
@@ -141,6 +201,7 @@ async function getAuth() {
   const cfg = client.installed || client.web;
   const oAuth2 = new google.auth.OAuth2(cfg.client_id, cfg.client_secret);
   oAuth2.setCredentials(JSON.parse(fs.readFileSync(tokenFile, 'utf8')));
+  AUTH_CAN_WRITE = true;
   return oAuth2;
 }
 
@@ -275,6 +336,16 @@ async function walkCategory(drive, folderId, categoryName, pathParts, depth) {
 
   if (!fs.existsSync(OUT_DIR)) fs.mkdirSync(OUT_DIR, { recursive: true });
   const outFile = path.join(OUT_DIR, 'manifest.json');
+
+  // Diff contra o manifest anterior pra achar arquivos NOVOS (antes de sobrescrever).
+  let prevIds = new Set();
+  if (fs.existsSync(outFile)) {
+    try {
+      const prev = JSON.parse(fs.readFileSync(outFile, 'utf8'));
+      (prev.files || []).forEach(f => prevIds.add(f.id));
+    } catch (_) { /* manifest anterior corrompido → trata como vazio */ }
+  }
+
   fs.writeFileSync(outFile, JSON.stringify(manifest));
   const compactBytes = fs.statSync(outFile).size;
 
@@ -290,6 +361,30 @@ async function walkCategory(drive, folderId, categoryName, pathParts, depth) {
   console.log(`  Gzipped:    ${(gz.length/1024).toFixed(0)} KB (-${Math.round((1 - gz.length/compactBytes)*100)}%)`);
   console.log(`  Tempo:      ${((Date.now()-t0)/1000).toFixed(1)}s`);
   console.log(`  Saída:      ${outFile}`);
+
+  // ── Auto-grant de permissão pública nos arquivos novos (mata o drift de 403) ──
+  if (!process.argv.includes('--no-perms')) {
+    const hadPrev = prevIds.size > 0;
+    const newIds = allFiles.map(f => f.id).filter(id => !prevIds.has(id));
+    if (!AUTH_CAN_WRITE) {
+      console.log('\nℹ️  Auth readonly — pulei auto-grant de permissão.');
+    } else if (!hadPrev) {
+      // Sem baseline → não varre 11k num build de rotina. Full sweep é job separado.
+      console.log('\n⚠️  Sem manifest anterior — pulei auto-grant. Rode o workflow "Drive Perm Sweep" pra garantir todos públicos.');
+    } else if (newIds.length === 0) {
+      console.log('\n✓ Nenhum arquivo novo — permissões já cobertas.');
+    } else {
+      console.log(`\nGarantindo "anyone reader" em ${newIds.length} arquivo(s) novo(s)...`);
+      try {
+        const res = await grantPublicReadOnDelta(drive, newIds);
+        console.log(`  ✓ ${res.granted} ok, ${res.failed} falha(s)`);
+        res.fails.forEach(e => console.log('    -', e));
+      } catch (e) {
+        // Falha de permissão NUNCA derruba o build do manifest.
+        console.log('  ⚠️  Auto-grant falhou (manifest segue válido):', e.message || e);
+      }
+    }
+  }
 })().catch(err => {
   console.error('\n[FATAL]', err);
   process.exit(1);

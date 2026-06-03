@@ -1,0 +1,33 @@
+name: Drive Perm Sweep
+
+# Rede de segurança: varre TODOS os arquivos do manifest e garante
+# "anyone reader" em cada um. O build-manifest já auto-concede nos
+# arquivos NOVOS a cada build — este sweep cobre o resto (ex.: arquivo
+# que teve permissão removida manualmente, edição externa no Drive).
+#
+# Idempotente: arquivos já públicos são pulados. Não commita nada.
+on:
+  schedule:
+    - cron: '0 4 1 * *'        # dia 1 de cada mês, 04:00 UTC
+  workflow_dispatch:            # botão manual quando precisar
+
+jobs:
+  sweep:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install deps
+        working-directory: audit
+        run: npm install
+
+      - name: Run permission sweep
+        working-directory: audit
+        env:
+          CINEPRO_OAUTH_CLIENT: ${{ secrets.CINEPRO_OAUTH_CLIENT }}
+          CINEPRO_OAUTH_TOKEN:  ${{ secrets.CINEPRO_OAUTH_TOKEN }}
+        run: node fix-drive-perms.js
