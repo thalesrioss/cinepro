@@ -16,11 +16,15 @@
  *   node mirror-to-r2.js              # espelha o que falta
  *   node mirror-to-r2.js --dry-run    # só mostra o diff
  *   node mirror-to-r2.js --limit 20   # smoke test com N arquivos
+ *   node mirror-to-r2.js --public     # baixa do Drive SEM OAuth (arquivos
+ *                                       são públicos pós-sweep): API key →
+ *                                       usercontent. Útil com token vencido.
  *
  * Env obrigatório:
  *   R2_ACCOUNT_ID, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY
  *   R2_BUCKET (default: cinepro-assets)
- *   + credenciais Drive (CINEPRO_OAUTH_CLIENT/TOKEN ou token local do audit/)
+ *   + credenciais Drive (CINEPRO_OAUTH_CLIENT/TOKEN ou token local do audit/),
+ *     OU --public com DRIVE_API_KEY opcional no env.
  */
 
 'use strict';
@@ -32,10 +36,12 @@ const { S3Client, PutObjectCommand, ListObjectsV2Command } = require('@aws-sdk/c
 
 const MANIFEST = path.join(__dirname, 'dist', 'manifest.json');
 const DRY    = process.argv.includes('--dry-run');
+const PUBLIC = process.argv.includes('--public');
 const LIMIT  = process.argv.includes('--limit')
   ? parseInt(process.argv[process.argv.indexOf('--limit') + 1] || '0', 10)
   : 0;
 const CONCURRENCY = 6;
+const DRIVE_API_KEY = process.env.DRIVE_API_KEY || '';
 
 const CONTENT_TYPES = {
   mp4: 'video/mp4', mov: 'video/quicktime', avi: 'video/x-msvideo',
@@ -85,6 +91,42 @@ async function getDriveAuth() {
   const oAuth2 = new google.auth.OAuth2(cfg.client_id, cfg.client_secret);
   oAuth2.setCredentials(JSON.parse(fs.readFileSync(tokenFile, 'utf8')));
   return oAuth2;
+}
+
+// Download público (sem OAuth): API key → usercontent, com guarda anti-HTML.
+// Só funciona porque o sweep garante "anyone reader" em todos os arquivos.
+async function fetchPublicFile(f) {
+  const urls = [];
+  if (DRIVE_API_KEY) {
+    urls.push(`https://www.googleapis.com/drive/v3/files/${f.id}?alt=media&key=${DRIVE_API_KEY}`);
+  }
+  urls.push(`https://drive.usercontent.google.com/download?id=${f.id}&export=download&confirm=t`);
+
+  let lastErr;
+  for (const url of urls) {
+    try {
+      return await withRetry(async () => {
+        const res = await fetch(url, { redirect: 'follow' });
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        const buf = Buffer.from(await res.arrayBuffer());
+        const ct = res.headers.get('content-type') || '';
+        const head = buf.slice(0, 5).toString('latin1');
+        if (ct.includes('text/html') || head === '<!DOC' || head.startsWith('<htm')) {
+          throw new Error('Resposta HTML em vez do arquivo');
+        }
+        return buf;
+      });
+    } catch (e) { lastErr = e; }
+  }
+  throw lastErr;
+}
+
+async function fetchDriveFile(drive, f) {
+  if (!drive) return fetchPublicFile(f);
+  const res = await withRetry(() =>
+    drive.files.get({ fileId: f.id, alt: 'media' }, { responseType: 'arraybuffer' })
+  );
+  return Buffer.from(res.data);
 }
 
 function getS3() {
@@ -153,8 +195,13 @@ function fmtElapsed(ms) {
     return;
   }
 
-  const auth = await getDriveAuth();
-  const drive = google.drive({ version: 'v3', auth });
+  let drive = null;
+  if (PUBLIC) {
+    console.log('Modo --public: download sem OAuth (API key/usercontent).');
+  } else {
+    const auth = await getDriveAuth();
+    drive = google.drive({ version: 'v3', auth });
+  }
 
   let done = 0, failed = 0, bytesUp = 0;
   const fails = [];
@@ -165,10 +212,7 @@ function fmtElapsed(ms) {
       const f = pending[qi++];
       const key = f.id + '.' + f.ext;
       try {
-        const res = await withRetry(() =>
-          drive.files.get({ fileId: f.id, alt: 'media' }, { responseType: 'arraybuffer' })
-        );
-        const body = Buffer.from(res.data);
+        const body = await fetchDriveFile(drive, f);
         await withRetry(() => s3.send(new PutObjectCommand({
           Bucket: BUCKET,
           Key: key,
