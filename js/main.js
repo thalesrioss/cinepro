@@ -1915,17 +1915,19 @@ function togglePlayInline(effect, card) {
   }
 
   // PERF: se já temos o arquivo em cache local, toca por file:// (instantâneo).
-  // Senão, stream do Drive E dispara prefetch silencioso pra próxima play ser instantânea.
-  var url;
+  // Senão, stream remoto com failover entre rotas E prefetch silencioso
+  // pra próxima play ser instantânea.
+  var urls;
   var localPath = effectCache[effect.id];
   if (localPath) {
-    url = 'file://' + localPath.split('/').map(encodeURIComponent).join('/');
+    urls = ['file://' + localPath.split('/').map(encodeURIComponent).join('/')];
   } else {
-    url = 'https://www.googleapis.com/drive/v3/files/' + effect.id
-        + '?alt=media&key=' + CINEPRO_CONFIG.GOOGLE_DRIVE_API_KEY;
+    urls = assetUrlChain(effect);
     // background — não bloqueia o play atual
     silentPrefetch(effect, card);
   }
+  var url = urls[0];
+  var urlIdx = 0;
 
   if (effect.kind === 'audio') {
     var audio = new Audio(url);
@@ -1933,6 +1935,14 @@ function togglePlayInline(effect, card) {
     card._audio = audio;
     audio.addEventListener('ended', function () { stopInline(card); });
     audio.addEventListener('error', function () {
+      // Failover: tenta a próxima rota antes de desistir
+      urlIdx++;
+      if (urlIdx < urls.length && currentlyPlaying === card) {
+        console.warn('[CinePRO] preview failover rota ' + (urlIdx + 1) + ':', effect.name);
+        audio.src = urls[urlIdx];
+        audio.play().catch(function () { /* erro dispara este handler de novo */ });
+        return;
+      }
       console.warn('[CinePRO] preview falhou:', effect.name, audio.error && audio.error.code);
       showToast('Preview indisponível pra "' + effect.name + '". Use Aplicar.', 'error');
       stopInline(card);
@@ -1957,6 +1967,13 @@ function togglePlayInline(effect, card) {
       v.playsInline = true;
       v.controls = false;
       v.addEventListener('error', function () {
+        // Failover: tenta a próxima rota antes de desistir
+        urlIdx++;
+        if (urlIdx < urls.length && currentlyPlaying === card) {
+          console.warn('[CinePRO] preview video failover rota ' + (urlIdx + 1) + ':', effect.name);
+          v.src = urls[urlIdx];
+          return;
+        }
         console.warn('[CinePRO] preview video falhou:', effect.name, v.error && v.error.code);
         showToast('Preview indisponível pra "' + effect.name + '". Use Aplicar.', 'error');
         stopInline(card);
@@ -2085,8 +2102,9 @@ function renderWaveformImg(thumbEl, dataUrl) {
  * decoda no main thread como fallback.
  */
 function generateWaveform(effect) {
-  var url = 'https://www.googleapis.com/drive/v3/files/' + effect.id
-          + '?alt=media&key=' + CINEPRO_CONFIG.GOOGLE_DRIVE_API_KEY;
+  // Rota primária da cadeia (CDN quando ativa; senão Drive). Waveform é
+  // cosmético — não precisa do failover completo do download.
+  var url = assetUrlChain(effect)[0];
 
   var worker = getWaveformWorker();
   if (worker) {
@@ -2351,9 +2369,30 @@ function fileExistsLocal(path) {
 }
 
 /**
- * Baixa o arquivo do Google Drive pra pasta de cache permanente.
- * Se já estiver em disco (índice + verificação), retorna o path direto.
- * Persiste entre reinicializações do Premiere.
+ * Cadeia de URLs pra baixar um asset, em ordem de preferência.
+ * O download tenta cada rota; se uma falhar (quota, lock de 24h do
+ * Drive, 4xx/5xx, rede), a PRÓXIMA assume. Nenhuma rota é ponto
+ * único de falha.
+ *   1. CDN própria (R2) — quando CDN_BASE configurado
+ *   2. Drive API (consome quota da API key)
+ *   3. Drive usercontent — endpoint público, NÃO usa a API key
+ */
+function assetUrlChain(effect) {
+  var urls = [];
+  if (CINEPRO_CONFIG.CDN_BASE) {
+    urls.push(CINEPRO_CONFIG.CDN_BASE.replace(/\/+$/, '') + '/' + effect.id + '.' + effect.ext);
+  }
+  urls.push('https://www.googleapis.com/drive/v3/files/' + effect.id
+    + '?alt=media&key=' + CINEPRO_CONFIG.GOOGLE_DRIVE_API_KEY);
+  urls.push('https://drive.usercontent.google.com/download?id=' + effect.id
+    + '&export=download&confirm=t');
+  return urls;
+}
+
+/**
+ * Baixa o arquivo pra pasta de cache permanente, com failover entre
+ * todas as rotas de assetUrlChain. Se já estiver em disco (índice +
+ * verificação), retorna o path direto. Persiste entre reinicializações.
  */
 function downloadEffectFile(effect) {
   // 0. v1.3: checa bundle (assets pre-instalados via .pkg/.exe)
@@ -2367,11 +2406,20 @@ function downloadEffectFile(effect) {
     return Promise.resolve(cachedPath);
   }
 
-  var downloadUrl = 'https://www.googleapis.com/drive/v3/files/' + effect.id
-    + '?alt=media&key=' + CINEPRO_CONFIG.GOOGLE_DRIVE_API_KEY;
-
-  // 2. Retry com backoff exponencial — até 3 tentativas em 5xx/network
-  return _downloadWithRetry(effect, downloadUrl, 3);
+  // 2. Tenta cada rota em ordem; cada uma com retry próprio em 5xx/rede.
+  //    4xx (ex: 403 de quota/lock) NÃO encerra — pula pra próxima rota.
+  var urls = assetUrlChain(effect);
+  function tryRoute(i) {
+    return _downloadWithRetry(effect, urls[i], 3).catch(function (err) {
+      if (i + 1 < urls.length) {
+        console.warn('[CinePRO] rota ' + (i + 1) + '/' + urls.length + ' falhou ('
+          + (err && err.message) + ') — failover: ' + effect.name);
+        return tryRoute(i + 1);
+      }
+      throw err;
+    });
+  }
+  return tryRoute(0);
 }
 
 // ── BUNDLE LOOKUP (v1.3) ─────────────────────────────────────────
@@ -2455,6 +2503,17 @@ function _downloadOnce(effect, downloadUrl) {
           try {
             var nodeFs = window.require ? window.require('fs') : null;
             if (!nodeFs) return reject(new Error('Node.js não disponível no CEP'));
+
+            // Guarda: rota alternativa pode devolver página HTML (interstitial)
+            // em vez do arquivo. HTML salvo como .mp3 = asset corrompido.
+            var head = new Uint8Array(xhr.response.slice(0, 5));
+            var headStr = String.fromCharCode.apply(null, head);
+            var ct = (xhr.getResponseHeader('Content-Type') || '');
+            if (ct.indexOf('text/html') !== -1 || headStr === '<!DOC' || headStr.slice(0, 4) === '<htm') {
+              var eh = new Error('Resposta HTML em vez do arquivo');
+              eh.code = 'CLIENT_ERROR';
+              return reject(eh);
+            }
 
             // Escreve em .tmp, depois renomeia atomicamente
             var bytes = new Uint8Array(xhr.response);

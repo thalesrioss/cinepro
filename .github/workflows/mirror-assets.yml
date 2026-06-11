@@ -1,0 +1,62 @@
+name: Mirror Assets to R2
+
+# Espelha os arquivos do manifest pro Cloudflare R2 (CDN própria).
+# Idempotente: só sobe o que falta. Roda depois do rebuild semanal do
+# manifest (sábado 03:00) e sob demanda.
+#
+# Requer secrets: R2_ACCOUNT_ID, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY
+# (+ CINEPRO_OAUTH_CLIENT/TOKEN que já existem). Sem eles, o job falha
+# rápido com mensagem clara — não quebra nada.
+on:
+  schedule:
+    - cron: '0 5 * * 6'        # sábado 05:00 UTC (manifest rebuilda 03:00)
+  workflow_dispatch:
+    inputs:
+      limit:
+        description: 'Smoke test: espelhar só N arquivos (vazio = todos)'
+        required: false
+        default: ''
+
+jobs:
+  mirror:
+    runs-on: ubuntu-latest
+    timeout-minutes: 350
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      # Sem secrets do R2 ainda? Sai verde com aviso em vez de poluir o CI
+      # de vermelho toda semana. Setup: docs/R2-SETUP.md
+      - name: Check R2 secrets
+        id: r2check
+        env:
+          R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
+        run: |
+          if [ -z "$R2_ACCOUNT_ID" ]; then
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            echo "::notice::R2 secrets ausentes — espelho pulado. Veja docs/R2-SETUP.md"
+          fi
+
+      - name: Install deps
+        if: steps.r2check.outputs.skip != 'true'
+        working-directory: manifest
+        run: npm install
+
+      - name: Mirror Drive → R2
+        if: steps.r2check.outputs.skip != 'true'
+        working-directory: manifest
+        env:
+          CINEPRO_OAUTH_CLIENT:  ${{ secrets.CINEPRO_OAUTH_CLIENT }}
+          CINEPRO_OAUTH_TOKEN:   ${{ secrets.CINEPRO_OAUTH_TOKEN }}
+          R2_ACCOUNT_ID:         ${{ secrets.R2_ACCOUNT_ID }}
+          R2_ACCESS_KEY_ID:      ${{ secrets.R2_ACCESS_KEY_ID }}
+          R2_SECRET_ACCESS_KEY:  ${{ secrets.R2_SECRET_ACCESS_KEY }}
+        run: |
+          if [ -n "${{ github.event.inputs.limit }}" ]; then
+            node mirror-to-r2.js --limit ${{ github.event.inputs.limit }}
+          else
+            node mirror-to-r2.js
+          fi
