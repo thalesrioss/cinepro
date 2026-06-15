@@ -68,6 +68,18 @@ function brandCategoryName(name) {
   if (/^cinepro/i.test(clean)) return clean;
   return 'CinePRO ' + clean;  // fallback: nada escapa do branding
 }
+// v1.5: macro-categoria derivada do TIPO do arquivo (não do nome da pasta).
+// DEVE ser idêntico ao manifest/recategorize.js. 5 pastas, busca-first.
+const MACRO_ORDER = ['Sound Effects', 'Visual Effects', 'LUTs', 'Presets', 'MOGRT'];
+const AUDIO_EXT = { mp3:1, wav:1, m4a:1, aac:1, ogg:1, aif:1, aiff:1 };
+function macroCategoryFor(ext) {
+  ext = (ext || '').toLowerCase();
+  if (AUDIO_EXT[ext]) return 'Sound Effects';
+  if (ext === 'mogrt') return 'MOGRT';
+  if (ext === 'prfpset') return 'Presets';
+  if (ext === 'cube' || ext === '3dl') return 'LUTs';
+  return 'Visual Effects';
+}
 function shouldSkipFolder(name) {
   return SKIP_FOLDER_REGEXES.some(rx => rx.test(name));
 }
@@ -314,6 +326,12 @@ async function walkCategory(drive, folderId, categoryName, pathParts, depth) {
     }
   }
 
+  // v1.5: colapsa tudo nas 5 macro-pastas por tipo de arquivo + achata subcategorias
+  for (const f of allFiles) {
+    f.category = macroCategoryFor(f.ext);
+    f.subcategory = null;
+  }
+
   // Stats por categoria
   const stats = {};
   for (const f of allFiles) {
@@ -329,7 +347,7 @@ async function walkCategory(drive, folderId, categoryName, pathParts, depth) {
       total: allFiles.length,
       byCategory: stats,
     },
-    categories: Array.from(catGroups.keys()).concat(rootFiles.length ? [brandCategoryName('Geral')] : []),
+    categories: MACRO_ORDER.filter(c => stats[c] > 0),  // v1.5: só as 5 macro presentes, ordem canônica
     concepts: CONCEPTS.map(c => ({ name: c.name, keys: c.keys })),  // embeddings dict
     files: allFiles,
   };

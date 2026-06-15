@@ -417,6 +417,71 @@ body {
   gap: 8px;
 }
 
+/* ── v1.5: MODO LISTA (áudio) — densidade Artlist ──────────── */
+.effects-grid.view-list {
+  grid-template-columns: 1fr;
+  gap: 2px;
+}
+.view-list .effect-card {
+  display: flex;
+  align-items: center;
+  height: 46px;
+  contain-intrinsic-size: 0 46px;
+}
+.view-list .effect-thumb {
+  aspect-ratio: auto;
+  width: 140px;
+  height: 38px;
+  flex: none;
+  border-radius: 4px;
+  margin: 4px 10px 4px 4px;
+}
+.view-list .effect-card-body {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 10px 0 0;
+}
+.view-list .effect-name {
+  flex: 1;
+  margin: 0;
+}
+.view-list .effect-meta {
+  flex: none;
+  justify-content: flex-end;
+}
+.view-list .drag-hint { display: none; }
+.view-list .btn-fav { top: 4px; left: 4px; }
+
+/* ── v1.5: TOGGLE de visão ⊞/☰ ─────────────────────────────── */
+.view-toggle {
+  display: flex;
+  gap: 2px;
+  margin-left: 8px;
+  flex: none;
+}
+.view-toggle-btn {
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md, 6px);
+  color: var(--text-dim);
+  cursor: pointer;
+  transition: color 0.15s, border-color 0.15s, background 0.15s;
+}
+.view-toggle-btn:hover { color: var(--text-main); }
+.view-toggle-btn.is-active {
+  color: var(--brand, #00B8FF);
+  border-color: var(--brand, #00B8FF);
+  background: rgba(0,184,255,0.08);
+}
+
 /* ── EFFECT CARD ─────────────────────────────────────────── */
 .effect-card {
   background: var(--bg-card);

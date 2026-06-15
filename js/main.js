@@ -270,6 +270,12 @@ function bindAppUI() {
     filterEffects('');
     input.focus();
   });
+
+  // v1.5: toggle de visão lista/grade (persiste por categoria)
+  var btnList = document.getElementById('view-list-btn');
+  var btnGrid = document.getElementById('view-grid-btn');
+  if (btnList) btnList.addEventListener('click', function () { setViewMode('list'); });
+  if (btnGrid) btnGrid.addEventListener('click', function () { setViewMode('grid'); });
 }
 
 /**
@@ -1213,9 +1219,50 @@ var PAGE_SIZE = 60;     // primeiro lote — menor pra UI ficar responsiva
 var PAGE_STEP = 60;     // cada "carregar mais"
 var renderState = null; // { effects, groups, labels, rendered }
 
+// ── MODO DE VISÃO (v1.5): lista densa pra áudio, grade pra visual ──
+// Default automático pelo conteúdo (maioria áudio → lista); o usuário pode
+// forçar via toggle ⊞/☰ e a escolha persiste por categoria.
+var VIEW_OVERRIDE = (function () {
+  try { return JSON.parse(localStorage.getItem('cinepro_view_modes') || '{}'); }
+  catch (e) { return {}; }
+})();
+var LAST_RENDER_EFFECTS = null;
+
+function autoViewFor(effects) {
+  var audio = 0;
+  for (var i = 0; i < effects.length; i++) if (effects[i].kind === 'audio') audio++;
+  return audio >= effects.length / 2 ? 'list' : 'grid';
+}
+
+function currentViewMode(effects) {
+  var key = activeCategory || 'all';
+  if (VIEW_OVERRIDE[key] === 'list' || VIEW_OVERRIDE[key] === 'grid') return VIEW_OVERRIDE[key];
+  return autoViewFor(effects);
+}
+
+function applyViewMode(mode) {
+  var grid = document.getElementById('effects-grid');
+  if (!grid) return;
+  grid.classList.toggle('view-list', mode === 'list');
+  grid.classList.toggle('view-grid', mode === 'grid');
+  var btnList = document.getElementById('view-list-btn');
+  var btnGrid = document.getElementById('view-grid-btn');
+  if (btnList) btnList.classList.toggle('is-active', mode === 'list');
+  if (btnGrid) btnGrid.classList.toggle('is-active', mode === 'grid');
+}
+
+function setViewMode(mode) {
+  VIEW_OVERRIDE[activeCategory || 'all'] = mode;
+  try { localStorage.setItem('cinepro_view_modes', JSON.stringify(VIEW_OVERRIDE)); } catch (e) {}
+  applyViewMode(mode);
+  if (LAST_RENDER_EFFECTS) renderEffects(LAST_RENDER_EFFECTS);
+}
+
 function renderEffects(effects) {
   var grid = document.getElementById('effects-grid');
   grid.innerHTML = '';
+  LAST_RENDER_EFFECTS = effects;
+  applyViewMode(currentViewMode(effects));
 
   if (effects.length === 0) {
     if (activeCategory === 'favorites') {
