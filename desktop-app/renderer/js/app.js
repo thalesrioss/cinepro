@@ -496,18 +496,30 @@ document.addEventListener('DOMContentLoaded', function () {
   });
 
   // ── Update notification (GitHub Releases check 24h) ──
+  // Fonte ÚNICA de versão: a versão real do app (Electron/package.json),
+  // a MESMA exibida no topbar. Antes comparava CINEPRO_CONFIG.PLUGIN_VERSION
+  // (fonte diferente) — se divergisse, recomendava a versão que você já tem.
   if (window.CinePROUpdateChecker) {
-    var current = (window.CINEPRO_CONFIG && CINEPRO_CONFIG.PLUGIN_VERSION) || '0.0.0';
-    var defer = window.requestIdleCallback || function (cb) { return setTimeout(cb, 1500); };
-    defer(function () {
-      window.CinePROUpdateChecker.check(current, function (release) {
-        if (!release) return;
-        var slot = document.getElementById('update-pill-slot');
-        window.CinePROUpdateChecker.render(release, {
-          pillHost: slot || document.body,
-          modalHost: document.body,
+    var runUpdateCheck = function (current) {
+      var defer = window.requestIdleCallback || function (cb) { return setTimeout(cb, 1500); };
+      defer(function () {
+        window.CinePROUpdateChecker.check(current, function (release) {
+          if (!release) return;
+          var slot = document.getElementById('update-pill-slot');
+          window.CinePROUpdateChecker.render(release, {
+            pillHost: slot || document.body,
+            modalHost: document.body,
+          });
         });
       });
-    });
+    };
+    var fallbackVer = (window.CINEPRO_CONFIG && CINEPRO_CONFIG.PLUGIN_VERSION) || '0.0.0';
+    if (window.cinepro && window.cinepro.appVersion) {
+      window.cinepro.appVersion()
+        .then(function (v) { runUpdateCheck(v || fallbackVer); })
+        .catch(function () { runUpdateCheck(fallbackVer); });
+    } else {
+      runUpdateCheck(fallbackVer);
+    }
   }
 });
