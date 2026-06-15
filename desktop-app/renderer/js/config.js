@@ -34,7 +34,7 @@ const CINEPRO_CONFIG = {
   // -- CDN própria (Cloudflare R2) --
   // Quando preenchido (ex: 'https://cdn.cinepro.app'), downloads tentam a CDN
   // PRIMEIRO e só caem pro Drive se ela falhar. Vazio = só Drive.
-  CDN_BASE: '',
+  CDN_BASE: 'https://pub-6ace91bcabf540f0a54bb6850d188ef4.r2.dev',
 
   // -- Admins (acesso vitalício, ignora assinatura) --
   // Coloque aqui os emails que sempre terão acesso, mesmo sem comprar

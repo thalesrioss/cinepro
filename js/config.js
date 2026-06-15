@@ -35,7 +35,7 @@ const CINEPRO_CONFIG = {
   // Quando preenchido (ex: 'https://cdn.cinepro.app'), downloads tentam a CDN
   // PRIMEIRO e só caem pro Drive se ela falhar. Vazio = só Drive (com failover
   // entre os dois endpoints do Drive). Os arquivos no R2 usam a key {id}.{ext}.
-  CDN_BASE: '',
+  CDN_BASE: 'https://pub-6ace91bcabf540f0a54bb6850d188ef4.r2.dev',
 
   // -- Admins (acesso vitalício, ignora assinatura) --
   // Coloque aqui os emails que sempre terão acesso, mesmo sem comprar
