@@ -664,6 +664,17 @@ body {
 }
 .lut-modal-foot.lut-err { color: #f59e9e; }
 
+/* v1.5.2: link "outro sistema" no modal de update */
+.update-other-os {
+  display: block;
+  text-align: center;
+  margin-top: 10px;
+  font-size: 11px;
+  color: var(--text-dim, #5b7089);
+  text-decoration: none;
+}
+.update-other-os:hover { color: var(--brand, #00B8FF); text-decoration: underline; }
+
 /* ── EFFECT CARD ─────────────────────────────────────────── */
 .effect-card {
   background: var(--bg-card);

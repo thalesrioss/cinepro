@@ -165,14 +165,28 @@
       modal.setAttribute('aria-labelledby', 'update-modal-title');
 
       var plat = detectPlatform();
-      var macBtn = release.assets.mac
-        ? '<a class="btn btn--primary-gradient btn--lg btn--block update-dl' + (plat === 'mac' ? ' is-recommended' : '') + '" href="' + escapeAttr(release.assets.mac) + '" target="_blank" rel="noopener">' +
-            '<span>Baixar pra macOS</span><small>.pkg</small></a>'
-        : '';
-      var winBtn = release.assets.win
-        ? '<a class="btn btn--primary-gradient btn--lg btn--block update-dl' + (plat === 'win' ? ' is-recommended' : '') + '" href="' + escapeAttr(release.assets.win) + '" target="_blank" rel="noopener">' +
-            '<span>Baixar pra Windows</span><small>.exe</small></a>'
-        : '';
+      // 1-clique: detecta o SO do usuário e oferece A versão certa como
+      // ação principal. O outro SO vira link discreto. Sem garimpo.
+      var primaryUrl  = plat === 'win' ? release.assets.win : release.assets.mac;
+      var primaryOS   = plat === 'win' ? 'Windows' : 'macOS';
+      var primaryExt  = plat === 'win' ? '.exe' : '.pkg';
+      var otherUrl    = plat === 'win' ? release.assets.mac : release.assets.win;
+      var otherOS     = plat === 'win' ? 'macOS' : 'Windows';
+
+      var actions = '';
+      if (plat !== 'unknown' && primaryUrl) {
+        actions =
+          '<a class="btn btn--primary-gradient btn--lg btn--block update-dl is-recommended" href="' + escapeAttr(primaryUrl) + '" target="_blank" rel="noopener" download>' +
+            '<span>⤓ Atualizar para ' + primaryOS + ' agora</span><small>' + primaryExt + ' · detectado automaticamente</small></a>' +
+          (otherUrl
+            ? '<a class="update-other-os" href="' + escapeAttr(otherUrl) + '" target="_blank" rel="noopener" download>Estou em outro sistema — baixar ' + otherOS + '</a>'
+            : '');
+      } else {
+        // SO não detectado → mostra os dois
+        actions =
+          (release.assets.mac ? '<a class="btn btn--primary-gradient btn--lg btn--block update-dl" href="' + escapeAttr(release.assets.mac) + '" target="_blank" rel="noopener" download><span>Baixar pra macOS</span><small>.pkg</small></a>' : '') +
+          (release.assets.win ? '<a class="btn btn--primary-gradient btn--lg btn--block update-dl" href="' + escapeAttr(release.assets.win) + '" target="_blank" rel="noopener" download><span>Baixar pra Windows</span><small>.exe</small></a>' : '');
+      }
       var fallback = (!release.assets.mac && !release.assets.win)
         ? '<a class="btn btn--soft btn--lg btn--block" href="' + escapeAttr(release.assets.page) + '" target="_blank" rel="noopener">Abrir página do release</a>'
         : '';
@@ -185,7 +199,7 @@
           '<h2 class="update-modal-title" id="update-modal-title">CinePRO ' + escapeHtml(release.tag) + '</h2>' +
           (release.published ? '<div class="update-modal-meta">Publicado em ' + formatDate(release.published) + '</div>' : '') +
           '<div class="update-modal-body">' + renderBody(release.body) + '</div>' +
-          '<div class="update-modal-actions">' + (plat === 'win' ? winBtn + macBtn : macBtn + winBtn) + fallback + '</div>' +
+          '<div class="update-modal-actions">' + actions + fallback + '</div>' +
           '<button class="update-modal-dismiss" type="button" data-dismiss="1">Lembrar daqui 7 dias</button>' +
         '</div>';
 
