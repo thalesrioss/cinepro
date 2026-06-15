@@ -326,12 +326,6 @@ async function walkCategory(drive, folderId, categoryName, pathParts, depth) {
     }
   }
 
-  // v1.5: colapsa tudo nas 5 macro-pastas por tipo de arquivo + achata subcategorias
-  for (const f of allFiles) {
-    f.category = macroCategoryFor(f.ext);
-    f.subcategory = null;
-  }
-
   // Stats por categoria
   const stats = {};
   for (const f of allFiles) {
@@ -347,7 +341,7 @@ async function walkCategory(drive, folderId, categoryName, pathParts, depth) {
       total: allFiles.length,
       byCategory: stats,
     },
-    categories: MACRO_ORDER.filter(c => stats[c] > 0),  // v1.5: só as 5 macro presentes, ordem canônica
+    categories: Array.from(catGroups.keys()).concat(rootFiles.length ? [brandCategoryName('Geral')] : []),
     concepts: CONCEPTS.map(c => ({ name: c.name, keys: c.keys })),  // embeddings dict
     files: allFiles,
   };
