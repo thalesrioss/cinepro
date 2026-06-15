@@ -2129,7 +2129,7 @@ var WAVEFORM_WORKER_CALLBACKS = {};  // id → { resolve, reject }
 function getWaveformWorker() {
   if (WAVEFORM_WORKER || typeof Worker === 'undefined') return WAVEFORM_WORKER;
   try {
-    WAVEFORM_WORKER = new Worker('js/waveform-worker.js');
+    WAVEFORM_WORKER = new Worker('js/waveform-worker.js?v=1.5.4');
     WAVEFORM_WORKER.onmessage = function (e) {
       var data = e.data || {};
       var cb = WAVEFORM_WORKER_CALLBACKS[data.id];

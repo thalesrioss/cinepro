@@ -4,8 +4,11 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>CinePRO</title>
-  <link rel="stylesheet" href="css/tokens.css">
-  <link rel="stylesheet" href="css/style.css">
+  <!-- ?v= = cache-bust: força o CEP/Chromium a recarregar JS/CSS a cada
+       versão (senão o cache do CEP roda o codigo antigo apos atualizar).
+       BUMPAR junto com PLUGIN_VERSION a cada release. -->
+  <link rel="stylesheet" href="css/tokens.css?v=1.5.4">
+  <link rel="stylesheet" href="css/style.css?v=1.5.4">
 
   <!-- Firebase SDK (compat) -->
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
@@ -13,11 +16,11 @@
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
 
   <!-- CEP + App -->
-  <script src="js/CSInterface.js"></script>
-  <script src="js/config.js"></script>
-  <script src="js/update-checker.js" defer></script>
-  <script src="js/lut-preview.js" defer></script>
-  <script src="js/main.js" defer></script>
+  <script src="js/CSInterface.js?v=1.5.4"></script>
+  <script src="js/config.js?v=1.5.4"></script>
+  <script src="js/update-checker.js?v=1.5.4" defer></script>
+  <script src="js/lut-preview.js?v=1.5.4" defer></script>
+  <script src="js/main.js?v=1.5.4" defer></script>
 </head>
 <body>
 
