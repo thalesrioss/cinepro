@@ -2666,6 +2666,8 @@ function humanizeError(err) {
   if (err.indexOf('FILE_NOT_FOUND') !== -1) return 'Arquivo não encontrado no cache.';
   if (err.indexOf('NO_VIDEO_TRACK') !== -1) return 'Crie uma trilha de vídeo na timeline.';
   if (err.indexOf('NO_AUDIO_TRACK') !== -1) return 'Crie uma trilha de áudio na timeline.';
+  if (err.indexOf('NO_FREE_TRACK')  !== -1) return 'Sem espaço livre no playhead. Adicione uma trilha ou mova a agulha.';
+  if (err.indexOf('PLACE:')         !== -1) return 'Falha ao posicionar na timeline: ' + err.replace('PLACE:', '').trim();
   if (err.indexOf('AUDIO:')         !== -1) return 'Falha ao inserir áudio: ' + err.replace('AUDIO:', '').trim();
   if (err.indexOf('CLIP:')          !== -1) return 'Falha ao inserir clip: ' + err.replace('CLIP:', '').trim();
   if (err.indexOf('PRESET')         !== -1) return 'Falha ao importar o preset.';

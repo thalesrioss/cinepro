@@ -128,8 +128,96 @@ function getPlayheadTime() {
   }
 }
 
-// Extensões puramente de áudio — vão em audioTracks[0], não videoTracks
+// Extensões puramente de áudio — vão em audio tracks, não videoTracks
 var AUDIO_EXTS = { mp3:1, wav:1, m4a:1, aac:1, ogg:1, aif:1, aiff:1 };
+
+// ══ COLOCAÇÃO INTELIGENTE NA TIMELINE ═══════════════════════════
+// Em vez de sempre track[0] + insertClip (que atropela/empurra a
+// montagem existente), procura a PRIMEIRA faixa com espaço livre no
+// intervalo [playhead, playhead+duração] e usa overwriteClip — que
+// numa região vazia não toca em nada do que o editor já montou.
+// Sem faixa livre? Tenta criar uma no fim via QE; se não der, erro
+// claro em vez de destruir trabalho.
+
+function getItemDurationSec(item) {
+  try {
+    var inp = item.getInPoint().seconds;
+    var out = item.getOutPoint().seconds;
+    var d = out - inp;
+    if (d > 0) return d;
+  } catch (e) {}
+  return 1; // fallback conservador (testa colisão em 1s)
+}
+
+function trackHasSpace(track, startSec, endSec) {
+  try {
+    if (track.isLocked && track.isLocked()) return false;
+    for (var i = 0; i < track.clips.numItems; i++) {
+      var c = track.clips[i];
+      if (c.start.seconds < endSec && c.end.seconds > startSec) return false;
+    }
+    return true;
+  } catch (e) {
+    return false;
+  }
+}
+
+function findFreeTrackIndex(trackList, startSec, durSec) {
+  var endSec = startSec + (durSec > 0 ? durSec : 1);
+  for (var t = 0; t < trackList.numTracks; t++) {
+    if (trackHasSpace(trackList[t], startSec, endSec)) return t;
+  }
+  return -1;
+}
+
+// Cria 1 faixa no fim via QE DOM (não documentado mas estável desde CC2018).
+function addTrackViaQE(seq, isAudio) {
+  try {
+    app.enableQE();
+    var qeSeq = qe.project.getActiveSequence();
+    if (!qeSeq) return false;
+    if (isAudio) {
+      // (video, posVideo, audio, tipoAudio[1=estéreo], posAudio)
+      qeSeq.addTracks(0, 0, 1, 1, seq.audioTracks.numTracks);
+    } else {
+      qeSeq.addTracks(1, seq.videoTracks.numTracks, 0, 0, 0);
+    }
+    return true;
+  } catch (e) {
+    return false;
+  }
+}
+
+/**
+ * Coloca um item na primeira faixa livre a partir do playhead.
+ * Retorna 'OK:PLACED_TRACK_n' ou 'ERR:NO_FREE_TRACK' / 'ERR:PLACE:...'.
+ */
+function placeItemSmart(seq, isAudio, importedItem, startSec) {
+  var trackList = isAudio ? seq.audioTracks : seq.videoTracks;
+  var dur = getItemDurationSec(importedItem);
+  var idx = findFreeTrackIndex(trackList, startSec, dur);
+
+  if (idx === -1 && addTrackViaQE(seq, isAudio)) {
+    // refetch: QE mexeu na sequência
+    trackList = isAudio ? seq.audioTracks : seq.videoTracks;
+    idx = trackList.numTracks - 1;
+    if (!trackHasSpace(trackList[idx], startSec, startSec + dur)) idx = -1;
+  }
+  if (idx === -1) return 'ERR:NO_FREE_TRACK';
+
+  try {
+    // overwriteClip em região vazia = não empurra nem cobre nada
+    trackList[idx].overwriteClip(importedItem, startSec);
+    return 'OK:PLACED_TRACK_' + (idx + 1);
+  } catch (e) {
+    try {
+      trackList[idx].insertClip(importedItem, startSec);
+      return 'OK:PLACED_TRACK_' + (idx + 1);
+    } catch (e2) {
+      return 'ERR:PLACE:' + e2.toString();
+    }
+  }
+}
 
 /**
  * Importa um arquivo na posição do playhead da sequência ativa.
@@ -236,19 +324,16 @@ function applyEffectToSelection(filePath, fileType) {
     }
     if (!importedItem) return 'WARN:IMPORTED_BUT_NOT_FOUND';
 
-    // Insere no IN POINT de cada clip selecionado
+    // Coloca no IN POINT de cada clip selecionado, em faixa LIVRE
     var inserted = 0;
+    var isAudio = !!AUDIO_EXTS[lowerType];
     for (var j = 0; j < selectedClips.length; j++) {
       var clip = selectedClips[j];
       var startTime = clip.start && clip.start.seconds;
       if (startTime == null) continue;
-
-      // Áudio em audio track; resto em video track
-      var trackList = (AUDIO_EXTS[lowerType]) ? seq.audioTracks : seq.videoTracks;
-      if (!trackList || !trackList[0]) continue;
       try {
-        trackList[0].insertClip(importedItem, startTime);
-        inserted++;
+        var r = placeItemSmart(seq, isAudio, importedItem, startTime);
+        if (r.indexOf('OK:') === 0) inserted++;
       } catch (e) {/* ignora — clip de track travada, etc. */}
     }
 
@@ -348,13 +433,11 @@ function importMogrtAtPlayhead(filePath, seq) {
       }
     }
 
-    // Se achou, insere na primeira track de vídeo disponível
+    // Se achou, insere na primeira track de vídeo LIVRE no playhead
     if (importedItem) {
       var cti = seq.getPlayerPosition();
-      var videoTrack = seq.videoTracks[0];
-      if (!videoTrack) return 'ERR:NO_VIDEO_TRACK';
-      videoTrack.insertClip(importedItem, cti.seconds);
-      return 'OK:MOGRT_INSERTED';
+      if (!seq.videoTracks[0]) return 'ERR:NO_VIDEO_TRACK';
+      return placeItemSmart(seq, false, importedItem, cti.seconds);
     }
 
     return 'WARN:IMPORTED_BUT_NOT_PLACED';
@@ -387,13 +470,10 @@ function importAudioAtPlayhead(filePath, seq) {
     if (!importedItem) return 'WARN:IMPORTED_BUT_NOT_FOUND';
 
     var cti = seq.getPlayerPosition();
+    if (!seq.audioTracks[0]) return 'ERR:NO_AUDIO_TRACK';
 
-    // Tenta audioTracks[0]; se não existir, cria via fallback
-    var audioTrack = seq.audioTracks[0];
-    if (!audioTrack) return 'ERR:NO_AUDIO_TRACK';
-
-    audioTrack.insertClip(importedItem, cti.seconds);
-    return 'OK:AUDIO_INSERTED';
+    // Primeira faixa LIVRE no playhead — não atropela a montagem
+    return placeItemSmart(seq, true, importedItem, cti.seconds);
 
   } catch (e) {
     return 'ERR:AUDIO:' + e.toString();
@@ -426,11 +506,10 @@ function importClipAtPlayhead(filePath, seq) {
     if (!importedItem) return 'WARN:IMPORTED_BUT_NOT_FOUND';
 
     var cti = seq.getPlayerPosition();
-    var videoTrack = seq.videoTracks[0];
-    if (!videoTrack) return 'ERR:NO_VIDEO_TRACK';
+    if (!seq.videoTracks[0]) return 'ERR:NO_VIDEO_TRACK';
 
-    videoTrack.insertClip(importedItem, cti.seconds);
-    return 'OK:CLIP_INSERTED';
+    // Primeira faixa LIVRE no playhead — não atropela a montagem
+    return placeItemSmart(seq, false, importedItem, cti.seconds);
 
   } catch (e) {
     return 'ERR:CLIP:' + e.toString();
