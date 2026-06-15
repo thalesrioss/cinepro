@@ -1536,6 +1536,10 @@ function createEffectCard(effect) {
   var previewBtn = canPreview
     ? '<button class="btn btn--floating btn--icon btn-preview" data-action="preview" title="Preview" aria-label="Preview">▶</button>'
     : '';
+  // v1.5.1: LUT ganha CTA "Antes / Depois" no lugar do preview
+  var lutBtn = (effect.kind === 'lut')
+    ? '<button class="btn btn--floating lut-cta" data-action="lut-preview" title="Ver antes/depois">Antes / Depois</button>'
+    : '';
 
   card.innerHTML =
     '<button class="btn btn--floating btn--icon btn--sm btn-fav" data-action="fav" title="Favoritar" aria-label="Favoritar">' +
@@ -1543,7 +1547,7 @@ function createEffectCard(effect) {
         '<polygon points="12 2 15 9 22 9.5 17 14.5 18.5 22 12 18 5.5 22 7 14.5 2 9.5 9 9 12 2"/>' +
       '</svg>' +
     '</button>' +
-    '<div class="effect-thumb">' + thumbHtml + previewBtn + '<span class="drag-hint">' + (cached ? '⇲ arrastar' : '⇩ preparar') + '</span></div>' +
+    '<div class="effect-thumb">' + thumbHtml + previewBtn + lutBtn + '<span class="drag-hint">' + (cached ? '⇲ arrastar' : '⇩ preparar') + '</span></div>' +
     /* v1.2 A4: download-overlay agora é lazy — só injetado quando download começa */
     '<div class="effect-card-body">' +
       '<div class="effect-name" title="' + effect.name + '">' + effect.name + '</div>' +
@@ -1660,6 +1664,9 @@ function bindGridDelegation() {
       case 'apply':   applyEffect(effect, card); break;
       case 'fav':     toggleFavorite(effect, card); break;
       case 'preview': togglePlayInline(effect, card); break;
+      case 'lut-preview':
+        if (window.openLutPreview) window.openLutPreview(effect, assetUrlChain(effect));
+        break;
     }
   });
 

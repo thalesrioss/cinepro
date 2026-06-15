@@ -532,6 +532,138 @@ body {
   background: rgba(0,184,255,0.08);
 }
 
+/* ── v1.5.1: LUT antes/depois ──────────────────────────────── */
+.lut-cta {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  font-size: 10px;
+  font-weight: 600;
+  padding: 6px 12px;
+  border-radius: 6px;
+  background: rgba(0,184,255,0.92);
+  color: #06121d;
+  border: none;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.15s, transform 0.1s;
+  white-space: nowrap;
+}
+.effect-card:hover .lut-cta { opacity: 1; }
+.lut-cta:active { transform: translate(-50%, -50%) scale(0.95); }
+
+.lut-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 2000;
+  background: rgba(0,0,0,0.72);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+}
+.lut-modal.hidden { display: none; }
+.lut-modal-box {
+  background: var(--bg-card, #0f1722);
+  border: 1px solid var(--border, #243245);
+  border-radius: 10px;
+  overflow: hidden;
+  width: 100%;
+  max-width: 380px;
+}
+.lut-modal-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--border, #243245);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-main, #e8eff7);
+}
+.lut-modal-close {
+  background: none;
+  border: none;
+  color: var(--text-dim, #5b7089);
+  cursor: pointer;
+  font-size: 14px;
+}
+.lut-modal-close:hover { color: var(--text-main, #fff); }
+.lut-stage {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  cursor: ew-resize;
+  user-select: none;
+  overflow: hidden;
+  background: #000;
+}
+.lut-canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+  image-rendering: auto;
+}
+.lut-after-wrap {
+  position: absolute;
+  inset: 0;
+  width: 50%;
+  overflow: hidden;
+}
+.lut-after-wrap .lut-after {
+  width: auto;
+  height: 100%;
+}
+.lut-divider {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 50%;
+  width: 2px;
+  background: #fff;
+  transform: translateX(-1px);
+  pointer-events: none;
+}
+.lut-handle {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: #fff;
+  color: #06121d;
+  font-size: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.lut-tag {
+  position: absolute;
+  top: 8px;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.6px;
+  padding: 2px 6px;
+  border-radius: 3px;
+  background: rgba(0,0,0,0.6);
+  color: #fff;
+  pointer-events: none;
+}
+.lut-tag-before { left: 8px; }
+.lut-tag-after  { right: 8px; }
+.lut-modal-foot {
+  padding: 8px 14px;
+  font-size: 10px;
+  color: var(--text-dim, #5b7089);
+  text-align: center;
+}
+.lut-modal-foot.lut-err { color: #f59e9e; }
+
 /* ── EFFECT CARD ─────────────────────────────────────────── */
 .effect-card {
   background: var(--bg-card);
