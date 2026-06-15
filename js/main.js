@@ -2129,7 +2129,7 @@ var WAVEFORM_WORKER_CALLBACKS = {};  // id → { resolve, reject }
 function getWaveformWorker() {
   if (WAVEFORM_WORKER || typeof Worker === 'undefined') return WAVEFORM_WORKER;
   try {
-    WAVEFORM_WORKER = new Worker('js/waveform-worker.js?v=1.5.4');
+    WAVEFORM_WORKER = new Worker('js/waveform-worker.js');
     WAVEFORM_WORKER.onmessage = function (e) {
       var data = e.data || {};
       var cb = WAVEFORM_WORKER_CALLBACKS[data.id];
@@ -2212,24 +2212,38 @@ function generateWaveform(effect) {
   var worker = getWaveformWorker();
   if (worker) {
     return new Promise(function (resolve, reject) {
-      WAVEFORM_WORKER_CALLBACKS[effect.id] = { resolve: function (data) {
-        // Worker mandou amps normalizadas → desenha no main (canvas precisa DOM)
-        try { resolve(drawWaveformFromAmps(data.amps, data.width)); }
-        catch (e) { reject(e); }
-      }, reject: reject };
-      worker.postMessage({ id: effect.id, url: url });
-      // timeout 30s
-      setTimeout(function () {
-        if (WAVEFORM_WORKER_CALLBACKS[effect.id]) {
-          var cb = WAVEFORM_WORKER_CALLBACKS[effect.id];
+      // Se o worker falhar (não responder, erro, decode indisponível no
+      // worker), NÃO desiste — cai pro decode no main thread.
+      var settled = false;
+      function viaMain(reason) {
+        if (settled) return; settled = true;
+        delete WAVEFORM_WORKER_CALLBACKS[effect.id];
+        decodeWaveformMainThread(url).then(resolve, reject);
+      }
+      WAVEFORM_WORKER_CALLBACKS[effect.id] = {
+        resolve: function (data) {
+          if (settled) return; settled = true;
           delete WAVEFORM_WORKER_CALLBACKS[effect.id];
-          cb.reject(new Error('worker timeout'));
-        }
-      }, 30000);
+          try { resolve(drawWaveformFromAmps(data.amps, data.width)); }
+          catch (e) { reject(e); }
+        },
+        reject: function () { viaMain(); },  // worker postou erro → main thread
+      };
+      try { worker.postMessage({ id: effect.id, url: url }); }
+      catch (e) { viaMain(); return; }
+      // timeout 20s → main thread
+      setTimeout(function () {
+        if (WAVEFORM_WORKER_CALLBACKS[effect.id]) viaMain();
+      }, 20000);
     });
   }
 
-  // Fallback: main thread (legado)
+  // Sem worker → direto no main thread
+  return decodeWaveformMainThread(url);
+}
+
+// Decode + desenho no main thread (fallback robusto).
+function decodeWaveformMainThread(url) {
   return fetchWithRetry(url)
     .then(function (r) { return r.arrayBuffer(); })
     .then(function (buf) {
@@ -2237,7 +2251,7 @@ function generateWaveform(effect) {
       if (!AC) return null;
       var ctx = new AC();
       return ctx.decodeAudioData(buf).then(function (audioBuffer) {
-        ctx.close();
+        try { ctx.close(); } catch (e) {}
         return drawWaveformFromBuffer(audioBuffer);
       });
     });
