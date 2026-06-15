@@ -1240,7 +1240,10 @@ function currentViewMode(effects) {
   return autoViewFor(effects);
 }
 
+var CURRENT_VIEW = 'grid';   // modo do batch sendo renderizado agora
+
 function applyViewMode(mode) {
+  CURRENT_VIEW = mode;
   var grid = document.getElementById('effects-grid');
   if (!grid) return;
   grid.classList.toggle('view-list', mode === 'list');
@@ -1359,7 +1362,7 @@ function renderNextBatch(count) {
 
     while (renderState.cursorItem < items.length && batchDone < count) {
       var effect = items[renderState.cursorItem];
-      var card = createEffectCard(effect);
+      var card = (CURRENT_VIEW === 'list') ? createEffectRow(effect) : createEffectCard(effect);
       frag.appendChild(card);
 
       if (effect.kind === 'audio' && card.querySelector('.effect-thumb-placeholder')) {
@@ -1557,6 +1560,52 @@ function createEffectCard(effect) {
   }
 
   return card;
+}
+
+/**
+ * v1.5: LINHA densa (modo lista, áudio) — layout Artlist.
+ * [play] [nome + meta] [waveform larga] [★ aplicar ✓].
+ * Mantém o MESMO contrato do card (.effect-card, data-action, dataset)
+ * pra reusar delegação/drag/preview/waveform sem fork.
+ */
+function createEffectRow(effect) {
+  effectsById[effect.id] = effect;
+  var cached = !!effectCache[effect.id];
+  var isFav  = isFavorite(effect.id);
+  var canPreview = (effect.kind === 'audio' || effect.kind === 'video' || effect.kind === 'image');
+
+  var row = document.createElement('div');
+  row.className  = 'effect-card effect-row' + (cached ? ' cached' : '') + (isFav ? ' is-fav' : '');
+  row.draggable  = true;
+  row.dataset.id   = effect.id;
+  row.dataset.ext  = effect.ext || '';
+  row.dataset.kind = effect.kind || '';
+
+  var previewBtn = canPreview
+    ? '<button class="btn btn--floating btn--icon btn-preview" data-action="preview" title="Preview" aria-label="Preview">▶</button>'
+    : '';
+  var sizeStr = effect.size ? formatBytes(effect.size) : '';
+  var ext = (effect.ext || '').toUpperCase();
+  var sub = ext + (sizeStr ? ' · ' + sizeStr : '');
+
+  row.innerHTML =
+    '<div class="effect-thumb row-play">' + previewBtn + '</div>' +
+    '<div class="row-info">' +
+      '<div class="effect-name" title="' + effect.name + '">' + effect.name + '</div>' +
+      '<div class="row-sub">' + sub + '</div>' +
+    '</div>' +
+    '<div class="row-wave effect-thumb-placeholder"></div>' +
+    '<div class="row-actions">' +
+      '<button class="btn btn--floating btn--icon btn--sm btn-fav" data-action="fav" title="Favoritar" aria-label="Favoritar">' +
+        '<svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linejoin="round">' +
+          '<polygon points="12 2 15 9 22 9.5 17 14.5 18.5 22 12 18 5.5 22 7 14.5 2 9.5 9 9 12 2"/>' +
+        '</svg>' +
+      '</button>' +
+      '<button class="btn btn--soft btn--xs btn-apply" data-action="apply">Aplicar</button>' +
+      '<span class="row-cache"' + (cached ? ' title="Offline">✓' : ' title="Preparar">') + '</span>' +
+    '</div>';
+
+  return row;
 }
 
 /**

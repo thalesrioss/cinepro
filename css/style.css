@@ -417,43 +417,93 @@ body {
   gap: 8px;
 }
 
-/* ── v1.5: MODO LISTA (áudio) — densidade Artlist ──────────── */
+/* ── v1.5: MODO LISTA (áudio) — linha densa estilo Artlist ──── */
 .effects-grid.view-list {
   grid-template-columns: 1fr;
   gap: 2px;
 }
-.view-list .effect-card {
-  display: flex;
-  align-items: center;
-  height: 46px;
-  contain-intrinsic-size: 0 46px;
-}
-.view-list .effect-thumb {
-  aspect-ratio: auto;
-  width: 140px;
-  height: 38px;
-  flex: none;
-  border-radius: 4px;
-  margin: 4px 10px 4px 4px;
-}
-.view-list .effect-card-body {
-  flex: 1;
-  min-width: 0;
+.effect-row {
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 0 10px 0 0;
+  height: 48px;
+  padding: 0 8px;
+  contain-intrinsic-size: 0 48px;
 }
-.view-list .effect-name {
-  flex: 1;
-  margin: 0;
-}
-.view-list .effect-meta {
+/* play à esquerda */
+.effect-row .effect-thumb.row-play {
+  aspect-ratio: auto;
+  width: 34px;
+  height: 34px;
   flex: none;
-  justify-content: flex-end;
+  border-radius: 6px;
+  background: var(--bg-elevated);
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
-.view-list .drag-hint { display: none; }
-.view-list .btn-fav { top: 4px; left: 4px; }
+.effect-row .row-play .btn-preview {
+  position: static;
+  width: 24px;
+  height: 24px;
+  opacity: 1;
+}
+/* nome + meta (largura fixa) */
+.effect-row .row-info {
+  flex: 0 0 150px;
+  min-width: 0;
+}
+.effect-row .effect-name {
+  margin: 0 0 1px;
+  font-size: 11px;
+}
+.effect-row .row-sub {
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.4px;
+  color: var(--text-dim);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+/* waveform PROTAGONISTA — ocupa o meio da linha */
+.effect-row .row-wave {
+  flex: 1;
+  height: 32px;
+  min-width: 0;
+  aspect-ratio: auto;
+  background: transparent;
+  display: flex;
+  align-items: center;
+  overflow: hidden;
+}
+.effect-row .row-wave .waveform-img {
+  width: 100%;
+  height: 100%;
+  object-fit: fill;
+  opacity: 0.9;
+}
+.effect-row.is-playing .row-wave .waveform-img { opacity: 1; }
+/* ações à direita */
+.effect-row .row-actions {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.effect-row .row-actions .btn-fav {
+  position: static;
+  opacity: 0;
+}
+.effect-row:hover .row-actions .btn-fav,
+.effect-row.is-fav .row-actions .btn-fav { opacity: 1; }
+.effect-row .row-cache {
+  width: 12px;
+  color: #22c55e;
+  font-size: 12px;
+  text-align: center;
+}
+.effect-row.cached { border-color: rgba(34,197,94,0.35); }
 
 /* ── v1.5: TOGGLE de visão ⊞/☰ ─────────────────────────────── */
 .view-toggle {
