@@ -416,22 +416,31 @@ function tryManifest(urls) {
     });
 }
 
+// v1.6: o PLUGIN mostra só mídia que entra na timeline (vídeo/áudio/imagem).
+// LUT/MOGRT/Preset/AE/projeto migraram pro app desktop (instalam em pastas
+// do Premiere). Filtra aqui pra esses tipos não aparecerem no plugin.
+var PLUGIN_KINDS = { video: 1, audio: 1, image: 1 };
+
 function applyManifest(manifest) {
-  // Popula allEffects direto do manifest
-  allEffects = manifest.files;
+  // Popula allEffects do manifest, só com os tipos de mídia da timeline
+  allEffects = (manifest.files || []).filter(function (f) {
+    return PLUGIN_KINDS[f.kind];
+  });
   // v1.2 Parte C: guarda dicionário de conceitos pra busca semântica
   CINEPRO_CONCEPTS_DICT = manifest.concepts || null;
 
-  // Reconstrói driveCategories a partir da lista de categorias do manifest
+  // Categorias derivadas só do que sobrou (categorias 100% LUT/Preset somem).
+  // Mantém a ordem de manifest.categories e completa com qualquer extra.
   var seenCats = {};
   driveCategories = [];
-  manifest.categories.forEach(function (catName) {
-    if (seenCats[catName]) return;
+  var catHasFiles = {};
+  allEffects.forEach(function (e) { catHasFiles[e.category] = true; });
+  (manifest.categories || []).forEach(function (catName) {
+    if (seenCats[catName] || !catHasFiles[catName]) return;
     seenCats[catName] = true;
     driveCategories.push({ id: null, name: catName, loaded: true });
     driveLoadedCats[catName] = true;
   });
-  // Garante categorias presentes nos files mas não no array (paranoia)
   allEffects.forEach(function (e) {
     if (!seenCats[e.category]) {
       seenCats[e.category] = true;
