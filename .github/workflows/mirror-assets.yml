@@ -9,7 +9,7 @@ name: Mirror Assets to R2
 # rápido com mensagem clara — não quebra nada.
 on:
   schedule:
-    - cron: '0 5 * * 6'        # sábado 05:00 UTC (manifest rebuilda 03:00)
+    - cron: '0 5 * * *'        # todo dia 05:00 UTC (2h após o rebuild do manifest)
   workflow_dispatch:
     inputs:
       limit:
