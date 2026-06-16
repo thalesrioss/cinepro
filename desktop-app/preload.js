@@ -13,5 +13,6 @@ contextBridge.exposeInMainWorld('cinepro', {
   },
   isPluginInstalled:    ()    => ipcRenderer.invoke('check-plugin-installed'),
   appVersion:           ()    => ipcRenderer.invoke('app:version'),
+  installAsset:         (a)   => ipcRenderer.invoke('install-asset', a),
   platform:             process.platform,
 });

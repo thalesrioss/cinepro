@@ -182,6 +182,8 @@ function refreshSubscription() {
     meta.textContent = 'Você tem acesso completo a todos os recursos.';
     btnSub.classList.add('hidden');
     btnMgmt.classList.add('hidden');
+    hideLibraryPreview();
+    initInstallables();   // admin também vê as abas instaláveis
     return;
   }
 
@@ -198,6 +200,7 @@ function refreshSubscription() {
         btnSub.classList.add('hidden');
         btnMgmt.classList.remove('hidden');
         hideLibraryPreview();
+        initInstallables();   // v1.6: libera abas LUT/MOGRT/Preset (assinante)
       } else {
         pill.className = 'status-pill inactive';
         text.textContent = 'Assinatura inativa';
@@ -208,6 +211,8 @@ function refreshSubscription() {
         btnSub.classList.remove('hidden');
         btnMgmt.classList.add('hidden');
         showLibraryPreview();
+        var inst = document.getElementById('installables');
+        if (inst) inst.classList.add('hidden');   // não-assinante não vê instaláveis
       }
     })
     .catch(function (e) {
@@ -523,3 +528,100 @@ document.addEventListener('DOMContentLoaded', function () {
     }
   }
 });
+
+// ════════════════════════════════════════════════════════════════
+//  v1.6 — Instaláveis (LUT / MOGRT / Presets)
+//  Só roda pra assinante (chamado do ramo "active" do refreshSubscription).
+//  Baixa do CDN→Drive e instala na pasta certa do Premiere via main process.
+// ════════════════════════════════════════════════════════════════
+var INST_MANIFEST = null;       // cache do manifest
+var INST_INITED = false;
+var INST_KIND_LABEL = { lut: 'LUTs', mogrt: 'MOGRT', preset: 'Presets' };
+var MANIFEST_URL = 'https://cdn.jsdelivr.net/gh/thalesrioss/cinepro@main/manifest/dist/manifest.json';
+
+function instAssetUrls(f) {
+  var urls = [];
+  var cdn = (window.CINEPRO_CONFIG && CINEPRO_CONFIG.CDN_BASE) || '';
+  if (cdn) urls.push(cdn.replace(/\/+$/, '') + '/' + f.id + '.' + f.ext);
+  var key = (window.CINEPRO_CONFIG && CINEPRO_CONFIG.GOOGLE_DRIVE_API_KEY) || '';
+  if (key) urls.push('https://www.googleapis.com/drive/v3/files/' + f.id + '?alt=media&key=' + key);
+  urls.push('https://drive.usercontent.google.com/download?id=' + f.id + '&export=download&confirm=t');
+  return urls;
+}
+
+function initInstallables() {
+  var section = document.getElementById('installables');
+  if (section) section.classList.remove('hidden');
+  if (INST_INITED) return;
+  INST_INITED = true;
+
+  // tabs
+  var tabs = document.getElementById('inst-tabs');
+  if (tabs) tabs.addEventListener('click', function (e) {
+    var btn = e.target.closest('.inst-tab');
+    if (!btn) return;
+    tabs.querySelectorAll('.inst-tab').forEach(function (t) { t.classList.remove('is-active'); });
+    btn.classList.add('is-active');
+    renderInstTab(btn.dataset.tab);
+  });
+
+  // carrega manifest 1x
+  var grid = document.getElementById('inst-grid');
+  if (grid) grid.innerHTML = '<div class="inst-loading">Carregando biblioteca…</div>';
+  fetch(MANIFEST_URL).then(function (r) { return r.json(); })
+    .then(function (m) { INST_MANIFEST = m; renderInstTab('lut'); })
+    .catch(function () {
+      if (grid) grid.innerHTML = '<div class="inst-loading">Não consegui carregar a biblioteca. Verifique a conexão.</div>';
+    });
+}
+
+function renderInstTab(kind) {
+  var grid = document.getElementById('inst-grid');
+  var footer = document.getElementById('inst-footer');
+  if (!grid || !INST_MANIFEST) return;
+  var files = (INST_MANIFEST.files || []).filter(function (f) { return f.kind === kind; });
+  if (footer) footer.textContent = files.length + ' ' + (INST_KIND_LABEL[kind] || '') + ' disponíveis';
+  if (!files.length) { grid.innerHTML = '<div class="inst-loading">Nada nesta categoria.</div>'; return; }
+
+  var frag = document.createDocumentFragment();
+  files.forEach(function (f) {
+    var card = document.createElement('div');
+    card.className = 'inst-card';
+    card.innerHTML =
+      '<div class="inst-card-info">' +
+        '<div class="inst-card-name" title="' + escapeAttr(f.name) + '">' + escapeHtml(f.name) + '</div>' +
+        '<div class="inst-card-meta">' + (f.ext || '').toUpperCase() + '</div>' +
+      '</div>' +
+      '<button class="btn btn--soft btn--sm inst-install">Instalar</button>';
+    var btn = card.querySelector('.inst-install');
+    btn.addEventListener('click', function () { installOne(f, kind, btn); });
+    frag.appendChild(card);
+  });
+  grid.innerHTML = '';
+  grid.appendChild(frag);
+}
+
+function installOne(f, kind, btn) {
+  if (!window.cinepro || !window.cinepro.installAsset) return;
+  btn.disabled = true;
+  btn.textContent = 'Instalando…';
+  window.cinepro.installAsset({
+    kind: kind, ext: f.ext, name: f.name, urls: instAssetUrls(f),
+  }).then(function (res) {
+    if (res && res.ok) {
+      btn.textContent = '✓ Instalado';
+      btn.classList.add('inst-done');
+    } else {
+      btn.disabled = false;
+      btn.textContent = 'Tentar de novo';
+      btn.title = (res && res.error) || 'Falha ao instalar';
+    }
+  }).catch(function () {
+    btn.disabled = false;
+    btn.textContent = 'Tentar de novo';
+  });
+}
+
+// helpers de escape (caso não existam no escopo)
+function escapeHtml(s) { return String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+function escapeAttr(s) { return escapeHtml(s).replace(/"/g,'&quot;'); }

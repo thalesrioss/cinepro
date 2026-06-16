@@ -577,3 +577,43 @@ html, body {
 .login-footer span {
   color: var(--text-muted);
 }
+
+/* ════ v1.6 — Instaláveis (LUT/MOGRT/Presets) ════ */
+.installables { margin-top: 20px; }
+.installables.hidden { display: none; }
+.installables-header { margin-bottom: 12px; }
+.installables-title { font-size: 16px; font-weight: 600; color: var(--text-main, #e8eff7); margin: 0; }
+.installables-desc { font-size: 12px; color: var(--text-dim, #8fa3bc); margin: 4px 0 0; }
+.inst-tabs { display: flex; gap: 6px; margin-bottom: 12px; }
+.inst-tab {
+  padding: 7px 16px; font-size: 12px; font-weight: 600; cursor: pointer;
+  background: var(--bg-elevated, #131c2b); color: var(--text-dim, #8fa3bc);
+  border: 1px solid var(--border, #243245); border-radius: 8px; transition: all .15s;
+}
+.inst-tab:hover { color: var(--text-main, #fff); }
+.inst-tab.is-active {
+  color: var(--brand, #00B8FF); border-color: var(--brand, #00B8FF);
+  background: rgba(0,184,255,0.08);
+}
+.inst-grid {
+  display: grid; grid-template-columns: 1fr; gap: 6px;
+  max-height: 360px; overflow-y: auto;
+}
+.inst-loading { padding: 24px; text-align: center; color: var(--text-dim, #8fa3bc); font-size: 13px; }
+.inst-card {
+  display: flex; align-items: center; gap: 12px;
+  padding: 10px 12px; background: var(--bg-card, #0f1722);
+  border: 1px solid var(--border, #243245); border-radius: 8px;
+}
+.inst-card-info { flex: 1; min-width: 0; }
+.inst-card-name {
+  font-size: 13px; color: var(--text-main, #e8eff7);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.inst-card-meta { font-size: 10px; font-weight: 600; letter-spacing: .5px; color: var(--text-dim, #5b7089); margin-top: 2px; }
+.inst-install { flex: none; }
+.inst-install.inst-done {
+  color: #22c55e; border-color: rgba(34,197,94,0.4); background: rgba(34,197,94,0.08);
+  cursor: default;
+}
+.inst-footer { margin-top: 10px; font-size: 11px; color: var(--text-dim, #5b7089); text-align: right; }
