@@ -134,11 +134,26 @@ function findPresetDirs() {
   return out;
 }
 
+// v1.6.1: pasta de LUTs do DaVinci Resolve — só entra se o Resolve existir
+// na máquina (não cria pastas órfãs pra quem não usa Resolve).
+function resolveLutDirs() {
+  const candidates = IS_WIN
+    ? [path.join(process.env.PROGRAMDATA || 'C:\\ProgramData', 'Blackmagic Design', 'DaVinci Resolve', 'Support', 'LUT')]
+    : [path.join('/Library', 'Application Support', 'Blackmagic Design', 'DaVinci Resolve', 'LUT'),
+       path.join(HOME, 'Library', 'Application Support', 'Blackmagic Design', 'DaVinci Resolve', 'LUT')];
+  const out = [];
+  for (const base of candidates) {
+    try { if (fs.existsSync(base)) out.push(path.join(base, 'CinePRO')); } catch (e) {}
+  }
+  return out;
+}
+
 // Resolve o(s) diretório(s) de destino por tipo de arquivo.
 function destDirsFor(kind, ext) {
   ext = (ext || '').toLowerCase();
   if (kind === 'lut' || ext === 'cube' || ext === '3dl') {
-    return [path.join(ADOBE_COMMON, 'LUTs', 'Creative')];
+    // Premiere sempre; Resolve também, se instalado (LUT é formato universal)
+    return [path.join(ADOBE_COMMON, 'LUTs', 'Creative')].concat(resolveLutDirs());
   }
   if (kind === 'mogrt' || ext === 'mogrt') {
     return [path.join(ADOBE_COMMON, 'Motion Graphics Templates')];
