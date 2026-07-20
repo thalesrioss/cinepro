@@ -617,3 +617,17 @@ html, body {
   cursor: default;
 }
 .inst-footer { margin-top: 10px; font-size: 11px; color: var(--text-dim, #5b7089); text-align: right; }
+
+/* ════ v1.0 — Biblioteca (DaVinci/Premiere) ════ */
+.lib-search {
+  width: 100%; padding: 10px 14px; margin-bottom: 12px;
+  background: var(--bg-elevated, #131c2b); color: var(--text-main, #e8eff7);
+  border: 1px solid var(--border, #243245); border-radius: 8px;
+  font-size: 13px; outline: none;
+}
+.lib-search:focus { border-color: var(--brand, #00B8FF); }
+.lib-badge { font-size: 11px; font-weight: 500; color: #22c55e; margin-left: 8px; }
+.lib-row { gap: 8px; }
+.lib-row.lib-ready { border-color: rgba(0,184,255,0.35); cursor: grab; }
+.lib-row.lib-ready:active { cursor: grabbing; }
+.lib-dl, .lib-resolve { flex: none; white-space: nowrap; }

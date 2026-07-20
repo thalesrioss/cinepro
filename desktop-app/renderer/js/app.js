@@ -213,6 +213,8 @@ function refreshSubscription() {
         showLibraryPreview();
         var inst = document.getElementById('installables');
         if (inst) inst.classList.add('hidden');   // não-assinante não vê instaláveis
+        var lib = document.getElementById('library-section');
+        if (lib) lib.classList.add('hidden');
       }
     })
     .catch(function (e) {
@@ -552,6 +554,7 @@ function instAssetUrls(f) {
 function initInstallables() {
   var section = document.getElementById('installables');
   if (section) section.classList.remove('hidden');
+  initLibrary();   // v1.0: biblioteca (mesmo gate de assinatura)
   if (INST_INITED) return;
   INST_INITED = true;
 
@@ -625,3 +628,118 @@ function installOne(f, kind, btn) {
 // helpers de escape (caso não existam no escopo)
 function escapeHtml(s) { return String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
 function escapeAttr(s) { return escapeHtml(s).replace(/"/g,'&quot;'); }
+
+// ════════════════════════════════════════════════════════════════
+//  v1.0 / DaVinci — Biblioteca no app (buscar, baixar, arrastar)
+//  Gate: chamado por initInstallables (assinante/admin apenas).
+// ════════════════════════════════════════════════════════════════
+var LIB_INITED = false;
+var LIB_CACHED = {};     // id -> path local (baixado nesta sessão)
+
+function libAssetOf(f) {
+  return { id: f.id, kind: f.kind, ext: f.ext, name: f.name, urls: instAssetUrls(f) };
+}
+
+function initLibrary() {
+  var section = document.getElementById('library-section');
+  if (section) section.classList.remove('hidden');
+  if (LIB_INITED) return;
+  LIB_INITED = true;
+
+  // badge de status do Resolve
+  if (window.cinepro && window.cinepro.resolveStatus) {
+    window.cinepro.resolveStatus().then(function (st) {
+      var b = document.getElementById('lib-resolve-badge');
+      if (b && st && st.installed) b.textContent = '· DaVinci Resolve detectado ✓';
+    }).catch(function () {});
+  }
+
+  var input = document.getElementById('lib-search');
+  var timer = null;
+  if (input) input.addEventListener('input', function (e) {
+    if (timer) clearTimeout(timer);
+    var q = e.target.value.trim().toLowerCase();
+    timer = setTimeout(function () { renderLibResults(q); }, 250);
+  });
+}
+
+function renderLibResults(q) {
+  var grid = document.getElementById('lib-grid');
+  var footer = document.getElementById('lib-footer');
+  if (!grid) return;
+  if (!INST_MANIFEST) { grid.innerHTML = '<div class="inst-loading">Carregando biblioteca…</div>'; return; }
+  if (!q || q.length < 2) { grid.innerHTML = '<div class="inst-loading">Digite pelo menos 2 letras.</div>'; if (footer) footer.textContent = ''; return; }
+
+  var MEDIA = { video: 1, audio: 1, image: 1 };
+  var norm = q.normalize ? q.normalize('NFD').replace(/[̀-ͯ]/g, '') : q;
+  var hits = [];
+  var files = INST_MANIFEST.files || [];
+  for (var i = 0; i < files.length && hits.length < 100; i++) {
+    var f = files[i];
+    if (!MEDIA[f.kind]) continue;
+    var hay = (f.name + ' ' + (f.category || '') + ' ' + ((f.tags || []).join(' ')));
+    hay = hay.toLowerCase();
+    hay = hay.normalize ? hay.normalize('NFD').replace(/[̀-ͯ]/g, '') : hay;
+    if (hay.indexOf(norm) !== -1) hits.push(f);
+  }
+  if (footer) footer.textContent = hits.length >= 100 ? '100+ resultados — refine a busca' : hits.length + ' resultado(s)';
+  if (!hits.length) { grid.innerHTML = '<div class="inst-loading">Nada pra "' + escapeHtml(q) + '". Tente outra palavra.</div>'; return; }
+
+  var frag = document.createDocumentFragment();
+  hits.forEach(function (f) {
+    var row = document.createElement('div');
+    row.className = 'inst-card lib-row' + (LIB_CACHED[f.id] ? ' lib-ready' : '');
+    row.innerHTML =
+      '<div class="inst-card-info">' +
+        '<div class="inst-card-name" title="' + escapeAttr(f.name) + '">' + escapeHtml(f.name) + '</div>' +
+        '<div class="inst-card-meta">' + (f.ext || '').toUpperCase() + (f.category ? ' · ' + escapeHtml(f.category) : '') + '</div>' +
+      '</div>' +
+      '<button class="btn btn--soft btn--sm lib-dl">' + (LIB_CACHED[f.id] ? '⇲ arrastar' : '⇣ Baixar') + '</button>' +
+      '<button class="btn btn--soft btn--sm lib-resolve" title="Enviar pra fila do Resolve">→ Resolve</button>';
+
+    var btnDl = row.querySelector('.lib-dl');
+    var btnRes = row.querySelector('.lib-resolve');
+
+    btnDl.addEventListener('click', function () {
+      if (LIB_CACHED[f.id]) return;
+      btnDl.disabled = true; btnDl.textContent = 'Baixando…';
+      window.cinepro.libraryDownload(libAssetOf(f)).then(function (res) {
+        if (res && res.ok) {
+          LIB_CACHED[f.id] = res.path;
+          row.classList.add('lib-ready');
+          row.draggable = true;
+          btnDl.disabled = false; btnDl.textContent = '⇲ arrastar';
+        } else {
+          btnDl.disabled = false; btnDl.textContent = 'Tentar de novo';
+          btnDl.title = (res && res.error) || 'falha';
+        }
+      });
+    });
+
+    btnRes.addEventListener('click', function () {
+      btnRes.disabled = true; btnRes.textContent = 'Enviando…';
+      window.cinepro.resolveSend(libAssetOf(f)).then(function (res) {
+        if (res && res.ok) {
+          btnRes.textContent = '✓ na fila';
+          btnRes.title = 'No Resolve: Workspace → Scripts → CinePRO Import';
+        } else {
+          btnRes.disabled = false; btnRes.textContent = '→ Resolve';
+          btnRes.title = (res && res.error) || 'falha';
+        }
+      });
+    });
+
+    // Drag nativo (após baixar): solta o arquivo real em qualquer editor
+    row.draggable = !!LIB_CACHED[f.id];
+    row.addEventListener('dragstart', function (ev) {
+      var p = LIB_CACHED[f.id];
+      if (!p) { ev.preventDefault(); return; }
+      ev.preventDefault();
+      window.cinepro.startDrag(p);
+    });
+
+    frag.appendChild(row);
+  });
+  grid.innerHTML = '';
+  grid.appendChild(frag);
+}

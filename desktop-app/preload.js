@@ -14,5 +14,9 @@ contextBridge.exposeInMainWorld('cinepro', {
   isPluginInstalled:    ()    => ipcRenderer.invoke('check-plugin-installed'),
   appVersion:           ()    => ipcRenderer.invoke('app:version'),
   installAsset:         (a)   => ipcRenderer.invoke('install-asset', a),
+  libraryDownload:      (a)   => ipcRenderer.invoke('library:download', a),
+  resolveSend:          (a)   => ipcRenderer.invoke('resolve:send', a),
+  resolveStatus:        ()    => ipcRenderer.invoke('resolve:status'),
+  startDrag:            (p)   => ipcRenderer.send('library:dragstart', p),
   platform:             process.platform,
 });

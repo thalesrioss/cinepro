@@ -224,9 +224,97 @@ ipcMain.handle('install-asset', async (_e, asset) => {
   }
 });
 
+// ── v1.0/DaVinci: biblioteca no app + ponte com o Resolve ───────────
+const RESOLVE_QUEUE = IS_WIN
+  ? path.join(process.env.APPDATA || HOME, 'CinePRO', 'resolve-queue')
+  : path.join(HOME, 'Library', 'Application Support', 'CinePRO', 'resolve-queue');
+
+// Pasta de Scripts do usuário no Resolve (aparece em Workspace > Scripts)
+function resolveScriptsDir() {
+  return IS_WIN
+    ? path.join(process.env.APPDATA || HOME, 'Blackmagic Design', 'DaVinci Resolve', 'Support', 'Fusion', 'Scripts', 'Utility')
+    : path.join(HOME, 'Library', 'Application Support', 'Blackmagic Design', 'DaVinci Resolve', 'Fusion', 'Scripts', 'Utility');
+}
+
+function resolveInstalled() {
+  const marker = IS_WIN
+    ? path.join(process.env.PROGRAMDATA || 'C:\\ProgramData', 'Blackmagic Design', 'DaVinci Resolve')
+    : '/Applications/DaVinci Resolve/DaVinci Resolve.app';
+  try { return fs.existsSync(marker); } catch (e) { return false; }
+}
+
+// Instala/atualiza o script CinePRO Import.py na pasta de Scripts do Resolve.
+// Chamado no boot do app (silencioso, idempotente).
+function installResolveScript() {
+  try {
+    if (!resolveInstalled()) return false;
+    const src = path.join(__dirname, 'resolve', 'CinePRO Import.py');
+    if (!fs.existsSync(src)) return false;
+    const dir = resolveScriptsDir();
+    fs.mkdirSync(dir, { recursive: true });
+    fs.copyFileSync(src, path.join(dir, 'CinePRO Import.py'));
+    return true;
+  } catch (e) { return false; }
+}
+
+// Baixa um asset pro cache local (se ainda não estiver) e retorna o path.
+async function ensureCached(asset) {
+  const { ext, name, urls, id } = asset || {};
+  if (!urls || !urls.length) throw new Error('sem URL de download');
+  fs.mkdirSync(CACHE_DIR, { recursive: true });
+  const safe = String(name || 'arquivo').replace(/[^a-zA-Z0-9_\-\. ]/g, '_');
+  const fileName = (id ? String(id).slice(0, 8) + '_' : '') +
+    (safe.toLowerCase().endsWith('.' + ext) ? safe : safe + '.' + ext);
+  const dest = path.join(CACHE_DIR, fileName);
+  if (fs.existsSync(dest) && fs.statSync(dest).size > 0) return dest;
+  const buf = await downloadBuffer(urls);
+  fs.writeFileSync(dest, buf);
+  return dest;
+}
+
+ipcMain.handle('library:download', async (_e, asset) => {
+  try { return { ok: true, path: await ensureCached(asset) }; }
+  catch (e) { return { ok: false, error: e.message || String(e) }; }
+});
+
+// Envia pro Resolve: garante download + copia pra fila que o script importa.
+ipcMain.handle('resolve:send', async (_e, asset) => {
+  try {
+    const p = await ensureCached(asset);
+    fs.mkdirSync(RESOLVE_QUEUE, { recursive: true });
+    fs.copyFileSync(p, path.join(RESOLVE_QUEUE, path.basename(p)));
+    installResolveScript();   // garante que o script está lá
+    return { ok: true, queued: true, resolve: resolveInstalled() };
+  } catch (e) { return { ok: false, error: e.message || String(e) }; }
+});
+
+ipcMain.handle('resolve:status', () => ({
+  installed: resolveInstalled(),
+  scriptInstalled: fs.existsSync(path.join(resolveScriptsDir(), 'CinePRO Import.py')),
+}));
+
+// Drag nativo: arrastar uma linha da biblioteca solta o ARQUIVO real
+// em qualquer app (Resolve, Premiere, Finder). Precisa estar cacheado.
+const { nativeImage } = require('electron');
+const DRAG_ICON = nativeImage.createFromDataURL(
+  'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAKklEQVR4AWMY0eA/GjaKGkbDgWE0HBhGw4FhNBwYRsOBYTQcGEbDgWEAAF9uI/1T2eScAAAAAElFTkSuQmCC'
+);
+const { ipcMain: _im } = require('electron');
+ipcMain.on('library:dragstart', (event, filePath) => {
+  try {
+    if (filePath && fs.existsSync(filePath)) {
+      event.sender.startDrag({ file: filePath, icon: DRAG_ICON });
+    }
+  } catch (e) {/* drag falhou — usuário usa o botão */}
+});
+
 // ── App lifecycle ────────────────────────────────────────
 
-app.whenReady().then(createWindow);
+app.whenReady().then(() => {
+  createWindow();
+  // DaVinci: mantém o script CinePRO Import atualizado na pasta do Resolve
+  setTimeout(installResolveScript, 3000);
+});
 
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') app.quit();
