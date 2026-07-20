@@ -19,4 +19,14 @@ USER_NAME="${USER:-$(stat -f%Su /dev/console)}"
 USER_HOME=$(eval echo "~$USER_NAME")
 rm -rf "$USER_HOME/Library/Application Support/Adobe/CEP/extensions/CinePRO" 2>/dev/null || true
 
+# 3. Remove o APP antigo. Sem isso, o Installer PULA a substituição quando o
+#    app instalado declara versão "maior" que o payload (proteção de downgrade
+#    de bundle) — foi o que travou o re-baseline 1.6.x -> 1.0.
+osascript -e 'quit app "CinePRO"' 2>/dev/null || true
+sleep 1
+rm -rf "/Applications/CinePRO.app" 2>/dev/null || true
+
+# 4. Limpa o cache do CEP do painel (Chromium cacheia JS antigo entre versões)
+rm -rf "$USER_HOME/Library/Caches/CSXS/cep_cache/"*"com.thales.cinepro"* 2>/dev/null || true
+
 exit 0

@@ -105,8 +105,20 @@ echo "  ✓ Payload total: $(du -sh "$PAYLOAD" | cut -f1)"
 
 # 5. Empacota o componente
 echo "→ Empacotando componente..."
+# Component plist com BundleIsVersionChecked=false: sem isso o Installer PULA
+# a substituição do .app quando o instalado tem CFBundleVersion "maior" que o
+# payload (nos mordeu no re-baseline 1.6.x -> 1.0).
+COMPONENTS="$BUILD/components.plist"
+pkgbuild --analyze --root "$PAYLOAD" "$COMPONENTS"
+i=0
+while /usr/libexec/PlistBuddy -c "Print :$i" "$COMPONENTS" >/dev/null 2>&1; do
+  /usr/libexec/PlistBuddy -c "Set :$i:BundleIsVersionChecked false" "$COMPONENTS" 2>/dev/null || true
+  i=$((i+1))
+done
+echo "  ✓ Version-check desligado em $i bundle(s)"
 pkgbuild \
   --root "$PAYLOAD" \
+  --component-plist "$COMPONENTS" \
   --identifier "com.cinepro.plugin" \
   --version "$VERSION" \
   --scripts "$HERE/scripts" \
