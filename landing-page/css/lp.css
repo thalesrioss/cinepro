@@ -1850,3 +1850,51 @@ section:not(:last-child) { border-bottom: 1px solid var(--border-subtle); }
   transition: color 150ms;
 }
 .exit-popup-dismiss:hover { color: var(--text-main, #fff); }
+
+/* ════ OUÇA — players de amostra (lead frio) ════ */
+.listen-section { padding: 72px 0; background: linear-gradient(180deg, transparent, rgba(0,184,255,0.03), transparent); }
+.listen-grid {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 10px; margin-top: 36px;
+}
+.listen-card {
+  display: flex; align-items: center; gap: 14px;
+  padding: 14px 16px; text-align: left; cursor: pointer;
+  background: var(--bg-card, #0d1420); color: var(--text-main, #e8eff7);
+  border: 1px solid var(--border, #1e2a3e); border-radius: 12px;
+  font: inherit; transition: border-color .2s, transform .15s;
+}
+.listen-card:hover { border-color: var(--brand, #00B8FF); transform: translateY(-1px); }
+.listen-play {
+  width: 40px; height: 40px; flex: none; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  background: rgba(0,184,255,0.12); color: var(--brand, #00B8FF);
+  font-size: 14px; transition: background .2s;
+}
+.listen-card.is-playing .listen-play { background: var(--brand, #00B8FF); color: #04121c; }
+.listen-card.is-loading .listen-play { animation: listen-pulse 0.9s ease-in-out infinite; }
+@keyframes listen-pulse { 50% { opacity: 0.4; } }
+.listen-info { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.listen-info strong { font-size: 14px; font-weight: 600; }
+.listen-info small { font-size: 11px; color: var(--text-dim, #8fa3bc); letter-spacing: 0.3px; }
+.listen-eq { display: flex; align-items: flex-end; gap: 3px; height: 22px; flex: none; opacity: 0.25; }
+.listen-eq i { width: 3px; height: 6px; border-radius: 2px; background: var(--brand, #00B8FF); }
+.listen-card.is-playing .listen-eq { opacity: 1; }
+.listen-card.is-playing .listen-eq i { animation: listen-eq 0.7s ease-in-out infinite alternate; }
+.listen-card.is-playing .listen-eq i:nth-child(1) { animation-delay: 0s; }
+.listen-card.is-playing .listen-eq i:nth-child(2) { animation-delay: .12s; }
+.listen-card.is-playing .listen-eq i:nth-child(3) { animation-delay: .24s; }
+.listen-card.is-playing .listen-eq i:nth-child(4) { animation-delay: .06s; }
+.listen-card.is-playing .listen-eq i:nth-child(5) { animation-delay: .18s; }
+@keyframes listen-eq { from { height: 5px; } to { height: 20px; } }
+.listen-footnote { text-align: center; margin-top: 24px; font-size: 13px; color: var(--text-dim, #8fa3bc); }
+
+/* ════ Nota do fundador ════ */
+.founder-note {
+  max-width: 640px; margin: 0 auto; padding: 32px;
+  background: var(--bg-card, #0d1420); border: 1px solid var(--border, #1e2a3e);
+  border-left: 3px solid var(--brand, #00B8FF); border-radius: 12px;
+}
+.founder-note p { font-size: 15px; line-height: 1.7; color: var(--text-main, #e8eff7); margin: 0 0 14px; }
+.founder-note .founder-sig { font-size: 13px; color: var(--text-dim, #8fa3bc); margin: 0; }
+.founder-note .founder-sig strong { color: var(--brand, #00B8FF); }

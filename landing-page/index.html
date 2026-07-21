@@ -30,7 +30,7 @@
   <a href="#" class="nav-brand">
     <img src="assets/logo.png" alt="" width="32" height="32">
     <span>Cine<strong>PRO</strong></span>
-    <small>Plugin · Premiere Pro</small>
+    <small>Premiere Pro · DaVinci Resolve</small>
   </a>
   <div class="nav-actions">
     <a href="#pricing" class="nav-price-link"><span class="nav-price">R$ 29,97<small>/mês</small></span></a>
@@ -45,7 +45,7 @@
 
     <div class="hero-pill">
       <span class="dot"></span>
-      Plugin para Adobe Premiere Pro
+      Para Adobe Premiere Pro + DaVinci Resolve
     </div>
 
     <h1 class="hero-title">
@@ -56,7 +56,7 @@
     <p class="hero-subtitle">
       CinePRO é um painel integrado ao Adobe Premiere Pro com
       <strong>11.000+ efeitos profissionais</strong>. Os 500 mais usados
-      já vêm dentro do instalador — <strong>apply instantâneo, sem esperar download.</strong>
+      já vêm dentro do instalador — <strong>apply instantâneo, sem esperar download.</strong> E a biblioteca completa também alimenta o <strong>DaVinci Resolve</strong> pelo app CinePRO.
     </p>
 
     <div class="hero-cta">
@@ -120,6 +120,88 @@
     </div>
   </div>
 </section>
+
+<!-- ══════════ OUÇA (lead frio: sentir antes de ler) ══════════ -->
+<section class="listen-section" id="listen">
+  <div class="container">
+    <div class="section-header">
+      <div class="section-eyebrow">Aperte o play</div>
+      <h2>Ouça a diferença.<br>Direto da biblioteca real.</h2>
+      <p class="section-sub">Estes são 6 dos 11.000+ efeitos — servidos da mesma CDN que o plugin usa. Sem cadastro, sem pegadinha.</p>
+    </div>
+    <div class="listen-grid" id="listen-grid">
+      <button class="listen-card" data-src="https://pub-6ace91bcabf540f0a54bb6850d188ef4.r2.dev/1BpRUTh3dKjSRNKZT3Oe9yjgl2Tr4Aiai.wav">
+        <span class="listen-play">▶</span>
+        <span class="listen-info"><strong>Whoosh Swipe</strong><small>Transições · SFX</small></span>
+        <span class="listen-eq" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></span>
+      </button>
+      <button class="listen-card" data-src="https://pub-6ace91bcabf540f0a54bb6850d188ef4.r2.dev/1IFfmY0cwRlf6B2UcI3P0t4sVXxQkSXlo.wav">
+        <span class="listen-play">▶</span>
+        <span class="listen-info"><strong>Impact Deep</strong><small>Impactos · Cinematic</small></span>
+        <span class="listen-eq" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></span>
+      </button>
+      <button class="listen-card" data-src="https://pub-6ace91bcabf540f0a54bb6850d188ef4.r2.dev/1pUBezd9n6Sdl6H33pfn9N_yW4nWbhH09.wav">
+        <span class="listen-play">▶</span>
+        <span class="listen-info"><strong>Riser Tension</strong><small>Risers · Build-up</small></span>
+        <span class="listen-eq" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></span>
+      </button>
+      <button class="listen-card" data-src="https://pub-6ace91bcabf540f0a54bb6850d188ef4.r2.dev/1IDxVZuhS3WeMVsV5nzryW07kL2mqM3iY.wav">
+        <span class="listen-play">▶</span>
+        <span class="listen-info"><strong>Thunderstorm Hit</strong><small>Natureza · Impacto</small></span>
+        <span class="listen-eq" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></span>
+      </button>
+      <button class="listen-card" data-src="https://pub-6ace91bcabf540f0a54bb6850d188ef4.r2.dev/1K2--giTYuKMFSy1kBKecfc-C54eW-1tS.mp3">
+        <span class="listen-play">▶</span>
+        <span class="listen-info"><strong>Glitch Severance</strong><small>Glitch · Digital</small></span>
+        <span class="listen-eq" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></span>
+      </button>
+      <button class="listen-card" data-src="https://pub-6ace91bcabf540f0a54bb6850d188ef4.r2.dev/1C87nj69sEaoYLqsGi9wjga-nxPkur9sa.mp3">
+        <span class="listen-play">▶</span>
+        <span class="listen-info"><strong>Trailer Flyby</strong><small>Cinematic · Whoosh</small></span>
+        <span class="listen-eq" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></span>
+      </button>
+    </div>
+    <p class="listen-footnote">No plugin, cada um desses aplica na timeline com 1 clique — em &lt;300ms.</p>
+  </div>
+</section>
+<script>
+(function () {
+  var current = null, currentCard = null;
+  document.getElementById('listen-grid').addEventListener('click', function (e) {
+    var card = e.target.closest('.listen-card');
+    if (!card) return;
+    if (currentCard === card && current) {
+      current.pause(); current = null;
+      card.classList.remove('is-playing');
+      card.querySelector('.listen-play').textContent = '▶';
+      currentCard = null;
+      return;
+    }
+    if (current) { current.pause(); }
+    if (currentCard) {
+      currentCard.classList.remove('is-playing');
+      currentCard.querySelector('.listen-play').textContent = '▶';
+    }
+    var audio = new Audio(card.dataset.src);
+    current = audio; currentCard = card;
+    card.classList.add('is-loading');
+    audio.addEventListener('playing', function () {
+      card.classList.remove('is-loading');
+      card.classList.add('is-playing');
+      card.querySelector('.listen-play').textContent = '⏸';
+    });
+    var done = function () {
+      card.classList.remove('is-playing', 'is-loading');
+      card.querySelector('.listen-play').textContent = '▶';
+      if (currentCard === card) { current = null; currentCard = null; }
+    };
+    audio.addEventListener('ended', done);
+    audio.addEventListener('error', done);
+    audio.play().catch(done);
+    if (window.plausible) plausible('listen-sample');
+  });
+})();
+</script>
 
 <!-- ══════════ FEATURES ══════════ -->
 <section class="features" id="features">
@@ -327,6 +409,12 @@
             <td>Download por pack</td>
           </tr>
           <tr>
+            <td>DaVinci Resolve</td>
+            <td class="vs-self">✓ App + importação com 1 script</td>
+            <td>✗</td>
+            <td>✗</td>
+          </tr>
+          <tr>
             <td>Busca em português</td>
             <td class="vs-self">✓ Semântica PT + EN</td>
             <td>Só inglês</td>
@@ -364,6 +452,19 @@
   </div>
 </section>
 
+<!-- ══════════ NOTA DO FUNDADOR ══════════ -->
+<section class="founder-section">
+  <div class="container">
+    <div class="founder-note">
+      <p>"Eu edito vídeo todos os dias. O CinePRO nasceu da minha própria bancada:
+      cansei de pagar 3 packs gringos em dólar, esperar download de SFX no meio da edição
+      e buscar <em>whoosh</em> em inglês. Construí a ferramenta que eu queria usar —
+      e uso, em cada vídeo que publico. Se em 7 dias ela não mudar seu fluxo, devolvo seu dinheiro."</p>
+      <p class="founder-sig"><strong>Thales Rios</strong> · editor e criador do CinePRO</p>
+    </div>
+  </div>
+</section>
+
 <!-- ══════════ PRICING ══════════ -->
 <section class="pricing" id="pricing">
   <div class="container">
@@ -381,7 +482,7 @@
         <span class="pricing-period">/mês</span>
       </div>
 
-      <p class="pricing-note">Cobrado em reais. Sem IOF. Cancele online quando quiser.</p>
+      <p class="pricing-note">Cobrado em reais. Sem IOF. Cancele online quando quiser.<br><strong>Quem assina agora trava R$ 29,97 pra sempre</strong> — mesmo quando o preço subir pros próximos.</p>
 
       <ul class="pricing-features">
         <li>Acesso a <strong>11.000+ efeitos</strong> profissionais</li>
