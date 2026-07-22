@@ -56,8 +56,28 @@ mkdir -p "$PAYLOAD/Library/Application Support/Adobe/CEP/extensions/CinePRO"
 mkdir -p "$DIST"
 
 # 3. Copia a .app pra /Applications/
+# ditto (não cp -R): preserva xattrs, symlinks e o selo do code signature.
+# cp -R corrompia a assinatura -> macOS mostrava "Malware Bloqueado".
 echo "→ Copiando CinePRO.app pra /Applications..."
-cp -R "$ELECTRON_APP" "$PAYLOAD/Applications/"
+ditto "$ELECTRON_APP" "$PAYLOAD/Applications/CinePRO.app"
+
+# 3b. Re-assina ad-hoc pra garantir selo VÁLIDO após a cópia.
+# App sem notarização ainda pede o bypass do Gatekeeper, mas assinatura
+# QUEBRADA é tratada como malware — assinatura ad-hoc válida não é.
+echo "→ Re-assinando (ad-hoc) pra selar o bundle..."
+codesign --remove-signature "$PAYLOAD/Applications/CinePRO.app" 2>/dev/null || true
+if codesign --force --deep --sign - --timestamp=none \
+     "$PAYLOAD/Applications/CinePRO.app" 2>/dev/null; then
+  if codesign --verify --deep --strict "$PAYLOAD/Applications/CinePRO.app" 2>/dev/null; then
+    echo "  ✓ Assinatura ad-hoc válida"
+  else
+    echo "  ⚠️  Assinatura ainda inválida — removendo (unsigned é melhor que quebrada)"
+    codesign --remove-signature "$PAYLOAD/Applications/CinePRO.app" 2>/dev/null || true
+  fi
+else
+  echo "  ⚠️  Falha ao assinar — removendo assinatura"
+  codesign --remove-signature "$PAYLOAD/Applications/CinePRO.app" 2>/dev/null || true
+fi
 
 # 4. Copia o plugin CEP pra Library/.../extensions/CinePRO/
 echo "→ Copiando plugin CEP..."
