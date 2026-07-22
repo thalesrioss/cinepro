@@ -131,6 +131,71 @@ function getPlayheadTime() {
 // Extensões puramente de áudio — vão em audio tracks, não videoTracks
 var AUDIO_EXTS = { mp3:1, wav:1, m4a:1, aac:1, ogg:1, aif:1, aiff:1 };
 
+// ══ AUTO-SFX NOS CORTES (v1.1) ══════════════════════════════════
+// Numa sequência EDITADA os cortes já são conhecidos: são os starts dos
+// clipes de vídeo. Coleta todos, deduplica (tolerância 40ms), e coloca o
+// SFX em faixa livre em cada um via placeItemSmart. Sem visão computacional
+// — a timeline é a fonte da verdade.
+function collectCutPoints(seq, maxN) {
+  var points = [];
+  try {
+    for (var t = 0; t < seq.videoTracks.numTracks; t++) {
+      var vt = seq.videoTracks[t];
+      for (var i = 0; i < vt.clips.numItems; i++) {
+        var s = vt.clips[i].start.seconds;
+        if (s > 0.05) points.push(s);   // início da sequência não é corte
+      }
+    }
+  } catch (e) {}
+  points.sort(function (a, b) { return a - b; });
+  var out = [];
+  for (var p = 0; p < points.length; p++) {
+    if (out.length && Math.abs(points[p] - out[out.length - 1]) < 0.04) continue;
+    out.push(points[p]);
+    if (out.length >= maxN) break;
+  }
+  return out;
+}
+
+/**
+ * Aplica um SFX em TODOS os cortes da timeline (em faixas livres).
+ * Retorna 'OK:CUTS_<colocados>_OF_<cortes>' ou ERR.
+ */
+function applyAtAllCuts(filePath, fileType, maxN) {
+  try {
+    var file = new File(filePath);
+    if (!file.exists) return 'ERR:FILE_NOT_FOUND:' + filePath;
+    var seq = app.project.activeSequence;
+    if (!seq) return 'ERR:NO_SEQUENCE';
+
+    var cuts = collectCutPoints(seq, maxN || 25);
+    if (!cuts.length) return 'ERR:NO_CUTS';
+
+    // Importa 1x
+    var bin = app.project.rootItem;
+    app.project.importFiles([filePath], true, bin, false);
+    var fileName = filePath.split('/').pop().split('\\').pop();
+    var importedItem = null;
+    for (var i = bin.children.numItems - 1; i >= 0; i--) {
+      if (bin.children[i].name === fileName) { importedItem = bin.children[i]; break; }
+    }
+    if (!importedItem) return 'WARN:IMPORTED_BUT_NOT_FOUND';
+
+    var isAudio = !!AUDIO_EXTS[(fileType || '').toLowerCase()];
+    var placed = 0;
+    for (var c = 0; c < cuts.length; c++) {
+      try {
+        var r = placeItemSmart(seq, isAudio, importedItem, cuts[c]);
+        if (r.indexOf('OK:') === 0) placed++;
+      } catch (e) {/* corte sem espaço — segue */}
+    }
+    if (!placed) return 'ERR:NO_FREE_TRACK';
+    return 'OK:CUTS_' + placed + '_OF_' + cuts.length;
+  } catch (e) {
+    return 'ERR:CUTS:' + e.toString();
+  }
+}
+
 // ══ COLOCAÇÃO INTELIGENTE NA TIMELINE ═══════════════════════════
 // Em vez de sempre track[0] + insertClip (que atropela/empurra a
 // montagem existente), procura a PRIMEIRA faixa com espaço livre no

@@ -1967,3 +1967,7 @@ body {
   transition: opacity 150ms;
 }
 .apply-floating-x:hover { opacity: 1; }
+
+/* v1.1: botão auto-cortes (⚡) na linha */
+.effect-row .btn-cuts { opacity: 0; font-size: 12px; color: var(--brand, #00B8FF); }
+.effect-row:hover .btn-cuts { opacity: 1; }
