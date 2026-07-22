@@ -707,6 +707,26 @@ function buildSidebarTree() {
     }));
   }
 
+  // ─ Packs (v1.1) — receitas psicoacústicas viram packs curados ─
+  try {
+    var recipes = window.CINEPRO_RECIPES || [];
+    if (recipes.length && CINEPRO_CONCEPTS_DICT) {
+      var packSep = document.createElement('div');
+      packSep.className = 'sidebar-sep';
+      packSep.textContent = 'Packs prontos';
+      tree.appendChild(packSep);
+      recipes.forEach(function (rc) {
+        tree.appendChild(makeSidebarItem({
+          label: rc.label, icon: '✦',
+          dataCat: 'pack:' + rc.id, dataSub: '',
+          isActive: activeCategory === 'pack:' + rc.id,
+          onClick: function () { setActiveCategory('pack:' + rc.id, null); },
+          count: null,
+        }));
+      });
+    }
+  } catch (e) { console.warn('[CinePRO] packs sidebar:', e && e.message); }
+
   // ─ Separador ─
   var sep = document.createElement('div');
   sep.className = 'sidebar-sep';
@@ -1140,6 +1160,39 @@ function semanticSearch(query, limit) {
   return results.slice(0, limit);
 }
 
+// ══ PACKS (v1.1) — receitas psicoacústicas → pack curado da biblioteca ══
+// Pesos em js/recipes.js (gerado de knowledge/receitas/generos.md).
+// score(arquivo) = Σ peso[conceito] × embed[conceito]. Cache por pack.
+var PACK_CACHE = {};   // packId → [effectId,...]
+
+function getPackIds(packId) {
+  if (PACK_CACHE[packId]) return PACK_CACHE[packId];
+  var recipes = window.CINEPRO_RECIPES || [];
+  var recipe = null;
+  for (var r = 0; r < recipes.length; r++) if (recipes[r].id === packId) { recipe = recipes[r]; break; }
+  if (!recipe || !CINEPRO_CONCEPTS_DICT) return [];
+
+  // nome do conceito → índice no dict do manifest
+  var conceptIdx = {};
+  for (var c = 0; c < CINEPRO_CONCEPTS_DICT.length; c++) conceptIdx[CINEPRO_CONCEPTS_DICT[c].name] = c;
+
+  var scored = [];
+  for (var i = 0; i < allEffects.length; i++) {
+    var e = allEffects[i];
+    if (!e.embed) continue;
+    var s = 0;
+    for (var name in recipe.weights) {
+      var ci = conceptIdx[name];
+      if (ci !== undefined && e.embed[ci]) s += recipe.weights[name] * e.embed[ci];
+    }
+    if (s > 0) scored.push({ id: e.id, s: s });
+  }
+  scored.sort(function (a, b) { return b.s - a.s; });
+  var ids = scored.slice(0, 40).map(function (x) { return x.id; });
+  PACK_CACHE[packId] = ids;
+  return ids;
+}
+
 function filterEffects(query) {
   // Sets pré-computados pra evitar lookup repetido
   var favSet = activeCategory === 'favorites' ? new Set(getFavoriteIds()) : null;
@@ -1147,6 +1200,10 @@ function filterEffects(query) {
   // "Recentes" e "Mais usados" são virtuais — ordem importa, então construímos lista direto.
   if (activeCategory === 'recents') return renderEffectsByIdOrder(getRecents(), query);
   if (activeCategory === 'most-used') return renderEffectsByIdOrder(getMostUsedIds(30), query);
+  // Packs também são virtuais — ranking por receita
+  if (activeCategory && activeCategory.indexOf('pack:') === 0) {
+    return renderEffectsByIdOrder(getPackIds(activeCategory.slice(5)), query);
+  }
 
   // Query? Usa inverted index. Sem query, scan direto (rápido pra check de categoria)
   if (!query) {
@@ -1609,6 +1666,7 @@ function createEffectRow(effect) {
     '</div>' +
     '<div class="row-wave effect-thumb-placeholder"></div>' +
     '<div class="row-actions">' +
+      '<button class="btn btn--floating btn--icon btn--sm btn-cuts" data-action="auto-cuts" title="Aplicar em todos os cortes da timeline" aria-label="Aplicar em todos os cortes">⚡</button>' +
       '<button class="btn btn--floating btn--icon btn--sm btn-fav" data-action="fav" title="Favoritar" aria-label="Favoritar">' +
         '<svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linejoin="round">' +
           '<polygon points="12 2 15 9 22 9.5 17 14.5 18.5 22 12 18 5.5 22 7 14.5 2 9.5 9 9 12 2"/>' +
@@ -1676,6 +1734,7 @@ function bindGridDelegation() {
       case 'lut-preview':
         if (window.openLutPreview) window.openLutPreview(effect, assetUrlChain(effect));
         break;
+      case 'auto-cuts': autoApplyAtCuts(effect, card); break;
     }
   });
 
@@ -2345,6 +2404,49 @@ function removeDownloadOverlay(card) {
   if (ov) ov.remove();
 }
 
+/**
+ * v1.1 Auto-SFX: aplica o efeito em TODOS os cortes da timeline.
+ * A timeline editada já conhece os cortes (starts dos clipes) — o host
+ * coleta, deduplica e coloca em faixa livre em cada um (máx 25).
+ */
+function autoApplyAtCuts(effect, card) {
+  if (card.classList.contains('downloading')) return;
+  var cachedPath = effectCache[effect.id];
+  var downloadPromise = cachedPath
+    ? Promise.resolve(cachedPath)
+    : downloadEffectFile(effect).then(function (p) { effectCache[effect.id] = p; return p; });
+
+  card.classList.add('downloading');
+  setStatus('loading', 'Aplicando "' + effect.name + '" nos cortes...');
+
+  downloadPromise
+    .then(function (localPath) {
+      card.classList.remove('downloading');
+      card.classList.add('cached');
+      cs.evalScript(
+        'applyAtAllCuts("' + escapePath(localPath) + '", "' + effect.ext + '", 25)',
+        function (result) {
+          if (!result || result.startsWith('ERR:')) {
+            var msg = result ? result.replace('ERR:', '') : 'Erro desconhecido';
+            setStatus('error', 'Erro: ' + msg);
+            showToast('Auto-cortes: ' + humanizeError(msg), 'error');
+          } else {
+            var m = /CUTS_(\d+)_OF_(\d+)/.exec(result);
+            var placed = m ? m[1] : '?', total = m ? m[2] : '?';
+            setStatus('ok', 'SFX em ' + placed + ' corte(s)!');
+            showToast('⚡ "' + effect.name + '" aplicado em ' + placed + ' de ' + total + ' corte(s)', 'success');
+            trackUsage(effect.id);
+          }
+        }
+      );
+    })
+    .catch(function (err) {
+      card.classList.remove('downloading');
+      setStatus('error', 'Erro no download');
+      showToast('Falha ao baixar: ' + humanizeError(err.message || ''), 'error');
+    });
+}
+
 function applyEffect(effect, card) {
   if (card.classList.contains('downloading')) return;
 
@@ -2792,6 +2894,8 @@ function humanizeError(err) {
   if (err.indexOf('FILE_NOT_FOUND') !== -1) return 'Arquivo não encontrado no cache.';
   if (err.indexOf('NO_VIDEO_TRACK') !== -1) return 'Crie uma trilha de vídeo na timeline.';
   if (err.indexOf('NO_AUDIO_TRACK') !== -1) return 'Crie uma trilha de áudio na timeline.';
+  if (err.indexOf('NO_CUTS')        !== -1) return 'Nenhum corte encontrado — a timeline precisa ter clipes editados.';
+  if (err.indexOf('CUTS:')          !== -1) return 'Falha ao aplicar nos cortes: ' + err.replace('CUTS:', '').trim();
   if (err.indexOf('NO_FREE_TRACK')  !== -1) return 'Sem espaço livre no playhead. Adicione uma trilha ou mova a agulha.';
   if (err.indexOf('PLACE:')         !== -1) return 'Falha ao posicionar na timeline: ' + err.replace('PLACE:', '').trim();
   if (err.indexOf('AUDIO:')         !== -1) return 'Falha ao inserir áudio: ' + err.replace('AUDIO:', '').trim();
