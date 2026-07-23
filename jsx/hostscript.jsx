@@ -158,6 +158,50 @@ function collectCutPoints(seq, maxN) {
 }
 
 /**
+ * Estatísticas da timeline pro plugin decidir o que aplicar (JSON).
+ * cuts = nº de cortes reais · first = tempo do 1º corte · duration = total.
+ */
+function getTimelineStats() {
+  try {
+    var seq = app.project.activeSequence;
+    if (!seq) return '{"error":"NO_SEQUENCE"}';
+    var cuts = collectCutPoints(seq, 200);
+    return '{"cuts":' + cuts.length +
+           ',"first":' + (cuts.length ? cuts[0].toFixed(3) : 0) +
+           ',"duration":' + seq.end.seconds.toFixed(3) + '}';
+  } catch (e) {
+    return '{"error":"' + String(e).replace(/"/g, "'") + '"}';
+  }
+}
+
+/**
+ * Aplica um arquivo num TEMPO específico (segundos), em faixa livre.
+ * Usado pelo auto-apply de pack (cama em 0s, hook no 1º corte, etc).
+ */
+function applyAtTime(filePath, fileType, sec) {
+  try {
+    var file = new File(filePath);
+    if (!file.exists) return 'ERR:FILE_NOT_FOUND:' + filePath;
+    var seq = app.project.activeSequence;
+    if (!seq) return 'ERR:NO_SEQUENCE';
+
+    var bin = app.project.rootItem;
+    app.project.importFiles([filePath], true, bin, false);
+    var fileName = filePath.split('/').pop().split('\\').pop();
+    var importedItem = null;
+    for (var i = bin.children.numItems - 1; i >= 0; i--) {
+      if (bin.children[i].name === fileName) { importedItem = bin.children[i]; break; }
+    }
+    if (!importedItem) return 'WARN:IMPORTED_BUT_NOT_FOUND';
+
+    var isAudio = !!AUDIO_EXTS[(fileType || '').toLowerCase()];
+    return placeItemSmart(seq, isAudio, importedItem, Number(sec) || 0);
+  } catch (e) {
+    return 'ERR:AT_TIME:' + e.toString();
+  }
+}
+
+/**
  * Aplica um SFX em TODOS os cortes da timeline (em faixas livres).
  * Retorna 'OK:CUTS_<colocados>_OF_<cortes>' ou ERR.
  */
