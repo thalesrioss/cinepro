@@ -725,7 +725,7 @@ function buildSidebarTree() {
       });
     },
   });
-  restoreItem.title = 'Re-baixa e religa no projeto os efeitos que foram apagados do cache';
+  restoreItem.title = 'Selecione clipes na timeline e clique pra restaurar só eles (ou nada selecionado = projeto inteiro). Re-baixa no mesmo caminho e religa.';
   tree.appendChild(restoreItem);
 
   // ─ Packs (v1.1) — receitas psicoacústicas viram packs curados ─
@@ -2845,72 +2845,124 @@ function downloadToPath(effect, destPath) {
  * Premiere: religa via changeMediaPath. DaVinci: o arquivo volta ao mesmo
  * caminho e o Resolve reconecta (pode pedir reabrir o projeto).
  */
-function restoreMissingMedia(btn) {
-  function setBtn(txt, disabled) {
-    if (!btn) return;
-    btn.textContent = txt;
-    btn.disabled = !!disabled;
-  }
-  setBtn('Verificando…', true);
-  setStatus('loading', 'Procurando mídias offline do projeto...');
+function baseNameOf(p) {
+  var parts = String(p).split(/[\/\\]/);
+  return parts[parts.length - 1];
+}
 
-  findMissingMedia().then(function (missing) {
-    if (!missing.length) {
-      setBtn('✓ Tudo no lugar', false);
-      setStatus('ok', 'Nenhuma mídia faltando.');
-      showToast('✓ Todas as mídias do projeto estão no cache.', 'success');
-      setTimeout(function () { setBtn('Restaurar mídias', false); }, 2500);
-      return;
+/**
+ * Resolve o efeito a partir de um caminho do cache. Ordem:
+ *  1. Registro in-use.json (rápido).
+ *  2. Pelo NOME do arquivo: "<id8>_<nome>.<ext>" → casa no manifest por
+ *     prefixo do id + ext. Isso recupera até mídia aplicada ANTES do
+ *     registro existir (projetos antigos, ex: Volkswagen).
+ * Retorna Promise<effect|null>.
+ */
+function resolveEffectForCachePath(path) {
+  return getCacheDir().then(function (cacheDir) {
+    var reg = readInUse(cacheDir);
+    if (reg[path] && reg[path].id && effectsById[reg[path].id]) return effectsById[reg[path].id];
+
+    var base = baseNameOf(path);
+    var m = /^(.{8})_.*\.([a-z0-9]+)$/i.exec(base);
+    if (m) {
+      var prefix = m[1], ext = m[2].toLowerCase();
+      for (var i = 0; i < allEffects.length; i++) {
+        var e = allEffects[i];
+        if (e.ext && e.ext.toLowerCase() === ext && String(e.id).slice(0, 8) === prefix) return e;
+      }
     }
-
-    setStatus('loading', 'Restaurando ' + missing.length + ' mídia(s)...');
-    var ok = 0, fail = 0, done = 0;
-
-    function step(i) {
-      if (i >= missing.length) return finish();
-      var m = missing[i];
-      setBtn('Restaurando ' + (i + 1) + '/' + missing.length + '…', true);
-      var effect = effectsById[m.meta.id] || m.meta;   // fallback nos metadados
-      return downloadToPath(effect, m.path)
-        .then(function () { ok++; })
-        .catch(function () { fail++; })
-        .then(function () { done++; return step(i + 1); });
-    }
-
-    function finish() {
-      // Premiere: força o religamento dos itens cujo arquivo voltou
-      cs.evalScript('relinkRestoredMedia()', function (r) {
-        var m2 = /RELINK_(\d+)/.exec(r || '');
-        var relinked = m2 ? m2[1] : null;
-        setBtn('Restaurar mídias', false);
-        if (ok) {
-          setStatus('ok', ok + ' mídia(s) restaurada(s)');
-          showToast('✓ ' + ok + ' mídia(s) restaurada(s)' +
-                    (relinked && relinked !== '0' ? ' · ' + relinked + ' religada(s) no projeto' : '') +
-                    (fail ? ' · ' + fail + ' falhou(aram)' : ''), 'success');
-        } else {
-          setStatus('error', 'Não consegui restaurar');
-          showToast('Falha ao restaurar ' + fail + ' mídia(s). Verifique sua conexão.', 'error');
-        }
-      });
-    }
-
-    step(0);
-  }).catch(function (err) {
-    setBtn('Restaurar mídias', false);
-    setStatus('error', 'Erro ao verificar');
-    showToast('Erro: ' + humanizeError((err && err.message) || ''), 'error');
+    // Último recurso: metadados do registro (mesmo sem estar no catálogo local)
+    if (reg[path] && reg[path].id) return reg[path];
+    return null;
   });
 }
 
-/** Checagem silenciosa no boot — avisa se há mídia offline. */
+/** Motor compartilhado: restaura uma LISTA de caminhos + religa no editor. */
+function restorePaths(paths, btn) {
+  function setBtn(txt, disabled) { if (btn) { btn.textContent = txt; btn.disabled = !!disabled; } }
+  if (!paths.length) {
+    setBtn('✓ Tudo no lugar', false);
+    setStatus('ok', 'Nenhuma mídia faltando.');
+    setTimeout(function () { setBtn('Restaurar mídias', false); }, 2500);
+    return;
+  }
+  var ok = 0, fail = 0;
+  setStatus('loading', 'Restaurando ' + paths.length + ' mídia(s)...');
+
+  function step(i) {
+    if (i >= paths.length) return finish();
+    setBtn('Restaurando ' + (i + 1) + '/' + paths.length + '…', true);
+    var p = paths[i];
+    return resolveEffectForCachePath(p).then(function (effect) {
+      if (!effect || !effect.id) { fail++; return; }
+      return downloadToPath(effect, p).then(function () { ok++; }, function () { fail++; });
+    }).then(function () { return step(i + 1); });
+  }
+
+  function finish() {
+    cs.evalScript('relinkRestoredMedia()', function (r) {
+      var m2 = /RELINK_(\d+)/.exec(r || '');
+      var relinked = m2 ? m2[1] : null;
+      setBtn('Restaurar mídias', false);
+      if (ok) {
+        setStatus('ok', ok + ' mídia(s) restaurada(s)');
+        showToast('✓ ' + ok + ' mídia(s) restaurada(s)' +
+                  (relinked && relinked !== '0' ? ' · ' + relinked + ' religada(s) no projeto' : '') +
+                  (fail ? ' · ' + fail + ' não estava(m) no catálogo' : ''), 'success');
+      } else {
+        setStatus('error', 'Não consegui restaurar');
+        showToast('Falha ao restaurar. Verifique a conexão — ou o efeito não está mais no catálogo.', 'error');
+      }
+    });
+  }
+  step(0);
+}
+
+/**
+ * Botão "Restaurar mídias" — seleção-aware:
+ *  - Se há clipes SELECIONADOS na timeline → restaura só os selecionados
+ *    que estão offline (multi-seleção suportada).
+ *  - Sem seleção → restaura TODAS as mídias offline do projeto.
+ */
+function restoreMissingMedia(btn) {
+  function setBtn(txt, disabled) { if (btn) { btn.textContent = txt; btn.disabled = !!disabled; } }
+  setBtn('Verificando…', true);
+  setStatus('loading', 'Verificando seleção...');
+
+  cs.evalScript('getSelectedMediaPaths()', function (raw) {
+    var sel = null; try { sel = JSON.parse(raw); } catch (e) {}
+    var items = (sel && sel.items) || [];
+    var selOffline = items.filter(function (x) { return x.offline; }).map(function (x) { return x.path; });
+
+    if (selOffline.length) {
+      showToast('Restaurando ' + selOffline.length + ' selecionada(s)...', 'success');
+      return restorePaths(selOffline, btn);
+    }
+    if (items.length) {   // selecionou, mas nada offline
+      setBtn('Restaurar mídias', false);
+      setStatus('ok', 'Seleção já está no lugar.');
+      showToast('✓ As mídias selecionadas já estão no cache.', 'success');
+      return;
+    }
+    // Sem seleção → projeto inteiro
+    setStatus('loading', 'Procurando mídias offline do projeto...');
+    cs.evalScript('getOfflineMediaPaths()', function (raw2) {
+      var all = null; try { all = JSON.parse(raw2); } catch (e) {}
+      restorePaths((all && all.paths) || [], btn);
+    });
+  });
+}
+
+/** Checagem silenciosa no boot — avisa se o projeto tem mídia offline. */
 function checkMissingMediaOnBoot() {
   scheduleIdle(function () {
-    findMissingMedia().then(function (missing) {
-      if (missing.length) {
-        showToast('⚠ ' + missing.length + ' mídia(s) do projeto sumiram do cache. Clique em "Restaurar mídias" na barra lateral.', 'error');
+    cs.evalScript('findOfflineMedia()', function (raw) {
+      var s = null; try { s = JSON.parse(raw); } catch (e) {}
+      if (s && s.missing > 0) {
+        showToast('⚠ ' + s.missing + ' mídia(s) do projeto estão offline. Selecione na timeline (ou nada) e clique "Restaurar mídias".', 'error');
       }
-    }).catch(function () {});
+    });
   });
 }
 

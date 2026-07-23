@@ -172,6 +172,51 @@ function walkProjectItems(item, cb) {
   } catch (e) {/* item exotico — ignora */}
 }
 
+// Caminhos de mídia CinePRO dos CLIPES SELECIONADOS na timeline. JSON array
+// [{path, offline}]. Base do "restaurar selecionados" (multi-seleção ok).
+function getSelectedMediaPaths() {
+  try {
+    var seq = app.project.activeSequence;
+    if (!seq) return '{"error":"NO_SEQUENCE"}';
+    var clips = collectSelectedClips(seq);
+    var seen = {}, out = [];
+    for (var i = 0; i < clips.length; i++) {
+      try {
+        var pi = clips[i].projectItem;
+        if (!pi || !pi.getMediaPath) continue;
+        var p = pi.getMediaPath();
+        if (!p || p.indexOf('CinePRO') === -1 || seen[p]) continue;
+        seen[p] = 1;
+        out.push('{"path":"' + p.replace(/\\/g, '\\\\').replace(/"/g, '\\"') +
+                 '","offline":' + (!(new File(p)).exists) + '}');
+      } catch (e) {}
+    }
+    return '{"items":[' + out.join(',') + ']}';
+  } catch (e) {
+    return '{"error":"' + String(e).replace(/"/g, "'") + '"}';
+  }
+}
+
+// TODOS os caminhos CinePRO offline do projeto inteiro. JSON array de paths.
+// Serve o "restaurar tudo" sem depender do registro (projetos antigos).
+function getOfflineMediaPaths() {
+  try {
+    var out = [], seen = {};
+    walkProjectItems(app.project.rootItem, function (it) {
+      try {
+        var p = it.getMediaPath ? it.getMediaPath() : '';
+        if (!p || p.indexOf('CinePRO') === -1 || seen[p]) return;
+        if ((new File(p)).exists) return;
+        seen[p] = 1;
+        out.push('"' + p.replace(/\\/g, '\\\\').replace(/"/g, '\\"') + '"');
+      } catch (e) {}
+    });
+    return '{"paths":[' + out.join(',') + ']}';
+  } catch (e) {
+    return '{"error":"' + String(e).replace(/"/g, "'") + '"}';
+  }
+}
+
 /** Quantos itens CinePRO estão com arquivo faltando. JSON. */
 function findOfflineMedia() {
   try {
