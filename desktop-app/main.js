@@ -81,15 +81,26 @@ ipcMain.handle('cache:size', () => {
 ipcMain.handle('cache:clear', async () => {
   try {
     if (!fs.existsSync(CACHE_DIR)) return { removed: 0 };
-    let removed = 0;
+    // v1.0.4: NUNCA apaga arquivo registrado como em-uso num projeto.
+    // in-use.json fica ao lado da pasta cache (../in-use.json).
+    const inUsePath = path.join(path.dirname(CACHE_DIR), 'in-use.json');
+    const protectedSet = new Set();
+    try {
+      if (fs.existsSync(inUsePath)) {
+        const reg = JSON.parse(fs.readFileSync(inUsePath, 'utf8')) || {};
+        for (const p of Object.keys(reg)) protectedSet.add(path.basename(p));
+      }
+    } catch (e) {/* registro corrompido — limpa tudo mesmo */}
+
+    let removed = 0, kept = 0;
     for (const f of fs.readdirSync(CACHE_DIR)) {
       const p = path.join(CACHE_DIR, f);
-      if (fs.statSync(p).isFile()) {
-        fs.unlinkSync(p);
-        removed++;
-      }
+      if (!fs.statSync(p).isFile()) continue;
+      if (protectedSet.has(f)) { kept++; continue; }  // em uso → preserva
+      fs.unlinkSync(p);
+      removed++;
     }
-    return { removed };
+    return { removed, kept };
   } catch (e) {
     return { removed: 0, error: e.message };
   }
@@ -258,6 +269,18 @@ function installResolveScript() {
 }
 
 // Baixa um asset pro cache local (se ainda não estiver) e retorna o path.
+// v1.0.4: registro compartilhado com o plugin — protege da limpeza de cache
+// e permite restaurar. Mesmo arquivo (../in-use.json) que o plugin CEP usa.
+function recordInUse(dest, asset) {
+  try {
+    const inUse = path.join(path.dirname(CACHE_DIR), 'in-use.json');
+    let reg = {};
+    try { if (fs.existsSync(inUse)) reg = JSON.parse(fs.readFileSync(inUse, 'utf8')) || {}; } catch (e) {}
+    reg[dest] = { id: asset.id, ext: asset.ext, name: asset.name, at: Date.now() };
+    fs.writeFileSync(inUse, JSON.stringify(reg));
+  } catch (e) {/* best-effort */}
+}
+
 async function ensureCached(asset) {
   const { ext, name, urls, id } = asset || {};
   if (!urls || !urls.length) throw new Error('sem URL de download');
@@ -266,9 +289,10 @@ async function ensureCached(asset) {
   const fileName = (id ? String(id).slice(0, 8) + '_' : '') +
     (safe.toLowerCase().endsWith('.' + ext) ? safe : safe + '.' + ext);
   const dest = path.join(CACHE_DIR, fileName);
-  if (fs.existsSync(dest) && fs.statSync(dest).size > 0) return dest;
+  if (fs.existsSync(dest) && fs.statSync(dest).size > 0) { recordInUse(dest, asset); return dest; }
   const buf = await downloadBuffer(urls);
   fs.writeFileSync(dest, buf);
+  recordInUse(dest, asset);
   return dest;
 }
 

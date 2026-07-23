@@ -455,6 +455,7 @@ function applyManifest(manifest) {
   buildSearchIndex();
   buildCategoryTabs();
   renderEffects(allEffects);
+  checkMissingMediaOnBoot();  // v1.0.4: avisa se o projeto tem mídia offline
 }
 
 // ── FALLBACK: Drive walk live (caso manifest off) ────────────────
@@ -709,6 +710,23 @@ function buildSidebarTree() {
       count: mostUsedCount,
     }));
   }
+
+  // ─ Restaurar mídias (v1.0.4) — religa SFX do projeto que sumiram do cache ─
+  var restoreItem = makeSidebarItem({
+    label: 'Restaurar mídias', icon: '⟳',
+    dataCat: 'restore-media', dataSub: '',
+    isActive: false,
+    onClick: function () {
+      var labelEl = restoreItem.querySelector('.sidebar-label') || restoreItem;
+      restoreMissingMedia({
+        get textContent() { return labelEl.textContent; },
+        set textContent(v) { labelEl.textContent = v; },
+        set disabled(v) { restoreItem.style.opacity = v ? '0.6' : ''; },
+      });
+    },
+  });
+  restoreItem.title = 'Re-baixa e religa no projeto os efeitos que foram apagados do cache';
+  tree.appendChild(restoreItem);
 
   // ─ Packs (v1.1) — receitas psicoacústicas viram packs curados ─
   try {
@@ -1262,18 +1280,18 @@ function packAutoApply(packId, btn) {
 
     if (bed) chain = chain.then(function () { return dl(bed); }).then(function (p) {
       return evalP('applyAtTime("' + escapePath(p) + '", "' + bed.ext + '", 0)').then(function (r) {
-        if (r && r.indexOf('OK:') === 0) done.push('cama sonora');
+        if (r && r.indexOf('OK:') === 0) { done.push('cama sonora'); recordUsedFile(bed, p); }
       });
     });
     if (hook) chain = chain.then(function () { return dl(hook); }).then(function (p) {
       return evalP('applyAtTime("' + escapePath(p) + '", "' + hook.ext + '", ' + (stats.first || 0) + ')').then(function (r) {
-        if (r && r.indexOf('OK:') === 0) done.push('impacto no 1º corte');
+        if (r && r.indexOf('OK:') === 0) { done.push('impacto no 1º corte'); recordUsedFile(hook, p); }
       });
     });
     if (cutSfx) chain = chain.then(function () { return dl(cutSfx); }).then(function (p) {
       return evalP('applyAtAllCuts("' + escapePath(p) + '", "' + cutSfx.ext + '", 25)').then(function (r) {
         var m = /CUTS_(\d+)_OF_(\d+)/.exec(r || '');
-        if (m) done.push('whoosh em ' + m[1] + ' corte(s)');
+        if (m) { done.push('whoosh em ' + m[1] + ' corte(s)'); recordUsedFile(cutSfx, p); }
       });
     });
 
@@ -2557,6 +2575,7 @@ function autoApplyAtCuts(effect, card) {
             setStatus('ok', 'SFX em ' + placed + ' corte(s)!');
             showToast('⚡ "' + effect.name + '" aplicado em ' + placed + ' de ' + total + ' corte(s)', 'success');
             trackUsage(effect.id);
+            recordUsedFile(effect, localPath);
           }
         }
       );
@@ -2602,6 +2621,7 @@ function applyEffect(effect, card) {
             setStatus('ok', '"' + effect.name + '" pronto!');
             showToast(successMessage(effect, result), 'success');
             trackUsage(effect.id);  // Recentes + counter
+            recordUsedFile(effect, localPath);  // v1.0.4: protege do clear + permite restaurar
           }
         }
       );
@@ -2743,6 +2763,157 @@ function assetUrlChain(effect) {
  * todas as rotas de assetUrlChain. Se já estiver em disco (índice +
  * verificação), retorna o path direto. Persiste entre reinicializações.
  */
+// ══ MÍDIAS EM USO (v1.0.4) ══════════════════════════════════════
+// Todo arquivo aplicado num projeto é registrado em in-use.json (ao lado
+// do cache). Isso resolve DOIS problemas:
+//   1. O app NÃO apaga esses arquivos ao limpar cache (prevenção).
+//   2. Se sumirem, re-baixamos no MESMO caminho e o projeto religa (cura).
+// Baseado em caminho → serve Premiere E DaVinci igualmente.
+function inUsePath(cacheDir) {
+  return String(cacheDir).replace(/[\/\\]cache$/, '') + '/in-use.json';
+}
+
+function readInUse(cacheDir) {
+  try {
+    var nodeFs = window.require ? window.require('fs') : null;
+    if (!nodeFs) return {};
+    var p = inUsePath(cacheDir);
+    if (!nodeFs.existsSync(p)) return {};
+    return JSON.parse(nodeFs.readFileSync(p, 'utf8')) || {};
+  } catch (e) { return {}; }
+}
+
+function recordUsedFile(effect, localPath) {
+  if (!localPath) return;
+  getCacheDir().then(function (cacheDir) {
+    try {
+      var nodeFs = window.require ? window.require('fs') : null;
+      if (!nodeFs) return;
+      var reg = readInUse(cacheDir);
+      reg[localPath] = { id: effect.id, ext: effect.ext, name: effect.name, at: Date.now() };
+      nodeFs.writeFileSync(inUsePath(cacheDir), JSON.stringify(reg));
+    } catch (e) {/* registro é best-effort */}
+  });
+}
+
+/** Lista as mídias registradas que sumiram do disco. */
+function findMissingMedia() {
+  return getCacheDir().then(function (cacheDir) {
+    var reg = readInUse(cacheDir);
+    var missing = [];
+    for (var p in reg) {
+      if (!fileExistsLocal(p)) missing.push({ path: p, meta: reg[p] });
+    }
+    return missing;
+  });
+}
+
+/** Baixa um asset num caminho EXATO (restauração — preserva o vínculo). */
+function downloadToPath(effect, destPath) {
+  var urls = assetUrlChain(effect);
+  function tryRoute(i) {
+    return new Promise(function (resolve, reject) {
+      var xhr = new XMLHttpRequest();
+      xhr.open('GET', urls[i], true);
+      xhr.responseType = 'arraybuffer';
+      xhr.timeout = 60000;
+      xhr.onload = function () {
+        if (xhr.status !== 200) return reject(new Error('HTTP ' + xhr.status));
+        try {
+          var head = String.fromCharCode.apply(null, new Uint8Array(xhr.response.slice(0, 5)));
+          var ct = xhr.getResponseHeader('Content-Type') || '';
+          if (ct.indexOf('text/html') !== -1 || head === '<!DOC') return reject(new Error('HTML'));
+          var nodeFs = window.require ? window.require('fs') : null;
+          if (!nodeFs) return reject(new Error('Node indisponível'));
+          nodeFs.writeFileSync(destPath, Buffer.from(new Uint8Array(xhr.response)));
+          resolve(destPath);
+        } catch (e) { reject(e); }
+      };
+      xhr.onerror = function () { reject(new Error('rede')); };
+      xhr.ontimeout = function () { reject(new Error('timeout')); };
+      xhr.send();
+    }).catch(function (err) {
+      if (i + 1 < urls.length) return tryRoute(i + 1);
+      throw err;
+    });
+  }
+  return tryRoute(0);
+}
+
+/**
+ * Restaura as mídias do projeto que sumiram do cache e religa no editor.
+ * Premiere: religa via changeMediaPath. DaVinci: o arquivo volta ao mesmo
+ * caminho e o Resolve reconecta (pode pedir reabrir o projeto).
+ */
+function restoreMissingMedia(btn) {
+  function setBtn(txt, disabled) {
+    if (!btn) return;
+    btn.textContent = txt;
+    btn.disabled = !!disabled;
+  }
+  setBtn('Verificando…', true);
+  setStatus('loading', 'Procurando mídias offline do projeto...');
+
+  findMissingMedia().then(function (missing) {
+    if (!missing.length) {
+      setBtn('✓ Tudo no lugar', false);
+      setStatus('ok', 'Nenhuma mídia faltando.');
+      showToast('✓ Todas as mídias do projeto estão no cache.', 'success');
+      setTimeout(function () { setBtn('Restaurar mídias', false); }, 2500);
+      return;
+    }
+
+    setStatus('loading', 'Restaurando ' + missing.length + ' mídia(s)...');
+    var ok = 0, fail = 0, done = 0;
+
+    function step(i) {
+      if (i >= missing.length) return finish();
+      var m = missing[i];
+      setBtn('Restaurando ' + (i + 1) + '/' + missing.length + '…', true);
+      var effect = effectsById[m.meta.id] || m.meta;   // fallback nos metadados
+      return downloadToPath(effect, m.path)
+        .then(function () { ok++; })
+        .catch(function () { fail++; })
+        .then(function () { done++; return step(i + 1); });
+    }
+
+    function finish() {
+      // Premiere: força o religamento dos itens cujo arquivo voltou
+      cs.evalScript('relinkRestoredMedia()', function (r) {
+        var m2 = /RELINK_(\d+)/.exec(r || '');
+        var relinked = m2 ? m2[1] : null;
+        setBtn('Restaurar mídias', false);
+        if (ok) {
+          setStatus('ok', ok + ' mídia(s) restaurada(s)');
+          showToast('✓ ' + ok + ' mídia(s) restaurada(s)' +
+                    (relinked && relinked !== '0' ? ' · ' + relinked + ' religada(s) no projeto' : '') +
+                    (fail ? ' · ' + fail + ' falhou(aram)' : ''), 'success');
+        } else {
+          setStatus('error', 'Não consegui restaurar');
+          showToast('Falha ao restaurar ' + fail + ' mídia(s). Verifique sua conexão.', 'error');
+        }
+      });
+    }
+
+    step(0);
+  }).catch(function (err) {
+    setBtn('Restaurar mídias', false);
+    setStatus('error', 'Erro ao verificar');
+    showToast('Erro: ' + humanizeError((err && err.message) || ''), 'error');
+  });
+}
+
+/** Checagem silenciosa no boot — avisa se há mídia offline. */
+function checkMissingMediaOnBoot() {
+  scheduleIdle(function () {
+    findMissingMedia().then(function (missing) {
+      if (missing.length) {
+        showToast('⚠ ' + missing.length + ' mídia(s) do projeto sumiram do cache. Clique em "Restaurar mídias" na barra lateral.', 'error');
+      }
+    }).catch(function () {});
+  });
+}
+
 function downloadEffectFile(effect) {
   // 0. v1.3: checa bundle (assets pre-instalados via .pkg/.exe)
   var bundlePath = getBundleFilePath(effect.id, effect.ext);

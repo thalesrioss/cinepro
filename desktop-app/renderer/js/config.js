@@ -29,7 +29,7 @@ const CINEPRO_CONFIG = {
   TICTO_CHECKOUT_URL: 'https://checkout.ticto.app/O292AD8B4',
 
   // -- App --
-  PLUGIN_VERSION: '1.0.3',
+  PLUGIN_VERSION: '1.0.4',
 
   // -- CDN própria (Cloudflare R2) --
   // Quando preenchido (ex: 'https://cdn.cinepro.app'), downloads tentam a CDN

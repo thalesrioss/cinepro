@@ -157,6 +157,62 @@ function collectCutPoints(seq, maxN) {
   return out;
 }
 
+// ══ MÍDIAS OFFLINE (v1.0.4) ═════════════════════════════════════
+// Percorre o projeto e trata itens do CinePRO cujo arquivo sumiu do
+// cache. Depois que o plugin re-baixa no MESMO caminho, forçamos o
+// refresh (changeMediaPath pro proprio path) pra sair de "offline".
+
+function walkProjectItems(item, cb) {
+  try {
+    if (item.children && item.children.numItems > 0) {
+      for (var i = 0; i < item.children.numItems; i++) walkProjectItems(item.children[i], cb);
+    } else {
+      cb(item);
+    }
+  } catch (e) {/* item exotico — ignora */}
+}
+
+/** Quantos itens CinePRO estão com arquivo faltando. JSON. */
+function findOfflineMedia() {
+  try {
+    var missing = 0, total = 0;
+    walkProjectItems(app.project.rootItem, function (it) {
+      try {
+        var p = it.getMediaPath ? it.getMediaPath() : '';
+        if (!p || p.indexOf('CinePRO') === -1) return;
+        total++;
+        if (!(new File(p)).exists) missing++;
+      } catch (e) {}
+    });
+    return '{"missing":' + missing + ',"total":' + total + '}';
+  } catch (e) {
+    return '{"error":"' + String(e).replace(/"/g, "'") + '"}';
+  }
+}
+
+/** Religa itens CinePRO cujo arquivo VOLTOU ao cache. 'OK:RELINK_<n>'. */
+function relinkRestoredMedia() {
+  try {
+    var relinked = 0;
+    walkProjectItems(app.project.rootItem, function (it) {
+      try {
+        var p = it.getMediaPath ? it.getMediaPath() : '';
+        if (!p || p.indexOf('CinePRO') === -1) return;
+        if (!(new File(p)).exists) return;          // ainda falta o arquivo
+        var isOff = false;
+        try { isOff = it.isOffline ? it.isOffline() : false; } catch (e) { isOff = true; }
+        if (isOff && it.changeMediaPath) {
+          it.changeMediaPath(p);                     // mesmo caminho = refresh
+          relinked++;
+        }
+      } catch (e) {}
+    });
+    return 'OK:RELINK_' + relinked;
+  } catch (e) {
+    return 'ERR:RELINK:' + e.toString();
+  }
+}
+
 /**
  * Estatísticas da timeline pro plugin decidir o que aplicar (JSON).
  * cuts = nº de cortes reais · first = tempo do 1º corte · duration = total.
