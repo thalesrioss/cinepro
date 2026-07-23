@@ -426,6 +426,9 @@ function applyManifest(manifest) {
   allEffects = (manifest.files || []).filter(function (f) {
     return PLUGIN_KINDS[f.kind];
   });
+  // Popula o índice por id pra TODOS (não só renderizados) — Packs/Recentes
+  // referenciam por id antes de qualquer card existir.
+  allEffects.forEach(function (e) { effectsById[e.id] = e; });
   // v1.2 Parte C: guarda dicionário de conceitos pra busca semântica
   CINEPRO_CONCEPTS_DICT = manifest.concepts || null;
 
@@ -1193,6 +1196,102 @@ function getPackIds(packId) {
   return ids;
 }
 
+// Escolhe do pack o melhor arquivo pra um PAPEL (por conceitos-alvo).
+function pickPackRole(ids, conceptNames) {
+  if (!CINEPRO_CONCEPTS_DICT) return null;
+  var cIdx = {};
+  for (var c = 0; c < CINEPRO_CONCEPTS_DICT.length; c++) cIdx[CINEPRO_CONCEPTS_DICT[c].name] = c;
+  var best = null, bestS = 0;
+  for (var i = 0; i < ids.length; i++) {
+    var e = effectsById[ids[i]];
+    if (!e || !e.embed || e.kind !== 'audio') continue;
+    var s = 0;
+    for (var n = 0; n < conceptNames.length; n++) {
+      var ci = cIdx[conceptNames[n]];
+      if (ci !== undefined && e.embed[ci]) s += e.embed[ci];
+    }
+    if (s > bestS) { bestS = s; best = e; }
+  }
+  return best;
+}
+
+/**
+ * v1.0.3 — "A mágica": analisa a timeline (cortes reais), entende o que o
+ * pack pede (knowledge/receitas) e APLICA os papéis certos:
+ *   cama (drone) em 0s → hook (impacto) no 1º corte → whoosh nos cortes.
+ * Tudo em faixas livres — nunca atropela a montagem.
+ */
+function packAutoApply(packId, btn) {
+  var recipes = window.CINEPRO_RECIPES || [];
+  var recipe = null;
+  for (var r = 0; r < recipes.length; r++) if (recipes[r].id === packId) { recipe = recipes[r]; break; }
+  if (!recipe) return;
+
+  if (btn) { btn.disabled = true; btn.textContent = 'Analisando timeline…'; }
+  setStatus('loading', 'Analisando os cortes da timeline...');
+
+  cs.evalScript('getTimelineStats()', function (raw) {
+    var stats = null;
+    try { stats = JSON.parse(raw); } catch (e) {}
+    function fail(msg) {
+      setStatus('error', msg);
+      showToast(msg, 'error');
+      if (btn) { btn.disabled = false; btn.textContent = '⚡ Aplicar pack na timeline'; }
+    }
+    if (!stats || stats.error) return fail(humanizeError((stats && stats.error) || 'Timeline indisponível'));
+    if (!stats.cuts) return fail('Timeline sem cortes — edite seus takes primeiro.');
+
+    var ids = getPackIds(packId);
+    var cutSfx = pickPackRole(ids, ['whoosh', 'transition']);
+    var hook   = pickPackRole(ids, ['impact']);
+    var bed    = (recipe.weights && recipe.weights.drone >= 2) ? pickPackRole(ids, ['drone']) : null;
+    if (!cutSfx && !hook && !bed) return fail('Pack sem sons aplicáveis.');
+
+    var done = [];
+    function dl(effect) {
+      var cached = effectCache[effect.id];
+      return cached ? Promise.resolve(cached)
+        : downloadEffectFile(effect).then(function (p) { effectCache[effect.id] = p; return p; });
+    }
+    function evalP(code) {
+      return new Promise(function (resolve) { cs.evalScript(code, resolve); });
+    }
+
+    setStatus('loading', stats.cuts + ' corte(s) — aplicando o pack...');
+    var chain = Promise.resolve();
+
+    if (bed) chain = chain.then(function () { return dl(bed); }).then(function (p) {
+      return evalP('applyAtTime("' + escapePath(p) + '", "' + bed.ext + '", 0)').then(function (r) {
+        if (r && r.indexOf('OK:') === 0) done.push('cama sonora');
+      });
+    });
+    if (hook) chain = chain.then(function () { return dl(hook); }).then(function (p) {
+      return evalP('applyAtTime("' + escapePath(p) + '", "' + hook.ext + '", ' + (stats.first || 0) + ')').then(function (r) {
+        if (r && r.indexOf('OK:') === 0) done.push('impacto no 1º corte');
+      });
+    });
+    if (cutSfx) chain = chain.then(function () { return dl(cutSfx); }).then(function (p) {
+      return evalP('applyAtAllCuts("' + escapePath(p) + '", "' + cutSfx.ext + '", 25)').then(function (r) {
+        var m = /CUTS_(\d+)_OF_(\d+)/.exec(r || '');
+        if (m) done.push('whoosh em ' + m[1] + ' corte(s)');
+      });
+    });
+
+    chain.then(function () {
+      if (btn) { btn.disabled = false; btn.textContent = '⚡ Aplicar pack na timeline'; }
+      if (done.length) {
+        setStatus('ok', 'Pack "' + recipe.label + '" aplicado!');
+        showToast('✦ ' + recipe.label + ': ' + done.join(' + '), 'success');
+        if (cutSfx) trackUsage(cutSfx.id);
+      } else {
+        fail('Não consegui aplicar — verifique espaço nas trilhas.');
+      }
+    }).catch(function (err) {
+      fail('Falha: ' + humanizeError((err && err.message) || ''));
+    });
+  });
+}
+
 function filterEffects(query) {
   // Sets pré-computados pra evitar lookup repetido
   var favSet = activeCategory === 'favorites' ? new Set(getFavoriteIds()) : null;
@@ -1332,6 +1431,28 @@ function renderEffects(effects) {
   grid.innerHTML = '';
   LAST_RENDER_EFFECTS = effects;
   applyViewMode(currentViewMode(effects));
+
+  // v1.0.3: header do Pack com o botão da "mágica" (analisa + aplica)
+  if (activeCategory && activeCategory.indexOf('pack:') === 0 && effects.length) {
+    var pid = activeCategory.slice(5);
+    var recipes = window.CINEPRO_RECIPES || [];
+    var rc = null;
+    for (var i = 0; i < recipes.length; i++) if (recipes[i].id === pid) { rc = recipes[i]; break; }
+    if (rc) {
+      var head = document.createElement('div');
+      head.className = 'pack-head';
+      head.innerHTML =
+        '<div class="pack-head-info">' +
+          '<div class="pack-head-title">' + rc.icon + ' ' + rc.label + '</div>' +
+          '<div class="pack-head-desc">' + rc.desc + '</div>' +
+        '</div>' +
+        '<button class="btn btn--primary btn--sm pack-apply">⚡ Aplicar pack na timeline</button>';
+      head.querySelector('.pack-apply').addEventListener('click', function (ev) {
+        packAutoApply(pid, ev.currentTarget);
+      });
+      grid.appendChild(head);
+    }
+  }
 
   if (effects.length === 0) {
     if (activeCategory === 'favorites') {

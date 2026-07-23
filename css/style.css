@@ -1971,3 +1971,21 @@ body {
 /* v1.1: botão auto-cortes (⚡) na linha */
 .effect-row .btn-cuts { opacity: 0; font-size: 12px; color: var(--brand, #00B8FF); }
 .effect-row:hover .btn-cuts { opacity: 1; }
+
+/* v1.0.3: header do Pack (a "mágica" — analisa timeline e aplica) */
+.pack-head {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  margin-bottom: 8px;
+  background: linear-gradient(135deg, rgba(0,184,255,0.10), rgba(0,184,255,0.02));
+  border: 1px solid rgba(0,184,255,0.30);
+  border-radius: var(--radius-md, 8px);
+}
+.pack-head-info { flex: 1; min-width: 0; }
+.pack-head-title { font-size: 13px; font-weight: 700; color: var(--text-main); }
+.pack-head-desc { font-size: 10px; color: var(--text-dim); margin-top: 2px; line-height: 1.4; }
+.pack-apply { flex: none; white-space: nowrap; }
+.pack-apply:disabled { opacity: 0.6; cursor: wait; }
