@@ -16,6 +16,7 @@ const fs   = require('fs');
 const path = require('path');
 const { google } = require('googleapis');
 const CONCEPT_API = require('./concepts.js');
+const { brandFileName, brandSubName } = require('./brand-names.js');
 const CONCEPTS = CONCEPT_API.CONCEPTS;
 
 // ── Config ───────────────────────────────────────────────────────
@@ -252,17 +253,25 @@ async function walkCategory(drive, folderId, categoryName, pathParts, depth) {
       if (shouldSkipFile(it.name)) continue;
       const ext = (it.name.split('.').pop() || '').toLowerCase();
       const cleanName = it.name.replace(/\.[^.]+$/, '');
-      const sub = pathParts.length > 0 ? cleanCategoryName(pathParts[0]) : null;
+      const rawSub = pathParts.length > 0 ? cleanCategoryName(pathParts[0]) : null;
+      // Rebranding: o que o usuário VÊ sai sem marca de terceiro. A pasta-pai
+      // entra como contexto pra salvar nomes inúteis de 1 char ("Z" → "Alphabet Z").
+      const parentFolder = pathParts.length ? pathParts[pathParts.length - 1] : categoryName;
+      const displayName = brandFileName(cleanName, parentFolder);
+      const sub = rawSub ? brandSubName(rawSub) : null;
+      // tags/embed continuam vindo do nome ORIGINAL: ele tem mais sinal
+      // (códigos UCS, termos do pack) e nada disso aparece na interface —
+      // rebrandar aqui só pioraria a busca semântica sem ganho nenhum.
       const tagList = extractTags(cleanName);
       out.push({
         id: it.id,
-        name: cleanName,
+        name: displayName,
         ext,
         kind: VALID_EXTS[ext],
         thumb: it.thumbnailLink || null,
         category: categoryName,
         subcategory: sub,
-        path: pathParts,
+        path: pathParts.map(p => brandSubName(cleanCategoryName(p))),
         tags: tagList,
         size: parseInt(it.size || 0, 10),
         embed: computeEmbed(cleanName, categoryName, sub, pathParts, tagList),
