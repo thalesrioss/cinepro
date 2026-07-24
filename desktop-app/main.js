@@ -117,6 +117,71 @@ ipcMain.handle('check-plugin-installed', () => {
 
 ipcMain.handle('app:version', () => app.getVersion());
 
+// ══ AUTO-UPDATE — baixa e abre o instalador DENTRO do app ═══════
+// Sem certificado Apple ainda, então não dá pra usar o auto-updater
+// completo (ele exige assinatura pra validar o pacote). Baixar o
+// instalador e abri-lo é o caminho que funciona hoje: o usuário clica
+// uma vez e não precisa mais entrar no site.
+
+function downloadToFile(url, dest, onProgress, depth) {
+  return new Promise((resolve, reject) => {
+    if ((depth || 0) > 5) return reject(new Error('redirects demais'));
+    const https = require('https');
+    https.get(url, { timeout: 120000 }, (res) => {
+      if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
+        res.resume();
+        return resolve(downloadToFile(res.headers.location, dest, onProgress, (depth || 0) + 1));
+      }
+      if (res.statusCode !== 200) { res.resume(); return reject(new Error('HTTP ' + res.statusCode)); }
+      const total = parseInt(res.headers['content-length'] || '0', 10);
+      let got = 0, lastPct = -1;
+      const out = fs.createWriteStream(dest);
+      res.on('data', (c) => {
+        got += c.length;
+        if (total && onProgress) {
+          const pct = Math.floor((got / total) * 100);
+          if (pct !== lastPct) { lastPct = pct; onProgress(pct); }
+        }
+      });
+      res.pipe(out);
+      out.on('finish', () => out.close(() => resolve(dest)));
+      out.on('error', reject);
+      res.on('error', reject);
+    }).on('error', reject);
+  });
+}
+
+ipcMain.handle('update:download', async (_e, payload) => {
+  try {
+    const { url, filename } = payload || {};
+    // Só aceitamos as origens do nosso próprio release — o URL vem da API do
+    // GitHub, mas nunca confiamos nele cegamente pra baixar e EXECUTAR algo.
+    if (!/^https:\/\/(github\.com|[a-z0-9-]+\.githubusercontent\.com)\//i.test(String(url || ''))) {
+      return { ok: false, error: 'origem de download não permitida' };
+    }
+    const safe = String(filename || 'CinePRO-update').replace(/[^A-Za-z0-9._-]/g, '');
+    const dest = path.join(os.tmpdir(), safe);
+    await downloadToFile(url, dest, (pct) => {
+      if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('update:progress', pct);
+    });
+    return { ok: true, path: dest };
+  } catch (e) {
+    return { ok: false, error: e.message };
+  }
+});
+
+ipcMain.handle('update:install', async (_e, filePath) => {
+  try {
+    const err = await shell.openPath(filePath);
+    if (err) return { ok: false, error: err };
+    // O instalador precisa do app fechado pra substituir o .app
+    setTimeout(() => app.quit(), 2000);
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e.message };
+  }
+});
+
 // ── v1.6: Instalar LUT / MOGRT / Preset nas pastas do Premiere ──────
 // Cada tipo vai pra pasta padrão do USUÁRIO (sem admin) que o Premiere lê.
 const HOME = os.homedir();

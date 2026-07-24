@@ -1248,64 +1248,113 @@ function packAutoApply(packId, btn) {
   if (btn) { btn.disabled = true; btn.textContent = 'Analisando timeline…'; }
   setStatus('loading', 'Analisando os cortes da timeline...');
 
+  function evalP(code) {
+    return new Promise(function (resolve) { cs.evalScript(code, resolve); });
+  }
+  function resetBtn() {
+    if (btn) { btn.disabled = false; btn.textContent = '⚡ Aplicar pack na timeline'; }
+  }
+  // Traduz o retorno cru do ExtendScript pra algo acionável (antes engolíamos
+  // o erro real num "não consegui aplicar" genérico — impossível diagnosticar).
+  function explain(r) {
+    r = String(r || '');
+    if (r.indexOf('NO_SEQUENCE') > -1)     return 'Abra uma sequência na timeline primeiro.';
+    if (r.indexOf('NO_FREE_TRACK') > -1)   return 'Sem faixa de áudio livre — não consegui criar novas trilhas.';
+    if (r.indexOf('FILE_NOT_FOUND') > -1)  return 'O arquivo baixado sumiu do cache.';
+    if (r.indexOf('EvalScript') > -1)      return 'O Premiere recusou o script (reinicie o Premiere).';
+    if (r.indexOf('ERR:') > -1)            return 'Premiere: ' + r.replace(/^.*ERR:/, '');
+    return r || 'sem resposta do Premiere';
+  }
+
   cs.evalScript('getTimelineStats()', function (raw) {
     var stats = null;
     try { stats = JSON.parse(raw); } catch (e) {}
     function fail(msg) {
       setStatus('error', msg);
-      showToast(msg, 'error');
-      if (btn) { btn.disabled = false; btn.textContent = '⚡ Aplicar pack na timeline'; }
+      showToast('⚠ ' + msg, 'error');
+      resetBtn();
     }
-    if (!stats || stats.error) return fail(humanizeError((stats && stats.error) || 'Timeline indisponível'));
-    if (!stats.cuts) return fail('Timeline sem cortes — edite seus takes primeiro.');
+    if (!stats || stats.error) return fail(explain((stats && stats.error) || raw));
+    if (!stats.clips) return fail('Timeline vazia — coloque seus takes na sequência primeiro.');
 
     var ids = getPackIds(packId);
-    var cutSfx = pickPackRole(ids, ['whoosh', 'transition']);
-    var hook   = pickPackRole(ids, ['impact']);
-    var bed    = (recipe.weights && recipe.weights.drone >= 2) ? pickPackRole(ids, ['drone']) : null;
-    if (!cutSfx && !hook && !bed) return fail('Pack sem sons aplicáveis.');
+    // Fallback: se o conceito exato não aparece no pack, usa o melhor áudio
+    // dele mesmo assim. Antes um pack sem "drone" simplesmente não aplicava nada.
+    var anyAudio = null;
+    for (var i = 0; i < ids.length && !anyAudio; i++) {
+      var e0 = effectsById[ids[i]];
+      if (e0 && e0.kind === 'audio') anyAudio = e0;
+    }
+    if (!anyAudio) return fail('Esse pack não tem áudios na sua base.');
 
-    var done = [];
+    var cutSfx = pickPackRole(ids, ['whoosh', 'transition']) || anyAudio;
+    var hook   = pickPackRole(ids, ['impact']) || null;
+    var bed    = (recipe.weights && recipe.weights.drone >= 2) ? pickPackRole(ids, ['drone']) : null;
+
+    // Sem cortes detectados (take único / corte só no áudio) o pack ainda
+    // faz sentido: cama + hook no playhead. Não é motivo pra abortar.
+    var cuts = stats.cuts || 0;
+    var hookAt = cuts ? (stats.first || 0) : (stats.playhead || 0);
+
+    var done = [], errs = [];
     function dl(effect) {
       var cached = effectCache[effect.id];
       return cached ? Promise.resolve(cached)
         : downloadEffectFile(effect).then(function (p) { effectCache[effect.id] = p; return p; });
     }
-    function evalP(code) {
-      return new Promise(function (resolve) { cs.evalScript(code, resolve); });
+    function stepApply(effect, code, label, okTest) {
+      return dl(effect).then(function (p) {
+        return evalP(code(escapePath(p), effect.ext)).then(function (r) {
+          var lbl = okTest(r);
+          if (lbl) { done.push(lbl); recordUsedFile(effect, p); }
+          else errs.push(explain(r));
+        });
+      }, function (err) {
+        errs.push('download de "' + effect.name + '": ' + humanizeError((err && err.message) || ''));
+      });
     }
 
-    setStatus('loading', stats.cuts + ' corte(s) — aplicando o pack...');
-    var chain = Promise.resolve();
+    setStatus('loading', (cuts || 'nenhum') + ' corte(s) — preparando trilhas...');
 
-    if (bed) chain = chain.then(function () { return dl(bed); }).then(function (p) {
-      return evalP('applyAtTime("' + escapePath(p) + '", "' + bed.ext + '", 0)').then(function (r) {
-        if (r && r.indexOf('OK:') === 0) { done.push('cama sonora'); recordUsedFile(bed, p); }
-      });
-    });
-    if (hook) chain = chain.then(function () { return dl(hook); }).then(function (p) {
-      return evalP('applyAtTime("' + escapePath(p) + '", "' + hook.ext + '", ' + (stats.first || 0) + ')').then(function (r) {
-        if (r && r.indexOf('OK:') === 0) { done.push('impacto no 1º corte'); recordUsedFile(hook, p); }
-      });
-    });
-    if (cutSfx) chain = chain.then(function () { return dl(cutSfx); }).then(function (p) {
-      return evalP('applyAtAllCuts("' + escapePath(p) + '", "' + cutSfx.ext + '", 25)').then(function (r) {
-        var m = /CUTS_(\d+)_OF_(\d+)/.exec(r || '');
-        if (m) { done.push('whoosh em ' + m[1] + ' corte(s)'); recordUsedFile(cutSfx, p); }
-      });
-    });
+    // Cria trilhas de áudio livres ANTES — numa timeline com A1-A3 ocupadas
+    // era exatamente aqui que tudo falhava com NO_FREE_TRACK.
+    evalP('ensureFreeAudioTracks(3)').then(function () {
+      setStatus('loading', 'Aplicando o pack...');
+      var chain = Promise.resolve();
 
-    chain.then(function () {
-      if (btn) { btn.disabled = false; btn.textContent = '⚡ Aplicar pack na timeline'; }
+      if (bed) chain = chain.then(function () {
+        return stepApply(bed,
+          function (p, ext) { return 'applyAtTime("' + p + '", "' + ext + '", 0)'; },
+          'cama sonora',
+          function (r) { return r && r.indexOf('OK:') === 0 ? 'cama sonora' : null; });
+      });
+
+      if (hook) chain = chain.then(function () {
+        return stepApply(hook,
+          function (p, ext) { return 'applyAtTime("' + p + '", "' + ext + '", ' + hookAt + ')'; },
+          'impacto',
+          function (r) { return r && r.indexOf('OK:') === 0 ? (cuts ? 'impacto no 1º corte' : 'impacto no playhead') : null; });
+      });
+
+      if (cuts && cutSfx) chain = chain.then(function () {
+        return stepApply(cutSfx,
+          function (p, ext) { return 'applyAtAllCuts("' + p + '", "' + ext + '", 25)'; },
+          'whoosh',
+          function (r) { var m = /CUTS_(\d+)_OF_(\d+)/.exec(r || ''); return m ? ('whoosh em ' + m[1] + ' corte(s)') : null; });
+      });
+
+      return chain;
+    }).then(function () {
+      resetBtn();
       if (done.length) {
         setStatus('ok', 'Pack "' + recipe.label + '" aplicado!');
         showToast('✦ ' + recipe.label + ': ' + done.join(' + '), 'success');
         if (cutSfx) trackUsage(cutSfx.id);
       } else {
-        fail('Não consegui aplicar — verifique espaço nas trilhas.');
+        fail(errs.length ? errs[0] : 'Nada foi aplicado (sem detalhe do Premiere).');
       }
     }).catch(function (err) {
-      fail('Falha: ' + humanizeError((err && err.message) || ''));
+      fail(humanizeError((err && err.message) || String(err)));
     });
   });
 }

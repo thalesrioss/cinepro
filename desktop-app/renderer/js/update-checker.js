@@ -107,12 +107,13 @@
    * @param {string} currentVersion  ex: '1.0.12'
    * @param {function(info|null)} cb
    */
-  function checkForUpdate(currentVersion, cb) {
+  function checkForUpdate(currentVersion, cb, force) {
     var s = getState();
     var now = Date.now();
 
-    // Cache hit? Reusa última checagem se <24h
-    if (s.lastCheck && s.lastRelease && (now - s.lastCheck) < CHECK_TTL_MS) {
+    // Cache hit? Reusa última checagem se <24h (force ignora — o app checa
+    // a cada abertura pra nunca deixar uma versao antiga passar batido)
+    if (!force && s.lastCheck && s.lastRelease && (now - s.lastCheck) < CHECK_TTL_MS) {
       var release = s.lastRelease;
       if (isNewer(release.tag, currentVersion) && !isDismissed(release.tag)) {
         cb(release);
@@ -191,6 +192,53 @@
 
       modalHost.appendChild(modal);
 
+      // ── Dentro do app: baixa e abre o instalador AQUI ─────────
+      // No navegador o <a download> resolve. Dentro do Electron, abrir o
+      // link jogaria o usuário pro site — exatamente o que queremos evitar.
+      // Aqui o app baixa (com progresso) e abre o instalador sozinho.
+      if (global.cinepro && global.cinepro.updateDownload) {
+        var progressTarget = null;
+        if (global.cinepro.onUpdateProgress) {
+          global.cinepro.onUpdateProgress(function (pct) {
+            if (progressTarget) progressTarget.textContent = 'Baixando… ' + pct + '%';
+          });
+        }
+        var actionsEl = modal.querySelector('.update-modal-actions');
+        if (actionsEl) actionsEl.addEventListener('click', function (e) {
+          var a = e.target.closest && e.target.closest('a[href]');
+          if (!a) return;
+          var url = a.getAttribute('href') || '';
+          if (!/\.(pkg|dmg|exe)$/i.test(url)) return;   // link "página do release" segue normal
+          e.preventDefault();
+          if (a.getAttribute('data-busy')) return;
+          a.setAttribute('data-busy', '1');
+
+          var label = a.querySelector('span') || a;
+          var orig  = label.textContent;
+          progressTarget = label;
+          label.textContent = 'Baixando… 0%';
+
+          global.cinepro.updateDownload({ url: url, filename: url.split('/').pop() })
+            .then(function (r) {
+              if (!r || !r.ok) throw new Error((r && r.error) || 'falha no download');
+              progressTarget = null;
+              label.textContent = 'Abrindo instalador…';
+              return global.cinepro.updateInstall(r.path);
+            })
+            .then(function (r) {
+              if (!r || !r.ok) throw new Error((r && r.error) || 'não consegui abrir o instalador');
+              label.textContent = '✓ Instalador aberto — siga os passos';
+            })
+            .catch(function (err) {
+              progressTarget = null;
+              a.removeAttribute('data-busy');
+              label.textContent = orig;
+              // Falhou o caminho automático → não deixa o usuário na mão
+              if (global.cinepro.openExternal) global.cinepro.openExternal(url);
+            });
+        });
+      }
+
       modal.addEventListener('click', function (e) {
         if (e.target.dataset.close) {
           modal.classList.remove('is-open');
@@ -208,6 +256,9 @@
     }
 
     pill.addEventListener('click', openModal);
+    // No app, abre sozinho: o usuario nao precisa reparar na pill pra saber
+    // que existe versao nova (o pedido era "bater nas versoes antigas").
+    if (opts.autoOpen) openModal();
   }
 
   // ── Render body: markdown light (titles, bullets, code) ─────

@@ -267,11 +267,45 @@ function getTimelineStats() {
     var seq = app.project.activeSequence;
     if (!seq) return '{"error":"NO_SEQUENCE"}';
     var cuts = collectCutPoints(seq, 200);
+    var vClips = 0;
+    try {
+      for (var t = 0; t < seq.videoTracks.numTracks; t++) vClips += seq.videoTracks[t].clips.numItems;
+    } catch (e) {}
     return '{"cuts":' + cuts.length +
+           ',"clips":' + vClips +
+           ',"atracks":' + seq.audioTracks.numTracks +
+           ',"playhead":' + seq.getPlayerPosition().seconds.toFixed(3) +
            ',"first":' + (cuts.length ? cuts[0].toFixed(3) : 0) +
            ',"duration":' + seq.end.seconds.toFixed(3) + '}';
   } catch (e) {
     return '{"error":"' + String(e).replace(/"/g, "'") + '"}';
+  }
+}
+
+/**
+ * Garante que existam pelo menos N faixas de áudio VAZIAS no fim da
+ * sequência. O auto-apply chama isto ANTES de aplicar — assim nunca
+ * falha com NO_FREE_TRACK numa timeline cheia (o caso comum: A1-A3 ja
+ * ocupadas com voz e trilha). Retorna 'OK:ATRACKS_<total>'.
+ */
+function ensureFreeAudioTracks(n) {
+  try {
+    var seq = app.project.activeSequence;
+    if (!seq) return 'ERR:NO_SEQUENCE';
+    var want = Number(n) || 2;
+    // conta faixas de audio completamente vazias
+    var empty = 0;
+    for (var t = 0; t < seq.audioTracks.numTracks; t++) {
+      if (seq.audioTracks[t].clips.numItems === 0) empty++;
+    }
+    var guard = 0;
+    while (empty < want && guard++ < 8) {
+      if (!addTrackViaQE(seq, true)) break;
+      empty++;
+    }
+    return 'OK:ATRACKS_' + seq.audioTracks.numTracks + '_FREE_' + empty;
+  } catch (e) {
+    return 'ERR:ENSURE:' + e.toString();
   }
 }
 

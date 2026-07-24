@@ -276,7 +276,9 @@ function bindDashboard() {
   });
 
   document.getElementById('btn-manage-sub').addEventListener('click', function () {
-    window.cinepro.openExternal('https://app.ticto.com.br/minhas-compras');
+    // app.ticto.com.br é o painel do PRODUTOR — o comprador não tem conta lá e
+    // caía num /login sem saída. A área do assinante (ver/cancelar) é esta:
+    window.cinepro.openExternal('https://dash.ticto.com.br/subscription-verification');
   });
 
   document.getElementById('btn-open-premiere').addEventListener('click', function () {
@@ -516,8 +518,9 @@ document.addEventListener('DOMContentLoaded', function () {
           window.CinePROUpdateChecker.render(release, {
             pillHost: slot || document.body,
             modalHost: document.body,
+            autoOpen: true,   // no app o aviso aparece sozinho
           });
-        });
+        }, true);             // force: checa a cada abertura, sem cache de 24h
       });
     };
     var fallbackVer = (window.CINEPRO_CONFIG && CINEPRO_CONFIG.PLUGIN_VERSION) || '0.0.0';
