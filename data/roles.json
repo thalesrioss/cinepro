@@ -1,0 +1,43 @@
+{
+  "schemaVersion": 1,
+  "updatedAt": "2026-07-25",
+  "note": "Papéis do motor de auto-SFX (ADR-008). Editável remotamente (Fase 0 do ADR-009): validado por schema + limites antes de usar; se falhar, o plugin cai nos padrões embarcados em js/remote-config.js.",
+
+  "roles": {
+    "cut": {
+      "label": "Passagem no corte",
+      "concepts": ["whoosh", "transition"],
+      "minDur": 0.15,
+      "maxDur": 1.2,
+      "poolSize": 5
+    },
+    "impact": {
+      "label": "Impacto",
+      "concepts": ["impact", "drop"],
+      "minDur": 0.3,
+      "maxDur": 2.5,
+      "poolSize": 4
+    },
+    "riser": {
+      "label": "Riser",
+      "concepts": ["riser"],
+      "minDur": 1.0,
+      "maxDur": 4.0,
+      "poolSize": 3,
+      "requiresResolution": true
+    },
+    "bed": {
+      "label": "Cama sonora",
+      "concepts": ["drone", "deep"],
+      "minDur": 20,
+      "maxDur": 600,
+      "poolSize": 3
+    }
+  },
+
+  "limits": {
+    "maxPlacements": 60,
+    "maxTracksToCreate": 8,
+    "minGapSameFile": 10
+  }
+}

@@ -456,6 +456,28 @@ function applyManifest(manifest) {
   buildCategoryTabs();
   renderEffects(allEffects);
   checkMissingMediaOnBoot();  // v1.0.4: avisa se o projeto tem mídia offline
+  loadRemoteConfig();         // Fase 0 do ADR-009: receitas/papéis do CDN
+}
+
+// Config remota (DADOS, nunca código) — permite ajustar receitas de pack e
+// papéis do motor de SFX sem release. Só roda depois do manifest porque
+// precisa do dicionário de conceitos pra descartar nome inexistente.
+// Falha aqui é inofensiva: o piso é a cópia embarcada em js/recipes.js.
+var CINEPRO_ROLES = null, CINEPRO_LIMITS = null;
+
+function loadRemoteConfig() {
+  if (!window.CinePRORemoteConfig) return;
+  window.CinePRORemoteConfig.load(CINEPRO_CONCEPTS_DICT, function (cfg) {
+    if (cfg.recipes && cfg.recipes.length) window.CINEPRO_RECIPES = cfg.recipes;
+    CINEPRO_ROLES  = cfg.roles;
+    CINEPRO_LIMITS = cfg.limits;
+    PACK_CACHE = {};            // pesos podem ter mudado — invalida o cache
+    buildSidebarTree();         // rótulos/ícones dos packs vêm daqui
+    if (cfg.warnings && cfg.warnings.length) {
+      console.warn('[CinePRO] config remota:', cfg.warnings.join(' | '));
+    }
+    console.log('[CinePRO] config:', JSON.stringify(cfg.source));
+  });
 }
 
 // ── FALLBACK: Drive walk live (caso manifest off) ────────────────
