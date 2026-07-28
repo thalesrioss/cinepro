@@ -283,6 +283,31 @@ function getTimelineStats() {
 }
 
 /**
+ * Tempos EXATOS de cada corte + duração e playhead. O motor de auto-SFX
+ * (ADR-008) precisa dos intervalos pra não colocar um som mais longo que
+ * o espaço até o corte seguinte — era isso que empilhava áudio.
+ */
+function getCutPoints() {
+  try {
+    var seq = app.project.activeSequence;
+    if (!seq) return '{"error":"NO_SEQUENCE"}';
+    var cuts = collectCutPoints(seq, 300);
+    var parts = [];
+    for (var i = 0; i < cuts.length; i++) parts.push(cuts[i].toFixed(3));
+    var vClips = 0;
+    try {
+      for (var t = 0; t < seq.videoTracks.numTracks; t++) vClips += seq.videoTracks[t].clips.numItems;
+    } catch (e) {}
+    return '{"cuts":[' + parts.join(',') + ']' +
+           ',"clips":' + vClips +
+           ',"duration":' + seq.end.seconds.toFixed(3) +
+           ',"playhead":' + seq.getPlayerPosition().seconds.toFixed(3) + '}';
+  } catch (e) {
+    return '{"error":"' + String(e).replace(/"/g, "'") + '"}';
+  }
+}
+
+/**
  * Garante que existam pelo menos N faixas de áudio VAZIAS no fim da
  * sequência. O auto-apply chama isto ANTES de aplicar — assim nunca
  * falha com NO_FREE_TRACK numa timeline cheia (o caso comum: A1-A3 ja

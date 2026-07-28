@@ -363,7 +363,21 @@ async function walkCategory(drive, folderId, categoryName, pathParts, depth) {
   if (fs.existsSync(outFile)) {
     try {
       const prev = JSON.parse(fs.readFileSync(outFile, 'utf8'));
-      (prev.files || []).forEach(f => prevIds.add(f.id));
+      // Carrega a duração já extraída. O rebuild diário lê o Drive, que não
+      // informa duração — sem este carry-over o bot apagaria o trabalho de
+      // extract-durations.js todo dia, e o motor de auto-SFX (ADR-008), que
+      // depende de duração pra escolher, pararia de achar candidato.
+      const prevDur = new Map();
+      (prev.files || []).forEach(f => {
+        prevIds.add(f.id);
+        if (typeof f.dur === 'number') prevDur.set(f.id, f.dur);
+      });
+      let carried = 0;
+      for (const f of allFiles) {
+        if (prevDur.has(f.id)) { f.dur = prevDur.get(f.id); carried++; }
+      }
+      const audio = allFiles.filter(f => f.kind === 'audio').length;
+      console.log(`  duração preservada: ${carried} | áudios sem duração: ${audio - carried}`);
     } catch (_) { /* manifest anterior corrompido → trata como vazio */ }
   }
 

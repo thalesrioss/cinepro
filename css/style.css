@@ -1989,3 +1989,48 @@ body {
 .pack-head-desc { font-size: 10px; color: var(--text-dim); margin-top: 2px; line-height: 1.4; }
 .pack-apply { flex: none; white-space: nowrap; }
 .pack-apply:disabled { opacity: 0.6; cursor: wait; }
+
+/* ── Plano do auto-SFX (ADR-008) ─────────────────────────── */
+/* O plano aparece ANTES de tocar na timeline: o editor vê o que vai
+   acontecer e confirma. Antes era caixa-preta. */
+.pack-plan {
+  flex-basis: 100%;
+  margin-top: 10px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: var(--bg-elev, rgba(255,255,255,.04));
+  border: 1px solid var(--border, rgba(255,255,255,.08));
+}
+.pack-plan-title {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-main);
+  margin-bottom: 7px;
+}
+.pack-plan-row {
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+  font-size: 10px;
+  line-height: 1.5;
+  padding: 2px 0;
+}
+.pack-plan-role {
+  flex: 0 0 108px;
+  color: var(--accent, #7c9cff);
+  font-weight: 600;
+}
+.pack-plan-detail {
+  flex: 1;
+  min-width: 0;
+  color: var(--text-dim);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.pack-plan-detail em { font-style: normal; opacity: .7; }
+.pack-plan-warn {
+  margin-top: 6px;
+  font-size: 10px;
+  color: var(--warn, #e0a33e);
+}

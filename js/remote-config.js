@@ -126,6 +126,10 @@
         icon: str(r.icon, 8) || '🎵',
         desc: str(r.desc, 200) || '',
         weights: w,
+        // De quantos em quantos cortes entra o SFX de passagem. Executa o
+        // princípio 4 do MD (habituação) e a regra de Tutorial, onde o som
+        // pontua sem competir com a fala. 1 = todo corte.
+        cutEvery: num(r.cutEvery, 1, 8, 1),
       });
     }
 

@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "updatedAt": "2026-07-25",
-  "note": "Editavel remotamente (Fase 0 do ADR-009). Validado por schema + limites antes de usar; se falhar, o plugin cai na copia embarcada em js/recipes.js.",
+  "note": "Editavel remotamente (Fase 0 do ADR-009). Validado por schema + limites antes de usar; se falhar, o plugin cai na copia embarcada em js/recipes.js. cutEvery = de quantos em quantos cortes entra o SFX de passagem (1 = todo corte).",
   "recipes": [
     {
       "id": "trailer",
@@ -16,7 +16,8 @@
         "whoosh": 2,
         "tense": 1,
         "drone": 1
-      }
+      },
+      "cutEvery": 2
     },
     {
       "id": "terror",
@@ -30,7 +31,8 @@
         "impact": 1,
         "glass": 1,
         "horror-creature": 1
-      }
+      },
+      "cutEvery": 2
     },
     {
       "id": "vlog",
@@ -43,7 +45,8 @@
         "transition": 2,
         "ui": 1,
         "fast": 1
-      }
+      },
+      "cutEvery": 1
     },
     {
       "id": "reels",
@@ -57,7 +60,8 @@
         "riser": 2,
         "ui": 1,
         "fast": 1
-      }
+      },
+      "cutEvery": 1
     },
     {
       "id": "gaming",
@@ -71,7 +75,8 @@
         "ui": 2,
         "fast": 1,
         "sci-fi": 1
-      }
+      },
+      "cutEvery": 1
     },
     {
       "id": "tutorial",
@@ -84,7 +89,8 @@
         "transition": 1,
         "gentle": 1,
         "minimal": 1
-      }
+      },
+      "cutEvery": 3
     },
     {
       "id": "corporativo",
@@ -97,7 +103,8 @@
         "whoosh": 2,
         "transition": 1,
         "minimal": 1
-      }
+      },
+      "cutEvery": 2
     },
     {
       "id": "documentario",
@@ -111,7 +118,8 @@
         "nature": 1,
         "deep": 1,
         "epic": 1
-      }
+      },
+      "cutEvery": 4
     }
   ]
 }

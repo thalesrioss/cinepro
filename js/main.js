@@ -1223,11 +1223,12 @@ function getPackIds(packId) {
   for (var i = 0; i < allEffects.length; i++) {
     var e = allEffects[i];
     if (!e.embed) continue;
-    var s = 0;
-    for (var name in recipe.weights) {
-      var ci = conceptIdx[name];
-      if (ci !== undefined && e.embed[ci]) s += recipe.weights[name] * e.embed[ci];
-    }
+    // Mesmo cosseno da aplicação automática (js/sfx-engine.js): a
+    // listagem sofria do mesmo viés de nome verboso, mostrando sempre
+    // os arquivos com mais conceitos no nome em vez dos mais adequados.
+    var s = window.CinePROSfxEngine
+      ? window.CinePROSfxEngine.genreFit(e, recipe, conceptIdx)
+      : 0;
     if (s > 0) scored.push({ id: e.id, s: s });
   }
   scored.sort(function (a, b) { return b.s - a.s; });
@@ -1236,150 +1237,192 @@ function getPackIds(packId) {
   return ids;
 }
 
-// Escolhe do pack o melhor arquivo pra um PAPEL (por conceitos-alvo).
-function pickPackRole(ids, conceptNames) {
-  if (!CINEPRO_CONCEPTS_DICT) return null;
-  var cIdx = {};
-  for (var c = 0; c < CINEPRO_CONCEPTS_DICT.length; c++) cIdx[CINEPRO_CONCEPTS_DICT[c].name] = c;
-  var best = null, bestS = 0;
-  for (var i = 0; i < ids.length; i++) {
-    var e = effectsById[ids[i]];
-    if (!e || !e.embed || e.kind !== 'audio') continue;
-    var s = 0;
-    for (var n = 0; n < conceptNames.length; n++) {
-      var ci = cIdx[conceptNames[n]];
-      if (ci !== undefined && e.embed[ci]) s += e.embed[ci];
-    }
-    if (s > bestS) { bestS = s; best = e; }
-  }
-  return best;
-}
-
 /**
- * v1.0.3 — "A mágica": analisa a timeline (cortes reais), entende o que o
- * pack pede (knowledge/receitas) e APLICA os papéis certos:
- *   cama (drone) em 0s → hook (impacto) no 1º corte → whoosh nos cortes.
- * Tudo em faixas livres — nunca atropela a montagem.
+ * v1.0.8 (ADR-008) — "A mágica", agora em duas etapas.
+ *
+ * 1º clique monta o PLANO (sem tocar na timeline) e mostra o que vai
+ * acontecer; 2º clique aplica. A versão anterior era caixa-preta: ou
+ * funcionava ou dava um erro genérico, e o editor não tinha como saber
+ * o que ela ia fazer nem corrigir.
+ *
+ * A seleção mudou por completo — ver js/sfx-engine.js.
  */
+var PENDING_PLAN = {};   // packId → plano aguardando confirmação
+
 function packAutoApply(packId, btn) {
   var recipes = window.CINEPRO_RECIPES || [];
   var recipe = null;
   for (var r = 0; r < recipes.length; r++) if (recipes[r].id === packId) { recipe = recipes[r]; break; }
   if (!recipe) return;
 
+  // 2º clique: já existe plano montado → aplica
+  if (PENDING_PLAN[packId]) {
+    var plan = PENDING_PLAN[packId];
+    delete PENDING_PLAN[packId];
+    return executePlan(plan, recipe, btn);
+  }
+
+  if (!window.CinePROSfxEngine) {
+    showToast('Motor de SFX não carregou — reabra o painel.', 'error');
+    return;
+  }
+
   if (btn) { btn.disabled = true; btn.textContent = 'Analisando timeline…'; }
-  setStatus('loading', 'Analisando os cortes da timeline...');
+  setStatus('loading', 'Lendo os cortes da timeline...');
+
+  cs.evalScript('getCutPoints()', function (raw) {
+    var tl = null;
+    try { tl = JSON.parse(raw); } catch (e) {}
+
+    function fail(msg) {
+      setStatus('error', msg);
+      showToast('⚠ ' + msg, 'error');
+      if (btn) { btn.disabled = false; btn.textContent = '⚡ Aplicar pack na timeline'; }
+    }
+    if (!tl || tl.error) {
+      return fail(String((tl && tl.error) || raw).indexOf('NO_SEQUENCE') > -1
+        ? 'Abra uma sequência na timeline primeiro.'
+        : 'Não consegui ler a timeline: ' + ((tl && tl.error) || 'sem resposta'));
+    }
+    if (!tl.clips) return fail('Timeline vazia — coloque seus takes na sequência primeiro.');
+
+    // Se a config remota ainda não respondeu (rede lenta, primeiro boot),
+    // usa os padrões embarcados em vez de montar um plano vazio.
+    var fallback = (window.CinePRORemoteConfig && window.CinePRORemoteConfig.DEFAULT_ROLES) || {};
+    var plan = window.CinePROSfxEngine.buildPlan({
+      effects: allEffects,
+      concepts: CINEPRO_CONCEPTS_DICT,
+      recipe: recipe,
+      roles: CINEPRO_ROLES || fallback.roles,
+      limits: CINEPRO_LIMITS || fallback.limits,
+      timeline: tl,
+    });
+
+    if (!plan.steps.length) {
+      return fail(plan.warnings.length
+        ? 'Nada aplicável: ' + plan.warnings[0]
+        : 'Nenhum som deste pack serve a esta timeline.');
+    }
+
+    PENDING_PLAN[packId] = plan;
+    renderPlanPreview(packId, plan, recipe);
+    if (btn) { btn.disabled = false; btn.textContent = '✓ Confirmar e aplicar'; }
+    setStatus('ok', 'Plano pronto — revise e confirme');
+  });
+}
+
+/** Mostra o plano no cabeçalho do pack, antes de tocar na timeline. */
+function renderPlanPreview(packId, plan, recipe) {
+  var head = document.querySelector('.pack-head');
+  if (!head) return;
+  var old = head.querySelector('.pack-plan');
+  if (old) old.remove();
+
+  var byRole = { bed: [], riser: [], impact: [], cut: [] };
+  plan.steps.forEach(function (s) { if (byRole[s.role]) byRole[s.role].push(s); });
+
+  var LABEL = { bed: 'Cama sonora', riser: 'Riser', impact: 'Impacto', cut: 'Passagem nos cortes' };
+  var rows = '';
+  ['bed', 'riser', 'impact', 'cut'].forEach(function (role) {
+    var list = byRole[role];
+    if (!list.length) return;
+    var names = {};
+    list.forEach(function (s) { names[s.effect.name] = 1; });
+    var uniq = Object.keys(names);
+    rows +=
+      '<div class="pack-plan-row">' +
+        '<span class="pack-plan-role">' + LABEL[role] + '</span>' +
+        '<span class="pack-plan-detail">' +
+          escapeHtmlLite(uniq.slice(0, 3).join(' · ')) +
+          (uniq.length > 3 ? ' +' + (uniq.length - 3) : '') +
+          (role === 'cut' ? ' <em>(' + list.length + '×)</em>' : '') +
+        '</span>' +
+      '</div>';
+  });
+
+  var box = document.createElement('div');
+  box.className = 'pack-plan';
+  box.innerHTML =
+    '<div class="pack-plan-title">Plano · ' + plan.stats.placements + ' colocações · ' +
+      plan.stats.distinctFiles + ' sons diferentes</div>' + rows +
+    (plan.warnings.length ? '<div class="pack-plan-warn">' + escapeHtmlLite(plan.warnings[0]) + '</div>' : '');
+  head.appendChild(box);
+}
+
+function escapeHtmlLite(s) {
+  return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+/** Baixa o que o plano precisa e aplica passo a passo. */
+function executePlan(plan, recipe, btn) {
+  function setBtn(txt, dis) { if (btn) { btn.textContent = txt; btn.disabled = !!dis; } }
+  function done(msg, kind) {
+    setBtn('⚡ Aplicar pack na timeline', false);
+    var box = document.querySelector('.pack-plan');
+    if (box) box.remove();
+    setStatus(kind === 'error' ? 'error' : 'ok', msg);
+    showToast((kind === 'error' ? '⚠ ' : '✦ ') + msg, kind === 'error' ? 'error' : 'success');
+  }
 
   function evalP(code) {
     return new Promise(function (resolve) { cs.evalScript(code, resolve); });
   }
-  function resetBtn() {
-    if (btn) { btn.disabled = false; btn.textContent = '⚡ Aplicar pack na timeline'; }
-  }
-  // Traduz o retorno cru do ExtendScript pra algo acionável (antes engolíamos
-  // o erro real num "não consegui aplicar" genérico — impossível diagnosticar).
-  function explain(r) {
-    r = String(r || '');
-    if (r.indexOf('NO_SEQUENCE') > -1)     return 'Abra uma sequência na timeline primeiro.';
-    if (r.indexOf('NO_FREE_TRACK') > -1)   return 'Sem faixa de áudio livre — não consegui criar novas trilhas.';
-    if (r.indexOf('FILE_NOT_FOUND') > -1)  return 'O arquivo baixado sumiu do cache.';
-    if (r.indexOf('EvalScript') > -1)      return 'O Premiere recusou o script (reinicie o Premiere).';
-    if (r.indexOf('ERR:') > -1)            return 'Premiere: ' + r.replace(/^.*ERR:/, '');
-    return r || 'sem resposta do Premiere';
+  function dl(effect) {
+    var cached = effectCache[effect.id];
+    return cached ? Promise.resolve(cached)
+      : downloadEffectFile(effect).then(function (p) { effectCache[effect.id] = p; return p; });
   }
 
-  cs.evalScript('getTimelineStats()', function (raw) {
-    var stats = null;
-    try { stats = JSON.parse(raw); } catch (e) {}
-    function fail(msg) {
-      setStatus('error', msg);
-      showToast('⚠ ' + msg, 'error');
-      resetBtn();
-    }
-    if (!stats || stats.error) return fail(explain((stats && stats.error) || raw));
-    if (!stats.clips) return fail('Timeline vazia — coloque seus takes na sequência primeiro.');
+  setBtn('Preparando trilhas…', true);
+  setStatus('loading', 'Criando trilhas livres...');
 
-    var ids = getPackIds(packId);
-    // Fallback: se o conceito exato não aparece no pack, usa o melhor áudio
-    // dele mesmo assim. Antes um pack sem "drone" simplesmente não aplicava nada.
-    var anyAudio = null;
-    for (var i = 0; i < ids.length && !anyAudio; i++) {
-      var e0 = effectsById[ids[i]];
-      if (e0 && e0.kind === 'audio') anyAudio = e0;
-    }
-    if (!anyAudio) return fail('Esse pack não tem áudios na sua base.');
-
-    var cutSfx = pickPackRole(ids, ['whoosh', 'transition']) || anyAudio;
-    var hook   = pickPackRole(ids, ['impact']) || null;
-    var bed    = (recipe.weights && recipe.weights.drone >= 2) ? pickPackRole(ids, ['drone']) : null;
-
-    // Sem cortes detectados (take único / corte só no áudio) o pack ainda
-    // faz sentido: cama + hook no playhead. Não é motivo pra abortar.
-    var cuts = stats.cuts || 0;
-    var hookAt = cuts ? (stats.first || 0) : (stats.playhead || 0);
-
-    var done = [], errs = [];
-    function dl(effect) {
-      var cached = effectCache[effect.id];
-      return cached ? Promise.resolve(cached)
-        : downloadEffectFile(effect).then(function (p) { effectCache[effect.id] = p; return p; });
-    }
-    function stepApply(effect, code, label, okTest) {
-      return dl(effect).then(function (p) {
-        return evalP(code(escapePath(p), effect.ext)).then(function (r) {
-          var lbl = okTest(r);
-          if (lbl) { done.push(lbl); recordUsedFile(effect, p); }
-          else errs.push(explain(r));
-        });
-      }, function (err) {
-        errs.push('download de "' + effect.name + '": ' + humanizeError((err && err.message) || ''));
+  // Cria as trilhas ANTES: numa timeline com A1-A3 ocupadas, era aqui
+  // que a versão antiga morria com NO_FREE_TRACK.
+  evalP('ensureFreeAudioTracks(' + ((CINEPRO_LIMITS && CINEPRO_LIMITS.maxTracksToCreate) || 4) + ')')
+    .then(function () {
+      // Baixa cada arquivo distinto UMA vez, não uma por colocação
+      var uniq = {}, order = [];
+      plan.steps.forEach(function (s) {
+        if (!uniq[s.effect.id]) { uniq[s.effect.id] = s.effect; order.push(s.effect); }
       });
-    }
-
-    setStatus('loading', (cuts || 'nenhum') + ' corte(s) — preparando trilhas...');
-
-    // Cria trilhas de áudio livres ANTES — numa timeline com A1-A3 ocupadas
-    // era exatamente aqui que tudo falhava com NO_FREE_TRACK.
-    evalP('ensureFreeAudioTracks(3)').then(function () {
-      setStatus('loading', 'Aplicando o pack...');
-      var chain = Promise.resolve();
-
-      if (bed) chain = chain.then(function () {
-        return stepApply(bed,
-          function (p, ext) { return 'applyAtTime("' + p + '", "' + ext + '", 0)'; },
-          'cama sonora',
-          function (r) { return r && r.indexOf('OK:') === 0 ? 'cama sonora' : null; });
-      });
-
-      if (hook) chain = chain.then(function () {
-        return stepApply(hook,
-          function (p, ext) { return 'applyAtTime("' + p + '", "' + ext + '", ' + hookAt + ')'; },
-          'impacto',
-          function (r) { return r && r.indexOf('OK:') === 0 ? (cuts ? 'impacto no 1º corte' : 'impacto no playhead') : null; });
-      });
-
-      if (cuts && cutSfx) chain = chain.then(function () {
-        return stepApply(cutSfx,
-          function (p, ext) { return 'applyAtAllCuts("' + p + '", "' + ext + '", 25)'; },
-          'whoosh',
-          function (r) { var m = /CUTS_(\d+)_OF_(\d+)/.exec(r || ''); return m ? ('whoosh em ' + m[1] + ' corte(s)') : null; });
-      });
-
-      return chain;
-    }).then(function () {
-      resetBtn();
-      if (done.length) {
-        setStatus('ok', 'Pack "' + recipe.label + '" aplicado!');
-        showToast('✦ ' + recipe.label + ': ' + done.join(' + '), 'success');
-        if (cutSfx) trackUsage(cutSfx.id);
-      } else {
-        fail(errs.length ? errs[0] : 'Nada foi aplicado (sem detalhe do Premiere).');
+      var paths = {}, i = 0;
+      function nextDl() {
+        if (i >= order.length) return Promise.resolve();
+        var e = order[i++];
+        setBtn('Baixando ' + i + '/' + order.length + '…', true);
+        return dl(e).then(function (p) { paths[e.id] = p; }, function () { /* segue sem ele */ })
+                    .then(nextDl);
       }
-    }).catch(function (err) {
-      fail(humanizeError((err && err.message) || String(err)));
+      return nextDl().then(function () { return paths; });
+    })
+    .then(function (paths) {
+      var okN = 0, failN = 0, j = 0;
+      function nextStep() {
+        if (j >= plan.steps.length) return Promise.resolve();
+        var s = plan.steps[j++];
+        var p = paths[s.effect.id];
+        if (!p) { failN++; return nextStep(); }
+        setBtn('Aplicando ' + j + '/' + plan.steps.length + '…', true);
+        return evalP('applyAtTime("' + escapePath(p) + '", "' + s.effect.ext + '", ' + s.at + ')')
+          .then(function (r) {
+            if (r && r.indexOf('OK:') === 0) { okN++; recordUsedFile(s.effect, p); }
+            else failN++;
+          })
+          .then(nextStep);
+      }
+      return nextStep().then(function () { return { okN: okN, failN: failN }; });
+    })
+    .then(function (res) {
+      if (!res.okN) return done('Nada foi aplicado — verifique espaço nas trilhas.', 'error');
+      trackUsage(plan.steps[0].effect.id);
+      done(recipe.label + ': ' + res.okN + ' som(ns) aplicado(s)' +
+           (res.failN ? ' · ' + res.failN + ' falhou(aram)' : ''), 'ok');
+    })
+    .catch(function (err) {
+      done('Falha: ' + humanizeError((err && err.message) || String(err)), 'error');
     });
-  });
 }
+
 
 function filterEffects(query) {
   // Sets pré-computados pra evitar lookup repetido
