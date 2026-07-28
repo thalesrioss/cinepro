@@ -205,7 +205,25 @@
     };
   }
 
-  var API = { parse: parse, normalize: normalize, fitLines: fitLines,
+  /**
+   * Serializa cues de volta pra SRT. É o formato que o Premiere e o
+   * Resolve leem nativamente — por isso a saída é SRT e não um formato
+   * nosso: funciona nos dois sem template nenhum.
+   */
+  function toSRT(cues) {
+    var out = [];
+    for (var i = 0; i < cues.length; i++) {
+      var c = cues[i];
+      var linhas = (c.lines && c.lines.length) ? c.lines : [c.text];
+      out.push(String(i + 1));
+      out.push(formatTime(c.start) + ' --> ' + formatTime(c.end));
+      out.push(linhas.join('\n'));
+      out.push('');
+    }
+    return out.join('\n');
+  }
+
+  var API = { parse: parse, normalize: normalize, fitLines: fitLines, toSRT: toSRT,
               cleanText: cleanText, parseTime: parseTime, formatTime: formatTime,
               stats: stats };
 

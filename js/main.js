@@ -750,6 +750,22 @@ function buildSidebarTree() {
   restoreItem.title = 'Selecione clipes na timeline e clique pra restaurar só eles (ou nada selecionado = projeto inteiro). Re-baixa no mesmo caminho e religa.';
   tree.appendChild(restoreItem);
 
+  // ─ Legendas (v1.0.8) — SRT limpo direto na timeline ─
+  var subsItem = makeSidebarItem({
+    label: 'Legendas (SRT)', icon: '💬',
+    dataCat: 'subtitles', dataSub: '',
+    isActive: false,
+    onClick: function () {
+      var labelEl = subsItem.querySelector('.sidebar-label') || subsItem;
+      importSubtitleFile({
+        get textContent() { return labelEl.textContent; },
+        set textContent(v) { labelEl.textContent = v; },
+      });
+    },
+  });
+  subsItem.title = 'Escolha um .srt/.vtt: corrigimos timing, sobreposição e quebra de linha antes de mandar pra timeline.';
+  tree.appendChild(subsItem);
+
   // ─ Packs (v1.1) — receitas psicoacústicas viram packs curados ─
   try {
     var recipes = window.CINEPRO_RECIPES || [];
@@ -3064,6 +3080,79 @@ function restoreMissingMedia(btn) {
     cs.evalScript('getOfflineMediaPaths()', function (raw2) {
       var all = null; try { all = JSON.parse(raw2); } catch (e) {}
       restorePaths((all && all.paths) || [], btn);
+    });
+  });
+}
+
+// ══ LEGENDAS (v1.0.8) ═══════════════════════════════════════════
+// Caminho NATIVO: Premiere e Resolve leem .srt direto, sem template.
+// O que agregamos é o arquivo LIMPO — o SRT de ASR (Whisper, CapCut,
+// YouTube) vem com sobreposição, cue de 0,1s e quebra no meio de
+// palavra. js/subtitles.js corrige isso antes de importar.
+
+function importSubtitleFile(btn) {
+  function setLabel(t) { if (btn) btn.textContent = t; }
+  var original = btn ? btn.textContent : '';
+  function reset(ms) { setTimeout(function () { setLabel(original); }, ms || 2500); }
+
+  if (!window.CinePROSubtitles) {
+    showToast('Motor de legendas não carregou — reabra o painel.', 'error');
+    return;
+  }
+
+  // File.openDialog do ExtendScript: o CEP não tem picker nativo e um
+  // <input type=file> num painel file:// não devolve caminho utilizável.
+  cs.evalScript('pickSubtitleFile()', function (raw) {
+    var srtPath = String(raw || '').trim();
+    if (!srtPath || srtPath === 'CANCEL' || srtPath.indexOf('ERR') === 0) {
+      if (srtPath.indexOf('ERR') === 0) showToast('Não consegui abrir o seletor.', 'error');
+      return;
+    }
+
+    var fsMod;
+    try { fsMod = window.require('fs'); } catch (e) {
+      showToast('Sem acesso ao disco neste painel.', 'error');
+      return;
+    }
+
+    var raw2;
+    try { raw2 = fsMod.readFileSync(srtPath, 'utf8'); }
+    catch (e) { showToast('Não consegui ler o arquivo.', 'error'); return; }
+
+    var cues = window.CinePROSubtitles.parse(raw2);
+    if (!cues.length) {
+      showToast('Nenhuma legenda válida nesse arquivo.', 'error');
+      return;
+    }
+
+    var norm = window.CinePROSubtitles.normalize(cues, { maxLines: 2 });
+    var st = window.CinePROSubtitles.stats(norm);
+
+    // Grava o normalizado ao lado do original — não sobrescreve o do usuário
+    var outPath = srtPath.replace(/\.(srt|vtt)$/i, '') + ' (CinePRO).srt';
+    try { fsMod.writeFileSync(outPath, window.CinePROSubtitles.toSRT(norm), 'utf8'); }
+    catch (e) { showToast('Não consegui gravar o SRT limpo.', 'error'); return; }
+
+    setLabel('Importando ' + st.count + '…');
+    setStatus('loading', st.count + ' legendas — importando...');
+
+    cs.evalScript('importSubtitles("' + escapePath(outPath) + '")', function (r) {
+      r = String(r || '');
+      if (r.indexOf('OK:') === 0) {
+        var naBin = r.indexOf('IMPORTED_TO_BIN') > -1;
+        setLabel('✓ ' + st.count + ' legendas');
+        setStatus('ok', st.count + ' legendas importadas');
+        showToast('✓ ' + st.count + ' legendas' +
+          (st.cps > 20 ? ' · ⚠ ' + st.cps + ' car/s (rápido demais pra ler)' : '') +
+          (naBin ? ' — no painel do projeto, arraste pra timeline' : ' na timeline'), 'success');
+      } else {
+        setLabel(original);
+        setStatus('error', 'Falha ao importar');
+        showToast('⚠ ' + (r.indexOf('NO_SEQUENCE') > -1
+          ? 'Abra uma sequência primeiro.'
+          : 'Premiere recusou: ' + r.replace(/^.*ERR:/, '')), 'error');
+      }
+      reset(4000);
     });
   });
 }
