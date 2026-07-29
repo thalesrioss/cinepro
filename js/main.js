@@ -777,7 +777,7 @@ function buildSidebarTree() {
       runDiagnostics({
         get textContent() { return labelEl.textContent; },
         set textContent(v) { labelEl.textContent = v; },
-      });
+      }, !!(window.event && window.event.shiftKey));
     },
   });
   diagItem.title = 'Analisa o ritmo da montagem e marca na timeline os trechos onde a retenção cai. Não altera nada — só escreve marcadores.';
@@ -3108,8 +3108,18 @@ function restoreMissingMedia(btn) {
 // Os limites (2s no vertical, 5s no horizontal) vêm de
 // knowledge/retencao-e-edicao.md, sintetizado do second brain.
 
-function runDiagnostics(btn) {
+function runDiagnostics(btn, selfTest) {
   function setLabel(t) { if (btn) btn.textContent = t; }
+
+  // Shift+clique roda o auto-teste em vez da analise: mostra o que o
+  // Premiere responde nesta instalacao, sem precisar de mim no meio.
+  if (selfTest) {
+    cs.evalScript('cineproSelfTest()', function (r) {
+      console.log('[CinePRO] self-test:', r);
+      showToast('🔧 ' + String(r).slice(0, 200), 'success');
+    });
+    return;
+  }
   var original = btn ? btn.textContent : '';
   function reset(ms) { setTimeout(function () { setLabel(original); }, ms || 4000); }
 
@@ -3126,11 +3136,23 @@ function runDiagnostics(btn) {
     try { tl = JSON.parse(raw); } catch (e) {}
 
     if (!tl || tl.error) {
+      // O MOTIVO precisa aparecer. A v1.0.9 falhou com "Não consegui ler
+      // a timeline" e sem o texto cru não deu pra saber que era
+      // seq.end.seconds lançando TypeError — foram horas às cegas.
+      var cru = String((tl && tl.error) || raw || 'sem resposta');
       setLabel(original);
-      setStatus('error', 'Não consegui ler a timeline');
-      showToast('⚠ ' + (String((tl && tl.error) || raw).indexOf('NO_SEQUENCE') > -1
-        ? 'Abra uma sequência na timeline primeiro.'
-        : 'Não consegui ler a timeline.'), 'error');
+      if (cru.indexOf('NO_SEQUENCE') > -1) {
+        setStatus('error', 'Sem sequência');
+        showToast('⚠ Abra uma sequência na timeline primeiro.', 'error');
+      } else if (/EvalScript|is not defined|undefined is not a function/i.test(cru)) {
+        setStatus('error', 'Plugin desatualizado');
+        showToast('⚠ O Premiere está com uma versão antiga do script. ' +
+                  'Feche e reabra o Premiere (não só o painel).', 'error');
+      } else {
+        setStatus('error', 'Falha ao ler a timeline');
+        showToast('⚠ Premiere: ' + cru.slice(0, 160), 'error');
+      }
+      console.error('[CinePRO] getCutPoints:', raw);
       return;
     }
     if (!tl.clips) {

@@ -136,6 +136,95 @@ var AUDIO_EXTS = { mp3:1, wav:1, m4a:1, aac:1, ogg:1, aif:1, aiff:1 };
 // clipes de vídeo. Coleta todos, deduplica (tolerância 40ms), e coloca o
 // SFX em faixa livre em cada um via placeItemSmart. Sem visão computacional
 // — a timeline é a fonte da verdade.
+// ══ DURAÇÃO DA SEQUÊNCIA — leitura robusta ══════════════════════
+// BUG que derrubou o diagnostico na v1.0.9: `seq.end` no ExtendScript
+// e STRING DE TICKS, nao objeto Time. Entao `seq.end.seconds` e
+// undefined e `.toFixed(3)` LANCA TypeError — que o catch de fora
+// transformava em '{"error":...}', derrubando a funcao inteira. O
+// mesmo defeito estava em getTimelineStats, usado pelo botao magico.
+//
+// Aqui tentamos tres caminhos e nunca deixamos um deles quebrar tudo.
+var TICKS_PER_SECOND = 254016000000;
+
+function seqDurationSec(seq) {
+  // 1. end como ticks (caminho documentado)
+  try {
+    var t = seq.end;
+    if (t && typeof t.seconds === 'number') return t.seconds;   // versoes que dao Time
+    if (typeof t === 'string' && t.length) {
+      var n = parseFloat(t);
+      if (isFinite(n) && n > 0) return n / TICKS_PER_SECOND;
+    }
+  } catch (e) {}
+  // 2. out point
+  try {
+    var op = seq.getOutPoint();
+    if (op && typeof op.seconds === 'number' && op.seconds > 0) return op.seconds;
+    if (typeof op === 'string') {
+      var n2 = parseFloat(op);
+      if (isFinite(n2) && n2 > 0) return n2 / TICKS_PER_SECOND;
+    }
+  } catch (e) {}
+  // 3. ultimo recurso: fim do ultimo clipe. TrackItem.end E Time —
+  //    e o mesmo acesso que collectCutPoints ja usa e funciona.
+  var max = 0;
+  try {
+    for (var i = 0; i < seq.videoTracks.numTracks; i++) {
+      var tr = seq.videoTracks[i];
+      for (var j = 0; j < tr.clips.numItems; j++) {
+        var e2 = tr.clips[j].end.seconds;
+        if (e2 > max) max = e2;
+      }
+    }
+    for (var a = 0; a < seq.audioTracks.numTracks; a++) {
+      var ta = seq.audioTracks[a];
+      for (var k = 0; k < ta.clips.numItems; k++) {
+        var e3 = ta.clips[k].end.seconds;
+        if (e3 > max) max = e3;
+      }
+    }
+  } catch (e) {}
+  return max;
+}
+
+/** Playhead em segundos, tolerante a falha. */
+function seqPlayheadSec(seq) {
+  try {
+    var p = seq.getPlayerPosition();
+    if (p && typeof p.seconds === 'number') return p.seconds;
+  } catch (e) {}
+  return 0;
+}
+
+/**
+ * Auto-teste: diz o que funciona nesta instalacao. Existe porque
+ * depurar as cegas pela mensagem do painel custou caro — agora um
+ * clique responde quais chamadas do Premiere respondem e quais nao.
+ */
+function cineproSelfTest() {
+  var out = [];
+  function probe(name, fn) {
+    try {
+      var v = fn();
+      out.push('"' + name + '":"' + String(v).replace(/"/g, "'").slice(0, 60) + '"');
+    } catch (e) {
+      out.push('"' + name + '":"ERRO: ' + String(e).replace(/"/g, "'").slice(0, 60) + '"');
+    }
+  }
+  probe('app', function () { return app.name + ' ' + app.version; });
+  var seq = null;
+  try { seq = app.project.activeSequence; } catch (e) {}
+  if (!seq) return '{"sequencia":"NENHUMA"}';
+  probe('seq', function () { return seq.name; });
+  probe('seq.end.tipo', function () { return typeof seq.end; });
+  probe('duracao', function () { return seqDurationSec(seq).toFixed(2) + 's'; });
+  probe('playhead', function () { return seqPlayheadSec(seq).toFixed(2) + 's'; });
+  probe('resolucao', function () { return seq.frameSizeHorizontal + 'x' + seq.frameSizeVertical; });
+  probe('cortes', function () { return collectCutPoints(seq, 300).length; });
+  probe('marcadores', function () { return seq.markers.numMarkers; });
+  return '{' + out.join(',') + '}';
+}
+
 function collectCutPoints(seq, maxN) {
   var points = [];
   try {
@@ -276,7 +365,7 @@ function getTimelineStats() {
            ',"atracks":' + seq.audioTracks.numTracks +
            ',"playhead":' + seq.getPlayerPosition().seconds.toFixed(3) +
            ',"first":' + (cuts.length ? cuts[0].toFixed(3) : 0) +
-           ',"duration":' + seq.end.seconds.toFixed(3) + '}';
+           ',"duration":' + seqDurationSec(seq).toFixed(3) + '}';
   } catch (e) {
     return '{"error":"' + String(e).replace(/"/g, "'") + '"}';
   }
@@ -359,8 +448,8 @@ function getCutPoints() {
            ',"clips":' + vClips +
            ',"width":' + (w || 0) +
            ',"height":' + (h || 0) +
-           ',"duration":' + seq.end.seconds.toFixed(3) +
-           ',"playhead":' + seq.getPlayerPosition().seconds.toFixed(3) + '}';
+           ',"duration":' + seqDurationSec(seq).toFixed(3) +
+           ',"playhead":' + seqPlayheadSec(seq).toFixed(3) + '}';
   } catch (e) {
     return '{"error":"' + String(e).replace(/"/g, "'") + '"}';
   }
@@ -932,8 +1021,8 @@ function getSequenceInfo() {
     if (!seq) return JSON.stringify({ error: 'NO_SEQUENCE' });
     return JSON.stringify({
       name: seq.name,
-      duration: seq.end.seconds,
-      playhead: seq.getPlayerPosition().seconds,
+      duration: seqDurationSec(seq),
+      playhead: seqPlayheadSec(seq),
       videoTracks: seq.videoTracks.numTracks,
       audioTracks: seq.audioTracks.numTracks,
     });
