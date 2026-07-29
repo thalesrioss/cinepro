@@ -187,3 +187,190 @@ tem.
 [[Hook e Ganchos - 2025]] · [[Contágio - Padrões de Viralização]]
 
 `04_Archives/` → [[Vídeo Virais de Elias Maman]] (12 vídeos, +300k views cada)
+
+---
+
+# Parte II — Base científica
+
+> **Como ler esta parte:** o vault manda *"não inventar, seguir o que já deu
+> certo"* — e também diz que, faltando algo, é pra **complementar, não
+> substituir**. É o que esta seção faz. Nada aqui substitui os frameworks
+> validados da Parte I; o que ela traz é o **mecanismo** por trás deles, o
+> que permite decidir em situações que a prática ainda não cobriu.
+>
+> Todas as fontes foram verificadas. Onde a evidência é fraca, está dito.
+
+---
+
+## 1. Por que o corte prende: Teoria da Segmentação de Eventos
+
+O cérebro fatia experiência contínua em **eventos** automaticamente, e isso
+não é escolha — é parte do processamento perceptual. A segmentação otimiza a
+atenção e organiza a experiência na memória.
+
+O mecanismo: o cérebro mantém um **modelo preditivo** do que vem a seguir.
+Quando o modelo erra, o **erro de predição** dispara um deslocamento
+transitório de atenção pra atualizar o modelo e codificar o novo evento.
+
+> **Um corte é uma descontinuidade que força o cérebro a atualizar o modelo.**
+> É literalmente isso que "comprar atenção" significa em termos neurais.
+
+Estudos de fMRI mostram regiões corticais reagindo às descontinuidades
+introduzidas por cortes de filme.
+
+**O que isso muda na prática:** confirma a Parte I e adiciona uma condição
+que a intuição não dizia — o corte precisa gerar **erro de predição**. Corte
+previsível (sempre o mesmo tipo, no mesmo ritmo) para de disparar o mecanismo.
+É a base neural da regra *"não repita a mesma quebra de padrão"*.
+
+**Fontes:** [Magliano & Zacks, *Cognitive Science* (2011)](https://onlinelibrary.wiley.com/doi/10.1111/j.1551-6709.2011.01202.x) ·
+[Individual differences in neural event segmentation, *Cerebral Cortex* (2023)](https://academic.oup.com/cercor/article/33/13/8164/7093068) ·
+[Estudo EEG sobre edição e segmentação (PMC)](https://www.ncbi.nlm.nih.gov/pmc/articles/PMC8586935/)
+
+---
+
+## 2. ⚠️ Correção: o "8 segundos" é estatística fabricada
+
+A Parte I registra *"o ciclo de atenção humana está dentro de 8 segundos,
+enquanto o de um peixinho dourado tem até 9 segundos"*. **Esse dado é falso.**
+
+Origem: um relatório da **Microsoft Canadá (2015)** que reproduziu um número
+da empresa **Statistic Brain** — que nunca apresentou fonte. A BBC investigou,
+não obteve sustentação, e pesquisadores de atenção classificaram como
+inverídico. A Microsoft tirou o relatório do ar. A parte do peixinho também é
+falsa: há milhares de estudos mostrando que peixes retêm informação por
+semanas e até anos.
+
+**O que NÃO muda:** os números operacionais (recomprar a cada ~5s no
+horizontal, ~2s no vertical) vieram da **sua prática**, não desse estudo. Como
+heurística de ofício, seguem valendo — e o motor de diagnóstico usa eles.
+
+**O que muda:** parar de vender isso como "ciência do cérebro". Se um cliente
+ou concorrente checar, o argumento cai — e leva junto a credibilidade do
+resto, que é sólido. O enquadramento correto é: *"na prática, vídeo vertical
+exige quebra a cada ~2s"* — afirmação de ofício, verificável no gráfico de
+retenção dele.
+
+**Fontes:** [Northwell Health — o mito explicado](https://thewell.northwell.edu/brain-nerve-health/attention-span-goldfish-myth) ·
+[Forbes — capacidade de atenção sustentada](https://www.forbes.com/sites/shanesnow/2023/01/16/science-shows-humans-have-massive-capacity-for-sustained-attention-and-storytelling-unlocks-it/)
+
+---
+
+## 3. Duração: o dado de maior amostra que existe
+
+Guo, Kim & Rubin analisaram **6,9 milhões de sessões** de vídeo no edX.
+Achado principal: **a duração foi o indicador mais forte de engajamento** —
+mais que qualquer escolha de produção.
+
+| Duração | Comportamento |
+|---|---|
+| **≤ 6 min** | assistem quase até o fim |
+| **> 9 min** | raramente chegam ao fim |
+
+Também acharam: vídeo de **talking head informal** engaja mais que produção
+formal.
+
+**O que isso muda:** dá um limite objetivo pra conteúdo educacional, e valida
+o formato que o editor já usa. É o dado mais defensável pra usar em copy —
+grande amostra, publicado em conferência (ACM L@S).
+
+**Fonte:** [Guo, Kim & Rubin, *ACM Learning@Scale* (2014)](https://dl.acm.org/doi/10.1145/2556325.2566239) ·
+[PDF](https://learningatscale.acm.org/las2014/talks/paper_philip_guo2.pdf)
+
+---
+
+## 4. Curiosidade é privação, não interesse
+
+Loewenstein descreve a curiosidade como **lacuna de informação** — uma forma
+de *privação cognitiva*: sabemos que existe algo que não sabemos, e queremos
+saber.
+
+Duas condições fazem a lacuna funcionar:
+
+1. Precisa ser **específica e saliente** — vaga não gera privação
+2. A resposta precisa parecer **alcançável** — a intensidade segue um **U
+   invertido**: incerteza baixa demais não move, alta demais desiste
+
+**O que isso muda:** dá o mecanismo por trás do *"Curiosidade > Interesse >
+Retenção"* da Parte I, e explica por que gancho vago não funciona. Também
+explica o U invertido na prática: *"o segredo que ninguém conta"* (vago
+demais) rende menos que *"por que seu Reels morre aos 3 segundos"*
+(específico, alcançável).
+
+**Fonte:** [Loewenstein, *Psychological Bulletin* 116(1) (1994)](https://www.cmu.edu/dietrich/sds/docs/golman/Information-Gap%20Theory%202016.pdf)
+
+---
+
+## 5. Edição sincroniza cérebros — mas nem toda edição
+
+Hasson mediu, por fMRI, a **correlação entre indivíduos** (ISC) assistindo ao
+mesmo filme. Alguns filmes produzem controle considerável sobre a atividade
+cerebral e o movimento ocular dos espectadores.
+
+O achado que importa: **isso não vale pra todo material.** O grau de controle
+varia conforme conteúdo, **edição** e direção.
+
+**O que isso muda:** é a evidência mais direta de que *"edição conduz"* — a
+Arquitetura de Emoções da Parte I — não é metáfora. E o corolário é
+desconfortável: material mal editado **não** sincroniza, ou seja, o mesmo
+conteúdo com edição pior produz espectadores dispersos.
+
+**Fonte:** [Hasson et al., *Projections* 2(1) (2008) — PDF](https://www.motionpictures.org/wp-content/uploads/2013/01/Hasson-etal_NeuroCinematics2008.pdf)
+
+---
+
+## 6. O que fica na memória: pico e fim
+
+Kahneman (sobre trabalho de Fredrickson) descreve a **regra do pico-fim**: a
+avaliação retrospectiva de uma experiência é dominada pelo **momento de maior
+intensidade** e pelo **final** — não pela média nem pela duração.
+
+O fenômeno associado é a **negligência de duração**: o comprimento da
+experiência quase não influencia a avaliação.
+
+**O que isso muda — e é o achado mais acionável desta pesquisa:**
+
+> O diagnóstico hoje trata todos os trechos igual. Mas um vão de retenção
+> **no final** custa mais caro que no meio, e um vídeo **sem pico** é
+> esquecido mesmo tendo ritmo bom.
+
+Duas verificações novas que isso justifica:
+1. **Peso maior pra problemas no terço final** — é o que fica na memória
+2. **Detecção de pico** — vídeo com ritmo uniforme e nenhum momento de
+   intensidade destacada não é lembrado
+
+**Fontes:** [Nielsen Norman Group — Peak-End Rule](https://www.nngroup.com/articles/peak-end-rule/) ·
+[The Decision Lab](https://thedecisionlab.com/biases/peak-end-rule)
+
+---
+
+## 7. Contrapeso: cortar mais nem sempre é melhor
+
+Um estudo publicado em *Neuroscience* indica que audiovisual **caótico e
+rápido aumenta o escopo atencional mas reduz o processamento consciente**.
+
+⚠️ **Ressalva de honestidade:** avaliei este pelo título e resumo, não pelo
+texto completo. Trate como direção de leitura, não como conclusão fechada.
+
+**Por que registro assim mesmo:** é o único contrapeso que achei ao viés de
+"cortar mais é sempre melhor", e ele coincide com uma decisão que já tomamos
+por outro caminho — a densidade por gênero (`cutEvery`), onde Tutorial e
+Documentário pontuam menos. Se o mecanismo se confirmar, ritmo alto demais
+aumenta a atenção **superficial** e reduz a **compreensão** — exatamente o
+oposto do que um tutorial precisa.
+
+**Fonte:** [*Neuroscience* (ScienceDirect)](https://www.sciencedirect.com/science/article/abs/pii/S0306452218306882)
+
+---
+
+## Impacto no produto — resumo
+
+| Achado | Consequência | Estado |
+|---|---|---|
+| Segmentação de eventos | corte precisa gerar erro de predição → não repetir a mesma quebra | ✅ já no motor |
+| Mito dos 8s | mudar o discurso, manter o número operacional | 📝 comunicação |
+| Teto de 6 min | flag de duração pra conteúdo educacional | 💡 proposto |
+| Lacuna de informação | gancho precisa ser específico e alcançável | 💡 caça-gancho |
+| ISC / neurocinema | edição ruim dispersa — argumento de venda defensável | 📝 copy |
+| **Pico-fim** | **peso maior no terço final + detectar ausência de pico** | 💡 **próximo** |
+| Ritmo alto reduz compreensão | densidade por gênero está certa | ✅ já no motor |
