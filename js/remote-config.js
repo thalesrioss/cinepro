@@ -29,6 +29,7 @@
   var SOURCES = {
     recipes: [REPO_CDN + 'recipes.json', './data/recipes.json'],
     roles:   [REPO_CDN + 'roles.json',   './data/roles.json'],
+    diagnostics: [REPO_CDN + 'diagnostics.json', './data/diagnostics.json'],
   };
 
   // Chaves que nunca podem ser copiadas de um objeto vindo da rede:
@@ -189,6 +190,35 @@
     return { ok: true, value: { roles: roles, limits: limits }, errors: errors };
   }
 
+  // ── Validação: diagnostics.json ─────────────────────────────
+  // Cada número aqui vira conselho na tela do editor. Um limite
+  // absurdo não quebra nada, mas faz o software mentir — por isso o
+  // clamp é apertado e o padrão embarcado é o piso.
+  var DEFAULT_DIAG = {
+    limitVertical: 2, limitHorizontal: 5, hardLimit: 8,
+    hookWindow: 5, maxFindings: 40,
+  };
+
+  function validateDiagnostics(raw) {
+    if (!isObj(raw)) return { ok: false, errors: ['raiz não é objeto'] };
+    if (raw.schemaVersion !== 1) return { ok: false, errors: ['schemaVersion desconhecida: ' + raw.schemaVersion] };
+    var errors = [];
+    var v = {
+      limitVertical:   num(raw.limitVertical,   0.5, 30,  DEFAULT_DIAG.limitVertical),
+      limitHorizontal: num(raw.limitHorizontal, 0.5, 60,  DEFAULT_DIAG.limitHorizontal),
+      hardLimit:       num(raw.hardLimit,       1,   120, DEFAULT_DIAG.hardLimit),
+      hookWindow:      num(raw.hookWindow,      0.5, 60,  DEFAULT_DIAG.hookWindow),
+      maxFindings:     num(raw.maxFindings,     1,   200, DEFAULT_DIAG.maxFindings),
+    };
+    // Coerência: o limite duro tem que ser maior que os de formato,
+    // senão TODO vão vira 'grave' e o diagnóstico perde utilidade.
+    if (v.hardLimit <= v.limitHorizontal) {
+      errors.push('hardLimit <= limitHorizontal — usando padrão');
+      v.hardLimit = DEFAULT_DIAG.hardLimit;
+    }
+    return { ok: true, value: v, errors: errors };
+  }
+
   // Descarta conceitos que não existem no dicionário do manifest — um
   // nome errado faria o papel nunca casar, falhando em silêncio.
   function pruneUnknownConcepts(roles, dict) {
@@ -263,7 +293,7 @@
   function load(conceptsDict, cb) {
     var embeddedRecipes = global.CINEPRO_RECIPES || [];
     var result = { warnings: [], source: {} };
-    var pending = 2;
+    var pending = 3;
 
     function finish() {
       if (--pending > 0) return;
@@ -276,6 +306,13 @@
       result.recipes = r.value;
       result.source.recipes = r.source;
       r.errors.forEach(function (e) { result.warnings.push('recipes: ' + e); });
+      finish();
+    });
+
+    loadOne('diagnostics', validateDiagnostics, DEFAULT_DIAG, function (r) {
+      result.diagnostics = r.value;
+      result.source.diagnostics = r.source;
+      r.errors.forEach(function (e) { result.warnings.push('diagnostics: ' + e); });
       finish();
     });
 
@@ -292,6 +329,8 @@
     load: load,
     validateRecipes: validateRecipes,
     validateRoles: validateRoles,
+    validateDiagnostics: validateDiagnostics,
+    DEFAULT_DIAG: DEFAULT_DIAG,
     pruneUnknownConcepts: pruneUnknownConcepts,
     DEFAULT_ROLES: DEFAULT_ROLES,
   };

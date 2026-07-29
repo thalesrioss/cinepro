@@ -351,12 +351,97 @@ function getCutPoints() {
     try {
       for (var t = 0; t < seq.videoTracks.numTracks; t++) vClips += seq.videoTracks[t].clips.numItems;
     } catch (e) {}
+    // Resolucao entra aqui porque o diagnostico usa formato pra escolher
+    // o limite: 2s no vertical, 5s no horizontal (ADR-011).
+    var w = 0, h = 0;
+    try { w = seq.frameSizeHorizontal; h = seq.frameSizeVertical; } catch (e) {}
     return '{"cuts":[' + parts.join(',') + ']' +
            ',"clips":' + vClips +
+           ',"width":' + (w || 0) +
+           ',"height":' + (h || 0) +
            ',"duration":' + seq.end.seconds.toFixed(3) +
            ',"playhead":' + seq.getPlayerPosition().seconds.toFixed(3) + '}';
   } catch (e) {
     return '{"error":"' + String(e).replace(/"/g, "'") + '"}';
+  }
+}
+
+// ══ ANOTADOR (ADR-011) ══════════════════════════════════════════
+// Escreve o diagnostico como MARCADOR na timeline. E o canal de
+// entrega nao-destrutivo: nao altera um frame da montagem, e o
+// editor apaga tudo quando quiser.
+//
+// Todo marcador nosso leva o prefixo CINEPRO_TAG no comentario —
+// e assim que clearDiagnosticMarkers sabe apagar SO os nossos e
+// nunca encostar nos marcadores de trabalho do editor.
+
+var CINEPRO_TAG = '[CinePRO]';
+
+// Premiere aceita cor por indice. Mapa aproximado dos nomes que o
+// motor usa (js/diagnostics.js) pros indices do Premiere.
+function markerColorIndex(name) {
+  switch (String(name || '').toLowerCase()) {
+    case 'red':    return 1;
+    case 'yellow': return 4;
+    case 'cyan':   return 7;
+    case 'green':  return 0;
+    default:       return 6;   // blue
+  }
+}
+
+/**
+ * Aplica marcadores. Recebe JSON: [{at, color, name, note, duration}]
+ * com tempos em SEGUNDOS. Retorna 'OK:MARKERS_<n>'.
+ */
+function addDiagnosticMarkers(payload) {
+  try {
+    var seq = app.project.activeSequence;
+    if (!seq) return 'ERR:NO_SEQUENCE';
+
+    var list = JSON.parse(payload);
+    if (!list || !list.length) return 'OK:MARKERS_0';
+
+    var markers = seq.markers;
+    var n = 0;
+    for (var i = 0; i < list.length; i++) {
+      var m = list[i];
+      try {
+        var mk = markers.createMarker(Number(m.at) || 0);
+        mk.name = String(m.name || 'CinePRO');
+        mk.comments = CINEPRO_TAG + ' ' + String(m.note || '');
+        // duracao ajuda a ver a EXTENSAO do problema, nao so o ponto
+        if (m.duration && Number(m.duration) > 0) {
+          try { mk.end = (Number(m.at) || 0) + Number(m.duration); } catch (e) {}
+        }
+        try { mk.setColorByIndex(markerColorIndex(m.color)); } catch (e) {}
+        n++;
+      } catch (e) {/* um marcador que falha nao aborta os outros */}
+    }
+    return 'OK:MARKERS_' + n;
+  } catch (e) {
+    return 'ERR:MARKERS:' + e.toString();
+  }
+}
+
+/** Apaga SO os marcadores do CinePRO. 'OK:CLEARED_<n>'. */
+function clearDiagnosticMarkers() {
+  try {
+    var seq = app.project.activeSequence;
+    if (!seq) return 'ERR:NO_SEQUENCE';
+    var markers = seq.markers;
+    var doomed = [];
+    var mk = markers.getFirstMarker();
+    while (mk) {
+      if (String(mk.comments || '').indexOf(CINEPRO_TAG) === 0) doomed.push(mk);
+      mk = markers.getNextMarker(mk);
+    }
+    // Coleta antes de apagar: remover durante a travessia perde itens
+    for (var i = 0; i < doomed.length; i++) {
+      try { markers.deleteMarker(doomed[i]); } catch (e) {}
+    }
+    return 'OK:CLEARED_' + doomed.length;
+  } catch (e) {
+    return 'ERR:CLEAR_MARKERS:' + e.toString();
   }
 }
 

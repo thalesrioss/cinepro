@@ -1,0 +1,11 @@
+{
+  "schemaVersion": 1,
+  "updatedAt": "2026-07-28",
+  "note": "Limites do diagnóstico de retenção (ADR-011). Vêm de knowledge/retencao-e-edicao.md, sintetizado do second brain: recomprar atenção a cada 5s no horizontal e 2s no vertical; ciclo de atenção humano ~8s. Editável remotamente — valide antes de mexer, é o número que gera o conselho.",
+
+  "limitVertical": 2,
+  "limitHorizontal": 5,
+  "hardLimit": 8,
+  "hookWindow": 5,
+  "maxFindings": 40
+}

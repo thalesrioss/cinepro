@@ -463,7 +463,7 @@ function applyManifest(manifest) {
 // papéis do motor de SFX sem release. Só roda depois do manifest porque
 // precisa do dicionário de conceitos pra descartar nome inexistente.
 // Falha aqui é inofensiva: o piso é a cópia embarcada em js/recipes.js.
-var CINEPRO_ROLES = null, CINEPRO_LIMITS = null;
+var CINEPRO_ROLES = null, CINEPRO_LIMITS = null, CINEPRO_DIAG_LIMITS = null;
 
 function loadRemoteConfig() {
   if (!window.CinePRORemoteConfig) return;
@@ -471,6 +471,7 @@ function loadRemoteConfig() {
     if (cfg.recipes && cfg.recipes.length) window.CINEPRO_RECIPES = cfg.recipes;
     CINEPRO_ROLES  = cfg.roles;
     CINEPRO_LIMITS = cfg.limits;
+    CINEPRO_DIAG_LIMITS = cfg.diagnostics;
     PACK_CACHE = {};            // pesos podem ter mudado — invalida o cache
     buildSidebarTree();         // rótulos/ícones dos packs vêm daqui
     if (cfg.warnings && cfg.warnings.length) {
@@ -765,6 +766,22 @@ function buildSidebarTree() {
   });
   subsItem.title = 'Escolha um .srt/.vtt: corrigimos timing, sobreposição e quebra de linha antes de mandar pra timeline.';
   tree.appendChild(subsItem);
+
+  // ─ Diagnóstico de retenção (v1.0.9 / ADR-011) ─
+  var diagItem = makeSidebarItem({
+    label: 'Diagnóstico', icon: '🔍',
+    dataCat: 'diagnostics', dataSub: '',
+    isActive: false,
+    onClick: function () {
+      var labelEl = diagItem.querySelector('.sidebar-label') || diagItem;
+      runDiagnostics({
+        get textContent() { return labelEl.textContent; },
+        set textContent(v) { labelEl.textContent = v; },
+      });
+    },
+  });
+  diagItem.title = 'Analisa o ritmo da montagem e marca na timeline os trechos onde a retenção cai. Não altera nada — só escreve marcadores.';
+  tree.appendChild(diagItem);
 
   // ─ Packs (v1.1) — receitas psicoacústicas viram packs curados ─
   try {
@@ -3080,6 +3097,94 @@ function restoreMissingMedia(btn) {
     cs.evalScript('getOfflineMediaPaths()', function (raw2) {
       var all = null; try { all = JSON.parse(raw2); } catch (e) {}
       restorePaths((all && all.paths) || [], btn);
+    });
+  });
+}
+
+// ══ DIAGNÓSTICO DE RETENÇÃO (ADR-011) ═══════════════════════════
+// Lê a montagem, aponta onde a atenção cai e escreve MARCADORES.
+// Não altera um frame — é o canal de entrega não-destrutivo.
+//
+// Os limites (2s no vertical, 5s no horizontal) vêm de
+// knowledge/retencao-e-edicao.md, sintetizado do second brain.
+
+function runDiagnostics(btn) {
+  function setLabel(t) { if (btn) btn.textContent = t; }
+  var original = btn ? btn.textContent : '';
+  function reset(ms) { setTimeout(function () { setLabel(original); }, ms || 4000); }
+
+  if (!window.CinePRODiagnostics) {
+    showToast('Motor de diagnóstico não carregou — reabra o painel.', 'error');
+    return;
+  }
+
+  setLabel('Analisando…');
+  setStatus('loading', 'Lendo a montagem...');
+
+  cs.evalScript('getCutPoints()', function (raw) {
+    var tl = null;
+    try { tl = JSON.parse(raw); } catch (e) {}
+
+    if (!tl || tl.error) {
+      setLabel(original);
+      setStatus('error', 'Não consegui ler a timeline');
+      showToast('⚠ ' + (String((tl && tl.error) || raw).indexOf('NO_SEQUENCE') > -1
+        ? 'Abra uma sequência na timeline primeiro.'
+        : 'Não consegui ler a timeline.'), 'error');
+      return;
+    }
+    if (!tl.clips) {
+      setLabel(original);
+      setStatus('ok', 'Timeline vazia');
+      showToast('Timeline vazia — coloque seus takes primeiro.', 'error');
+      return;
+    }
+
+    var opts = (CINEPRO_DIAG_LIMITS || {});
+    var result = window.CinePRODiagnostics.analyze(tl, opts);
+    var markers = window.CinePRODiagnostics.toMarkers(result, tl.fps || 30);
+    var st = result.stats;
+
+    // Limpa os NOSSOS marcadores antes: reexecutar não pode empilhar.
+    cs.evalScript('clearDiagnosticMarkers()', function () {
+      if (!markers.length) {
+        setLabel('✓ Ritmo ok');
+        setStatus('ok', 'Nenhum ponto de atenção');
+        showToast('✓ Ritmo segurando a atenção — nenhum trecho acima de ' +
+                  st.limit + 's (' + st.format + ').', 'success');
+        reset();
+        return;
+      }
+
+      var payload = JSON.stringify(markers.map(function (m) {
+        return {
+          at: m.frame / (tl.fps || 30),
+          duration: m.durationFrames / (tl.fps || 30),
+          color: m.color,
+          name: m.name,
+          note: m.note,
+        };
+      })).replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+
+      cs.evalScript('addDiagnosticMarkers("' + payload + '")', function (r) {
+        var m2 = /MARKERS_(\d+)/.exec(String(r || ''));
+        var n = m2 ? parseInt(m2[1], 10) : 0;
+        if (!n) {
+          setLabel(original);
+          setStatus('error', 'Não consegui marcar');
+          showToast('⚠ Premiere recusou os marcadores: ' + String(r).replace(/^.*ERR:/, ''), 'error');
+          reset();
+          return;
+        }
+        setLabel('✓ ' + n + ' marcados');
+        setStatus('ok', st.total + ' ponto(s) de atenção');
+        var rit = result.rhythm ? ' · corte médio ' + result.rhythm.avgGap + 's' : '';
+        showToast('🔍 ' + st.total + ' ponto(s) de atenção' +
+                  (st.high ? ' (' + st.high + ' graves)' : '') +
+                  ' · pior: ' + st.worstGap + 's sem quebra' + rit +
+                  ' — veja os marcadores na timeline.', 'success');
+        reset(6000);
+      });
     });
   });
 }
