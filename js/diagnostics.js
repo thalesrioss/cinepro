@@ -185,6 +185,108 @@
     };
   }
 
+
+  // ══ BRIEFING ════════════════════════════════════════════════
+  // Apontar problema não muda edição. O que muda é dizer O QUE FAZER
+  // e POR QUE — o "porquê" é o que ensina o editor a não repetir.
+  // Toda prescrição aqui vem de knowledge/retencao-e-edicao.md.
+
+  var PRESCRICOES = {
+    'retention-gap': {
+      acao: 'Insira uma quebra de padrão: corte, lettering, mudança de ' +
+            'câmera, animação ou SFX.',
+      porque: 'A atenção precisa ser recomprada em ciclos. Passar do limite ' +
+              'do formato é onde a retenção cai.',
+      cuidado: 'Não repita a mesma quebra que você usou antes — repetir o ' +
+               'mesmo recurso derruba a atenção em vez de segurar. E B-roll ' +
+               'de 3s não conta: o raciocínio precisa de fluxo contínuo.',
+    },
+    'slow-hook': {
+      acao: 'Corte antes ou comece o vídeo mais perto do conflito.',
+      porque: 'O bloco de abertura decide se a pessoa fica. No 7E, o ' +
+              'Antagonismo mira 3-5s.',
+      cuidado: 'Fórmula que funciona: "Enquanto [uns fazem X], [outros ' +
+               'fazem Y]". Contraste faz o cérebro parar pra processar.',
+    },
+  };
+
+  /**
+   * Transforma achados em briefing de edição.
+   * @returns {object} {verdict, tone, headline, cards, acoes, principio}
+   */
+  function buildBriefing(result) {
+    var st = result.stats;
+    var r = result.rhythm;
+    var n = st.total, graves = st.high;
+
+    var verdict, tone;
+    if (!n) {
+      verdict = 'Ritmo saudável';
+      tone = 'ok';
+    } else if (graves >= 3) {
+      verdict = 'A retenção está vazando';
+      tone = 'bad';
+    } else if (graves >= 1) {
+      verdict = 'Tem pontos que derrubam a retenção';
+      tone = 'warn';
+    } else {
+      verdict = 'Quase lá — ajustes pontuais';
+      tone = 'warn';
+    }
+
+    var headline = !n
+      ? 'Nenhum trecho passa de ' + st.limit + 's sem quebra de padrão. ' +
+        'O ritmo está segurando a atenção.'
+      : n + (n === 1 ? ' trecho perde' : ' trechos perdem') + ' a atenção do ' +
+        'espectador. O pior fica ' + st.worstGap + 's sem nenhuma quebra de ' +
+        'padrão — o limite para ' + st.format + ' é ' + st.limit + 's.';
+
+    var cards = [
+      { label: 'Formato', value: st.format === 'vertical' ? 'Vertical' : 'Horizontal',
+        hint: 'recompra a cada ' + st.limit + 's' },
+      { label: 'Duração', value: fmtTime(st.duration), hint: 'da sequência' },
+    ];
+    if (r) {
+      cards.push({ label: 'Cortes', value: String(r.cuts), hint: 'na timeline' });
+      cards.push({
+        label: 'Ritmo médio', value: r.avgGap + 's',
+        hint: r.avgGap > st.limit ? 'acima do limite' : 'dentro do limite',
+        bad: r.avgGap > st.limit,
+      });
+    }
+
+    var acoes = result.findings.map(function (f) {
+      var p = PRESCRICOES[f.type] || {};
+      return {
+        at: f.at,
+        timecode: fmtTime(f.at),
+        severity: f.severity,
+        titulo: f.title,
+        acao: p.acao || f.note,
+        porque: p.porque || '',
+        cuidado: p.cuidado || '',
+      };
+    });
+
+    // O princípio fecha o briefing: é o que o editor leva pro próximo vídeo.
+    var principio = st.format === 'vertical'
+      ? 'Em Reels e Shorts a atenção precisa ser recomprada a cada 2 segundos. ' +
+        'Interesse não é conquistado, é mantido.'
+      : 'No YouTube a atenção precisa ser recomprada a cada 5 segundos. ' +
+        'Curiosidade leva a interesse, e interesse leva a retenção.';
+
+    return {
+      verdict: verdict, tone: tone, headline: headline,
+      cards: cards, acoes: acoes, principio: principio,
+    };
+  }
+
+  function fmtTime(sec) {
+    sec = Math.max(0, Number(sec) || 0);
+    var m = Math.floor(sec / 60), s = Math.floor(sec % 60);
+    return m + ':' + (s < 10 ? '0' : '') + s;
+  }
+
   /** Achados → marcadores. `customData` permite apagar só os nossos. */
   function toMarkers(result, fps) {
     fps = Number(fps) || 24;
@@ -232,6 +334,8 @@
 
   var API = {
     analyze: analyze,
+    buildBriefing: buildBriefing,
+    fmtTime: fmtTime,
     retentionGaps: retentionGaps,
     hookCheck: hookCheck,
     cutRhythm: cutRhythm,

@@ -124,7 +124,7 @@
       out.push({
         id: id,
         label: label,
-        icon: str(r.icon, 8) || '🎵',
+        icon: str(r.icon, 8) || '◆',
         desc: str(r.desc, 200) || '',
         weights: w,
         // De quantos em quantos cortes entra o SFX de passagem. Executa o

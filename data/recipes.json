@@ -6,7 +6,7 @@
     {
       "id": "trailer",
       "label": "Trailer Cinematográfico",
-      "icon": "🎬",
+      "icon": "◆",
       "desc": "Risers que resolvem em impacto. Sub-grave pra escala.",
       "weights": {
         "impact": 3,
@@ -22,7 +22,7 @@
     {
       "id": "terror",
       "label": "Terror / Suspense",
-      "icon": "🕯",
+      "icon": "◆",
       "desc": "Cama de drone + silêncio antes do susto.",
       "weights": {
         "horror": 3,
@@ -37,7 +37,7 @@
     {
       "id": "vlog",
       "label": "Vlog Dinâmico",
-      "icon": "📹",
+      "icon": "◆",
       "desc": "Whoosh na virada de assunto, leveza no resto.",
       "weights": {
         "whoosh": 3,
@@ -51,7 +51,7 @@
     {
       "id": "reels",
       "label": "Reels / TikTok",
-      "icon": "⚡",
+      "icon": "◆",
       "desc": "Hook sonoro no segundo 0. Reset de atenção a cada 3-5s.",
       "weights": {
         "impact": 2,
@@ -66,7 +66,7 @@
     {
       "id": "gaming",
       "label": "Gaming / Highlights",
-      "icon": "🎮",
+      "icon": "◆",
       "desc": "Impactos exagerados, risers de clutch, UI de score.",
       "weights": {
         "impact": 3,
@@ -81,7 +81,7 @@
     {
       "id": "tutorial",
       "label": "Tutorial / Educacional",
-      "icon": "🎓",
+      "icon": "◆",
       "desc": "O som serve a voz. Pontuação discreta, nunca por cima da fala.",
       "weights": {
         "ui": 3,
@@ -95,7 +95,7 @@
     {
       "id": "corporativo",
       "label": "Corporativo",
-      "icon": "💼",
+      "icon": "◆",
       "desc": "Autoridade sem drama. Transições suaves, zero glitch.",
       "weights": {
         "gentle": 2,
@@ -109,7 +109,7 @@
     {
       "id": "documentario",
       "label": "Documentário / Emocional",
-      "icon": "🎞",
+      "icon": "◆",
       "desc": "A emoção vem do espaço, não do hit. Camas longas.",
       "weights": {
         "drone": 3,

@@ -225,6 +225,19 @@ function cineproSelfTest() {
   return '{' + out.join(',') + '}';
 }
 
+/** Leva o playhead pra um tempo em segundos. Usado pelos timecodes
+ *  clicaveis do briefing — o editor VE o problema em vez de ler sobre. */
+function setPlayheadTime(sec) {
+  try {
+    var seq = app.project.activeSequence;
+    if (!seq) return 'ERR:NO_SEQUENCE';
+    seq.setPlayerPosition(String(Math.round((Number(sec) || 0) * TICKS_PER_SECOND)));
+    return 'OK';
+  } catch (e) {
+    return 'ERR:PLAYHEAD:' + e.toString();
+  }
+}
+
 function collectCutPoints(seq, maxN) {
   var points = [];
   try {
