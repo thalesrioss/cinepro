@@ -42,7 +42,7 @@ function hydrateCacheFromDisk() {
     }
   });
   if (hits !== ids.length) saveCacheIndex(idx);
-  if (hits > 0) console.log('[CinePRO] hidratou cache com ' + hits + 'arquivos persistentes');
+  if (hits > 0) console.log('[CinePRO] hidratou cache com ' + hits + ' arquivos persistentes');
 }
 
 // ══ FIREBASE ══════════════════════════════════════════════════
@@ -80,7 +80,7 @@ function checkSubscription(user) {
   // Whitelist de admins (acesso vitalício, ignora assinatura)
   if (CINEPRO_CONFIG.ADMIN_EMAILS && CINEPRO_CONFIG.ADMIN_EMAILS.indexOf((user.email || '').toLowerCase()) !== -1) {
     showScreen('app');
-    setUserBadge(user.email + '(ADM)');
+    setUserBadge(user.email + ' (ADM)');
     loadEffects();
     return;
   }
@@ -90,7 +90,7 @@ function checkSubscription(user) {
       // Acesso por admin no documento OU assinatura ativa
       if (doc.exists && (doc.data().admin === true || doc.data().subscriptionActive === true)) {
         showScreen('app');
-        var badge = user.email + (doc.data().admin === true ? '(ADM)' : '');
+        var badge = user.email + (doc.data().admin === true ? ' (ADM)' : '');
         setUserBadge(badge);
         loadEffects();
       } else {
@@ -155,7 +155,7 @@ function sendPasswordReset() {
   }
   auth.sendPasswordResetEmail(email)
     .then(function () {
-      showLoginSuccess('Link enviado pra ' + email + '. Verifique seu email.');
+      showLoginSuccess('✓ Link enviado pra ' + email + '. Verifique seu email.');
     })
     .catch(function (e) {
       if (e.code === 'auth/user-not-found') {
@@ -385,7 +385,7 @@ function loadEffects() {
       if (manifest) {
         applyManifest(manifest);
         var ageHours = ((Date.now() - new Date(manifest.builtAt).getTime()) / 3600000).toFixed(0);
-        setStatus('ok', allEffects.length + 'efeitos prontos (manifest ' + ageHours + 'h atrás)');
+        setStatus('ok', allEffects.length + ' efeitos prontos (manifest ' + ageHours + 'h atrás)');
         return;
       }
       console.warn('[CinePRO] Manifest indisponível, fallback pra Drive walk');
@@ -407,7 +407,7 @@ function tryManifest(urls) {
     })
     .then(function (m) {
       if (!m || !m.files || !Array.isArray(m.files)) throw new Error('manifest inválido');
-      console.log('[CinePRO] Manifest carregado de:', url, '· ' + m.files.length + 'arquivos · built ' + m.builtAt);
+      console.log('[CinePRO] Manifest carregado de:', url, '· ' + m.files.length + ' arquivos · built ' + m.builtAt);
       return m;
     })
     .catch(function (e) {
@@ -475,7 +475,7 @@ function loadRemoteConfig() {
     PACK_CACHE = {};            // pesos podem ter mudado — invalida o cache
     buildSidebarTree();         // rótulos/ícones dos packs vêm daqui
     if (cfg.warnings && cfg.warnings.length) {
-      console.warn('[CinePRO] config remota:', cfg.warnings.join('| '));
+      console.warn('[CinePRO] config remota:', cfg.warnings.join(' | '));
     }
     console.log('[CinePRO] config:', JSON.stringify(cfg.source));
   });
@@ -517,7 +517,7 @@ function loadEffectsFromDriveLive() {
     .then(function () {
       buildCategoryTabs();
       renderEffects(allEffects);
-      setStatus('ok', driveCategories.length + 'categorias prontas — clique pra explorar');
+      setStatus('ok', driveCategories.length + ' categorias prontas — clique pra explorar');
     })
     .catch(function (err) {
       setStatus('error', 'Erro ao carregar');
@@ -548,7 +548,7 @@ function loadCategoryDeep(categoryName) {
       driveLoadedCats[categoryName] = true;
       cat.loaded = true;
       buildSearchIndex();  // rebuild com itens novos
-      setStatus('ok', allEffects.filter(function(e){return e.category===categoryName;}).length + 'itens em "' + categoryName + '"');
+      setStatus('ok', allEffects.filter(function(e){return e.category===categoryName;}).length + ' itens em "' + categoryName + '"');
       // Atualiza contadores nas abas
       var btn = document.querySelector('.tab-btn[data-cat="' + categoryName + '"] .tab-count');
       if (btn) {
@@ -631,7 +631,7 @@ function listDriveFolderAll(folderId) {
 
 function listDriveFolder(folderId, pageToken) {
   var url = 'https://www.googleapis.com/drive/v3/files'
-    + '?q=' + encodeURIComponent("'"+ folderId + "' in parents and trashed=false")
+    + '?q=' + encodeURIComponent("'" + folderId + "' in parents and trashed=false")
     + '&fields=nextPageToken,files(id,name,mimeType,thumbnailLink,size)'
     + '&pageSize=' + DRIVE_PAGE_SIZE
     + (pageToken ? '&pageToken=' + encodeURIComponent(pageToken) : '')
@@ -751,21 +751,6 @@ function buildSidebarTree() {
   restoreItem.title = 'Selecione clipes na timeline e clique pra restaurar só eles (ou nada selecionado = projeto inteiro). Re-baixa no mesmo caminho e religa.';
   tree.appendChild(restoreItem);
 
-  // ─ Legendas (v1.0.8) — SRT limpo direto na timeline ─
-  var subsItem = makeSidebarItem({
-    label: 'Legendas (SRT)', icon: '≡',
-    dataCat: 'subtitles', dataSub: '',
-    isActive: false,
-    onClick: function () {
-      var labelEl = subsItem.querySelector('.sidebar-label') || subsItem;
-      importSubtitleFile({
-        get textContent() { return labelEl.textContent; },
-        set textContent(v) { labelEl.textContent = v; },
-      });
-    },
-  });
-  subsItem.title = 'Escolha um .srt/.vtt: corrigimos timing, sobreposição e quebra de linha antes de mandar pra timeline.';
-  tree.appendChild(subsItem);
 
   // ─ Diagnóstico de retenção (v1.0.9 / ADR-011) ─
   var diagItem = makeSidebarItem({
@@ -774,7 +759,10 @@ function buildSidebarTree() {
     isActive: false,
     onClick: function () {
       var labelEl = diagItem.querySelector('.sidebar-label') || diagItem;
-      openDiagnostics(!!(window.event && window.event.shiftKey));
+      runDiagnostics({
+        get textContent() { return labelEl.textContent; },
+        set textContent(v) { labelEl.textContent = v; },
+      }, !!(window.event && window.event.shiftKey));
     },
   });
   diagItem.title = 'Analisa o ritmo da montagem e marca na timeline os trechos onde a retenção cai. Não altera nada — só escreve marcadores.';
@@ -869,10 +857,10 @@ function updateSidebarActive() {
 function makeSidebarItem(opts) {
   var btn = document.createElement('button');
   btn.className = 'sidebar-item'
-    + (opts.isActive   ? 'is-active'   : '')
-    + (opts.isFav      ? 'is-fav'      : '')
-    + (opts.isFolder   ? 'is-folder'   : '')
-    + (opts.isSub      ? 'is-sub'      : '');
+    + (opts.isActive   ? ' is-active'   : '')
+    + (opts.isFav      ? ' is-fav'      : '')
+    + (opts.isFolder   ? ' is-folder'   : '')
+    + (opts.isSub      ? ' is-sub'      : '');
   if (opts.dataCat != null) btn.dataset.cat = opts.dataCat;
   if (opts.dataSub != null) btn.dataset.sub = opts.dataSub;
   btn.innerHTML =
@@ -902,10 +890,6 @@ function getSubcategoriesFor(categoryName) {
 
 /** Muda categoria/subcategoria ativa e re-renderiza */
 function setActiveCategory(cat, sub) {
-  // Sair do diagnóstico devolve a grade — o painel ocupa o mesmo espaço.
-  var _dp = document.getElementById('diag-panel');
-  var _ec = document.getElementById('effects-container');
-  if (_dp && cat !== 'diagnostics') { _dp.classList.add('hidden'); if (_ec) _ec.classList.remove('hidden'); }
   activeCategory    = cat;
   activeSubcategory = sub;
   // PERF: limpa observer e fila de waveform — descarta trabalho da view antiga,
@@ -993,7 +977,7 @@ function toggleFavorite(effect, card) {
   if (idx === -1) {
     favs.push(effect.id);
     if (card) card.classList.add('is-fav');
-    showToast('Adicionado aos favoritos ', 'success');
+    showToast('Adicionado aos favoritos ★', 'success');
   } else {
     favs.splice(idx, 1);
     if (card) card.classList.remove('is-fav');
@@ -1031,10 +1015,10 @@ function buildSearchIndex() {
     // Normaliza acentos no índice → busca textual fica accent-insensitive
     // ("transição" acha o que tá salvo como "transicao" e vice-versa).
     var blob = normalizeConceptText(
-      e.name + '' + e.category + '' +
-      (e.subcategory || '') + '' +
-      ((e.path && e.path.join) ? e.path.join('') : '') + '' +
-      ((e.tags && e.tags.join) ? e.tags.join('') : '')
+      e.name + ' ' + e.category + ' ' +
+      (e.subcategory || '') + ' ' +
+      ((e.path && e.path.join) ? e.path.join(' ') : '') + ' ' +
+      ((e.tags && e.tags.join) ? e.tags.join(' ') : '')
     );
     SEARCH_INDEX_NAMES[i] = blob;
 
@@ -1057,8 +1041,8 @@ function buildSearchIndex() {
       }
     }
   }
-  console.log('[CinePRO] inverted index: ' + SEARCH_INDEX.size + 'tokens em ' +
-              ((performance.now() - t0) | 0) + 'ms (' + allEffects.length + 'items)');
+  console.log('[CinePRO] inverted index: ' + SEARCH_INDEX.size + ' tokens em ' +
+              ((performance.now() - t0) | 0) + 'ms (' + allEffects.length + ' items)');
 }
 
 /**
@@ -1146,7 +1130,7 @@ function matchConceptKeys(normText, tokens, keys) {
   for (var k = 0; k < keys.length; k++) {
     var nk = normalizeConceptText(keys[k]);
     if (!nk) continue;
-    if (nk.indexOf('') !== -1 || nk.indexOf('-') !== -1) {
+    if (nk.indexOf(' ') !== -1 || nk.indexOf('-') !== -1) {
       if (normText.indexOf(nk) !== -1) count++;
       continue;
     }
@@ -1310,8 +1294,8 @@ function packAutoApply(packId, btn) {
 
     function fail(msg) {
       setStatus('error', msg);
-      showToast(msg, 'error');
-      if (btn) { btn.disabled = false; btn.textContent = 'Aplicar pack na timeline'; }
+      showToast('⚠ ' + msg, 'error');
+      if (btn) { btn.disabled = false; btn.textContent = '⚡ Aplicar pack na timeline'; }
     }
     if (!tl || tl.error) {
       return fail(String((tl && tl.error) || raw).indexOf('NO_SEQUENCE') > -1
@@ -1340,7 +1324,7 @@ function packAutoApply(packId, btn) {
 
     PENDING_PLAN[packId] = plan;
     renderPlanPreview(packId, plan, recipe);
-    if (btn) { btn.disabled = false; btn.textContent = 'Confirmar e aplicar'; }
+    if (btn) { btn.disabled = false; btn.textContent = '✓ Confirmar e aplicar'; }
     setStatus('ok', 'Plano pronto — revise e confirme');
   });
 }
@@ -1367,9 +1351,9 @@ function renderPlanPreview(packId, plan, recipe) {
       '<div class="pack-plan-row">' +
         '<span class="pack-plan-role">' + LABEL[role] + '</span>' +
         '<span class="pack-plan-detail">' +
-          escapeHtmlLite(uniq.slice(0, 3).join('· ')) +
-          (uniq.length > 3 ? '+' + (uniq.length - 3) : '') +
-          (role === 'cut' ? '<em>(' + list.length + '×)</em>' : '') +
+          escapeHtmlLite(uniq.slice(0, 3).join(' · ')) +
+          (uniq.length > 3 ? ' +' + (uniq.length - 3) : '') +
+          (role === 'cut' ? ' <em>(' + list.length + '×)</em>' : '') +
         '</span>' +
       '</div>';
   });
@@ -1377,8 +1361,8 @@ function renderPlanPreview(packId, plan, recipe) {
   var box = document.createElement('div');
   box.className = 'pack-plan';
   box.innerHTML =
-    '<div class="pack-plan-title">Plano · ' + plan.stats.placements + 'colocações · ' +
-      plan.stats.distinctFiles + 'sons diferentes</div>' + rows +
+    '<div class="pack-plan-title">Plano · ' + plan.stats.placements + ' colocações · ' +
+      plan.stats.distinctFiles + ' sons diferentes</div>' + rows +
     (plan.warnings.length ? '<div class="pack-plan-warn">' + escapeHtmlLite(plan.warnings[0]) + '</div>' : '');
   head.appendChild(box);
 }
@@ -1391,11 +1375,11 @@ function escapeHtmlLite(s) {
 function executePlan(plan, recipe, btn) {
   function setBtn(txt, dis) { if (btn) { btn.textContent = txt; btn.disabled = !!dis; } }
   function done(msg, kind) {
-    setBtn('Aplicar pack na timeline', false);
+    setBtn('⚡ Aplicar pack na timeline', false);
     var box = document.querySelector('.pack-plan');
     if (box) box.remove();
     setStatus(kind === 'error' ? 'error' : 'ok', msg);
-    showToast((kind === 'error' ? '' : '') + msg, kind === 'error' ? 'error' : 'success');
+    showToast((kind === 'error' ? '⚠ ' : '✦ ') + msg, kind === 'error' ? 'error' : 'success');
   }
 
   function evalP(code) {
@@ -1449,8 +1433,8 @@ function executePlan(plan, recipe, btn) {
     .then(function (res) {
       if (!res.okN) return done('Nada foi aplicado — verifique espaço nas trilhas.', 'error');
       trackUsage(plan.steps[0].effect.id);
-      done(recipe.label + ': ' + res.okN + 'som(ns) aplicado(s)' +
-           (res.failN ? '· ' + res.failN + 'falhou(aram)' : ''), 'ok');
+      done(recipe.label + ': ' + res.okN + ' som(ns) aplicado(s)' +
+           (res.failN ? ' · ' + res.failN + ' falhou(aram)' : ''), 'ok');
     })
     .catch(function (err) {
       done('Falha: ' + humanizeError((err && err.message) || String(err)), 'error');
@@ -1534,7 +1518,7 @@ function renderEffectsByIdOrder(ids, query) {
     var e = effectsById[ids[i]];
     if (!e) continue;
     if (qLower) {
-      var blob = (e.name + '' + e.category + '' + (e.tags||[]).join('')).toLowerCase();
+      var blob = (e.name + ' ' + e.category + ' ' + (e.tags||[]).join(' ')).toLowerCase();
       if (blob.indexOf(qLower) === -1) continue;
     }
     result.push(e);
@@ -1609,10 +1593,10 @@ function renderEffects(effects) {
       head.className = 'pack-head';
       head.innerHTML =
         '<div class="pack-head-info">' +
-          '<div class="pack-head-title">' + rc.icon + '' + rc.label + '</div>' +
+          '<div class="pack-head-title">' + rc.icon + ' ' + rc.label + '</div>' +
           '<div class="pack-head-desc">' + rc.desc + '</div>' +
         '</div>' +
-        '<button class="btn btn--primary btn--sm pack-apply"> Aplicar pack na timeline</button>';
+        '<button class="btn btn--primary btn--sm pack-apply">⚡ Aplicar pack na timeline</button>';
       head.querySelector('.pack-apply').addEventListener('click', function (ev) {
         packAutoApply(pid, ev.currentTarget);
       });
@@ -1622,13 +1606,13 @@ function renderEffects(effects) {
 
   if (effects.length === 0) {
     if (activeCategory === 'favorites') {
-      renderEmpty('Você ainda não favoritou nada.<br>Passe o mouse num card e clique na  pra começar.');
+      renderEmpty('Você ainda não favoritou nada.<br>Passe o mouse num card e clique na ⭐ pra começar.');
     } else if (activeCategory === 'recents') {
       renderEmpty('Nenhum efeito usado ainda.<br>Os que você aplicar vão aparecer aqui em ordem.');
     } else if (activeCategory === 'most-used') {
       renderEmpty('Nenhum efeito usado ainda.<br>O top dos seus mais usados vai surgir aqui.');
     } else if (activeCategory === 'all') {
-      renderEmpty('Clique numa categoria acima pra começar <br>Os arquivos são carregados sob demanda.');
+      renderEmpty('Clique numa categoria acima pra começar 👆<br>Os arquivos são carregados sob demanda.');
     } else {
       renderEmpty('Nenhum efeito encontrado.<br>Tente outra palavra ou categoria.');
     }
@@ -1709,7 +1693,7 @@ function renderNextBatch(count) {
       var title = document.createElement('div');
       title.className = 'section-title';
       title.style.gridColumn = '1 / -1';
-      title.innerHTML = '<span class="section-bullet"></span>' + label + '<span class="section-count">' + items.length + '</span>';
+      title.innerHTML = '<span class="section-bullet"></span>' + label + ' <span class="section-count">' + items.length + '</span>';
       frag.appendChild(title);
     }
 
@@ -1749,8 +1733,8 @@ function renderNextBatch(count) {
     btn.id = 'load-more-btn';
     btn.className = 'load-more-btn';
     btn.style.cssText = 'grid-column:1/-1;';
-    btn.innerHTML = 'Carregar mais <span style="opacity:0.6">(' +
-                    (renderState.total - renderState.rendered) + 'restantes)</span>';
+    btn.innerHTML = '↓ Carregar mais <span style="opacity:0.6">(' +
+                    (renderState.total - renderState.rendered) + ' restantes)</span>';
     btn.addEventListener('click', function () { renderNextBatch(PAGE_STEP); });
     grid.appendChild(btn);
 
@@ -1808,7 +1792,7 @@ function observeForWaveform(card, effect) {
 
 function renderEmpty(msg) {
   var grid = document.getElementById('effects-grid');
-  grid.innerHTML = '<div class="state-box"style="grid-column:1/-1"><div class="state-icon"></div><div class="state-desc">' + msg + '</div></div>';
+  grid.innerHTML = '<div class="state-box" style="grid-column:1/-1"><div class="state-icon">🎬</div><div class="state-desc">' + msg + '</div></div>';
 }
 
 // Cache de arquivos já baixados nessa sessão (effect.id → localPath)
@@ -1867,7 +1851,7 @@ function createEffectCard(effect) {
   var canPreview = (effect.kind === 'audio' || effect.kind === 'video' || effect.kind === 'image');
 
   var card = document.createElement('div');
-  card.className  = 'effect-card' + (cached ? 'cached' : '') + (isFav ? 'is-fav' : '');
+  card.className  = 'effect-card' + (cached ? ' cached' : '') + (isFav ? ' is-fav' : '');
   card.draggable  = true;
   card.dataset.id   = effect.id;
   card.dataset.ext  = effect.ext || '';
@@ -1878,33 +1862,33 @@ function createEffectCard(effect) {
   var bundleThumb = getBundleThumbPath(effect.id);
   if (bundleThumb) {
     var fileUrl = 'file://' + bundleThumb.split('/').map(encodeURIComponent).join('/');
-    thumbHtml = '<img class="thumb-img"data-src="' + fileUrl + '"alt="" decoding="async">';
+    thumbHtml = '<img class="thumb-img" data-src="' + fileUrl + '" alt="" decoding="async">';
   } else if (effect.thumb) {
-    thumbHtml = '<img class="thumb-img"data-src="' + effect.thumb + '"alt="" decoding="async" fetchpriority="low">';
+    thumbHtml = '<img class="thumb-img" data-src="' + effect.thumb + '" alt="" decoding="async" fetchpriority="low">';
   } else {
     thumbHtml = '<div class="effect-thumb-placeholder">' + thumbForKind(effect.kind) + '</div>';
   }
 
   var typeBadge = effect.ext ? '<span class="effect-type-badge ' + effect.ext + '">' + effect.ext.toUpperCase() + '</span>' : '';
   var previewBtn = canPreview
-    ? '<button class="btn btn--floating btn--icon btn-preview"data-action="preview" title="Preview" aria-label="Preview"></button>'
+    ? '<button class="btn btn--floating btn--icon btn-preview" data-action="preview" title="Preview" aria-label="Preview">▶</button>'
     : '';
   // v1.5.1: LUT ganha CTA "Antes / Depois" no lugar do preview
   var lutBtn = (effect.kind === 'lut')
-    ? '<button class="btn btn--floating lut-cta"data-action="lut-preview" title="Ver antes/depois">Antes / Depois</button>'
+    ? '<button class="btn btn--floating lut-cta" data-action="lut-preview" title="Ver antes/depois">Antes / Depois</button>'
     : '';
 
   card.innerHTML =
-    '<button class="btn btn--floating btn--icon btn--sm btn-fav"data-action="fav" title="Favoritar" aria-label="Favoritar">' +
-      '<svg viewBox="0 0 24 24"width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linejoin="round">' +
+    '<button class="btn btn--floating btn--icon btn--sm btn-fav" data-action="fav" title="Favoritar" aria-label="Favoritar">' +
+      '<svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linejoin="round">' +
         '<polygon points="12 2 15 9 22 9.5 17 14.5 18.5 22 12 18 5.5 22 7 14.5 2 9.5 9 9 12 2"/>' +
       '</svg>' +
     '</button>' +
-    '<div class="effect-thumb">' + thumbHtml + previewBtn + lutBtn + '<span class="drag-hint">' + (cached ? 'arrastar' : 'preparar') + '</span></div>' +
+    '<div class="effect-thumb">' + thumbHtml + previewBtn + lutBtn + '<span class="drag-hint">' + (cached ? '⇲ arrastar' : '⇩ preparar') + '</span></div>' +
     /* v1.2 A4: download-overlay agora é lazy — só injetado quando download começa */
     '<div class="effect-card-body">' +
-      '<div class="effect-name"title="' + effect.name + '">' + effect.name + '</div>' +
-      '<div class="effect-meta">' + typeBadge + '<button class="btn btn--soft btn--xs btn-apply"data-action="apply">Aplicar</button></div>' +
+      '<div class="effect-name" title="' + effect.name + '">' + effect.name + '</div>' +
+      '<div class="effect-meta">' + typeBadge + '<button class="btn btn--soft btn--xs btn-apply" data-action="apply">Aplicar</button></div>' +
     '</div>';
 
   // Lazy thumb observer + fallback on-error pra thumbs expirados
@@ -1932,35 +1916,35 @@ function createEffectRow(effect) {
   var canPreview = (effect.kind === 'audio' || effect.kind === 'video' || effect.kind === 'image');
 
   var row = document.createElement('div');
-  row.className  = 'effect-card effect-row' + (cached ? 'cached' : '') + (isFav ? 'is-fav' : '');
+  row.className  = 'effect-card effect-row' + (cached ? ' cached' : '') + (isFav ? ' is-fav' : '');
   row.draggable  = true;
   row.dataset.id   = effect.id;
   row.dataset.ext  = effect.ext || '';
   row.dataset.kind = effect.kind || '';
 
   var previewBtn = canPreview
-    ? '<button class="btn btn--floating btn--icon btn-preview"data-action="preview" title="Preview" aria-label="Preview"></button>'
+    ? '<button class="btn btn--floating btn--icon btn-preview" data-action="preview" title="Preview" aria-label="Preview">▶</button>'
     : '';
   var sizeStr = effect.size ? formatBytes(effect.size) : '';
   var ext = (effect.ext || '').toUpperCase();
-  var sub = ext + (sizeStr ? '· ' + sizeStr : '');
+  var sub = ext + (sizeStr ? ' · ' + sizeStr : '');
 
   row.innerHTML =
     '<div class="effect-thumb row-play">' + previewBtn + '</div>' +
     '<div class="row-info">' +
-      '<div class="effect-name"title="' + effect.name + '">' + effect.name + '</div>' +
+      '<div class="effect-name" title="' + effect.name + '">' + effect.name + '</div>' +
       '<div class="row-sub">' + sub + '</div>' +
     '</div>' +
     '<div class="row-wave effect-thumb-placeholder"></div>' +
     '<div class="row-actions">' +
-      '<button class="btn btn--floating btn--icon btn--sm btn-cuts"data-action="auto-cuts" title="Aplicar em todos os cortes da timeline" aria-label="Aplicar em todos os cortes"></button>' +
-      '<button class="btn btn--floating btn--icon btn--sm btn-fav"data-action="fav" title="Favoritar" aria-label="Favoritar">' +
-        '<svg viewBox="0 0 24 24"width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linejoin="round">' +
+      '<button class="btn btn--floating btn--icon btn--sm btn-cuts" data-action="auto-cuts" title="Aplicar em todos os cortes da timeline" aria-label="Aplicar em todos os cortes">⚡</button>' +
+      '<button class="btn btn--floating btn--icon btn--sm btn-fav" data-action="fav" title="Favoritar" aria-label="Favoritar">' +
+        '<svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linejoin="round">' +
           '<polygon points="12 2 15 9 22 9.5 17 14.5 18.5 22 12 18 5.5 22 7 14.5 2 9.5 9 9 12 2"/>' +
         '</svg>' +
       '</button>' +
-      '<button class="btn btn--soft btn--xs btn-apply"data-action="apply">Aplicar</button>' +
-      '<span class="row-cache"' + (cached ? 'title="Offline">' : 'title="Preparar">') + '</span>' +
+      '<button class="btn btn--soft btn--xs btn-apply" data-action="apply">Aplicar</button>' +
+      '<span class="row-cache"' + (cached ? ' title="Offline">✓' : ' title="Preparar">') + '</span>' +
     '</div>';
 
   return row;
@@ -2150,7 +2134,7 @@ function updateApplyFloating() {
   APPLY_FLOATING_BTN.innerHTML =
     '<span class="apply-floating-count">' + n + '</span>' +
     '<span>Aplicar selecionados</span>' +
-    '<span class="apply-floating-x"title="Limpar seleção (Esc)"></span>';
+    '<span class="apply-floating-x" title="Limpar seleção (Esc)">✕</span>';
   // X interno limpa sem aplicar
   APPLY_FLOATING_BTN.querySelector('.apply-floating-x').onclick = function (ev) {
     ev.stopPropagation();
@@ -2169,7 +2153,7 @@ function applySelection() {
   var cards = Array.prototype.slice.call(document.querySelectorAll('#effects-grid .effect-card'));
   var ordered = cards.filter(function (c) { return selection.has(c.dataset.id); });
 
-  showToast('Aplicando ' + ordered.length + 'efeito' + (ordered.length > 1 ? 's' : '') + '...', '');
+  showToast('Aplicando ' + ordered.length + ' efeito' + (ordered.length > 1 ? 's' : '') + '...', '');
 
   var total = ordered.length;
   var okCount = 0;
@@ -2178,11 +2162,11 @@ function applySelection() {
 
   function finish() {
     if (failCount === 0) {
-      showToast(okCount + 'efeito' + (okCount > 1 ? 's aplicados' : 'aplicado'), 'success');
+      showToast('✓ ' + okCount + ' efeito' + (okCount > 1 ? 's aplicados' : ' aplicado'), 'success');
     } else if (okCount === 0) {
-      showToast('Nenhum efeito aplicado (' + failCount + 'falharam)', 'error');
+      showToast('✗ Nenhum efeito aplicado (' + failCount + ' falharam)', 'error');
     } else {
-      showToast('' + okCount + '/' + total + 'aplicados — ' + failCount + 'falhou(aram)', 'error');
+      showToast('⚠️ ' + okCount + '/' + total + ' aplicados — ' + failCount + ' falhou(aram)', 'error');
     }
     clearSelection();
   }
@@ -2331,7 +2315,7 @@ function bindKeyboardShortcuts() {
     }
 
     // Espaço → preview
-    if (e.key === '' && focusedCardEl) {
+    if (e.key === ' ' && focusedCardEl) {
       e.preventDefault();
       var fx2 = effectsById[focusedCardEl.dataset.id];
       if (fx2) togglePlayInline(fx2, focusedCardEl);
@@ -2445,7 +2429,7 @@ function togglePlayInline(effect, card) {
   card.classList.add('is-playing');
   // Troca o ícone do botão pra ⏸
   var btn = card.querySelector('.btn-preview');
-  if (btn) btn.textContent = '';
+  if (btn) btn.textContent = '⏸';
 
   currentlyPlaying = card;
 }
@@ -2456,15 +2440,15 @@ function stopInline(card) {
   if (card._video) { card._video.pause(); card._video.remove(); card._video = null; }
   card.classList.remove('is-playing');
   var btn = card.querySelector('.btn-preview');
-  if (btn) btn.textContent = '';
+  if (btn) btn.textContent = '▶';
   if (currentlyPlaying === card) currentlyPlaying = null;
 }
 
 function formatBytes(bytes) {
-  if (bytes < 1024) return bytes + 'B';
-  if (bytes < 1024*1024) return (bytes/1024).toFixed(1) + 'KB';
-  if (bytes < 1024*1024*1024) return (bytes/1024/1024).toFixed(1) + 'MB';
-  return (bytes/1024/1024/1024).toFixed(2) + 'GB';
+  if (bytes < 1024) return bytes + ' B';
+  if (bytes < 1024*1024) return (bytes/1024).toFixed(1) + ' KB';
+  if (bytes < 1024*1024*1024) return (bytes/1024/1024).toFixed(1) + ' MB';
+  return (bytes/1024/1024/1024).toFixed(2) + ' GB';
 }
 
 // (modal preview foi removido — preview agora é inline no card)
@@ -2552,7 +2536,7 @@ function pumpWaveformQueue() {
 }
 
 function renderWaveformImg(thumbEl, dataUrl) {
-  thumbEl.innerHTML = '<img class="waveform-img"src="' + dataUrl + '"alt="">';
+  thumbEl.innerHTML = '<img class="waveform-img" src="' + dataUrl + '" alt="">';
 }
 
 /**
@@ -2656,17 +2640,17 @@ function drawWaveformFromBuffer(audioBuffer) {
 
 function thumbForKind(kind) {
   // SVGs limpos — sem emoji. Estilo line-icon consistente com o resto da UI.
-  var common = 'viewBox="0 0 24 24"fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"';
+  var common = 'viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"';
   var icons = {
-    audio:  '<svg ' + common + '><path d="M9 18V5l12-2v13"/><circle cx="6"cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>',
-    video:  '<svg ' + common + '><polygon points="23 7 16 12 23 17 23 7"/><rect x="1"y="5" width="15" height="14" rx="2" ry="2"/></svg>',
-    image:  '<svg ' + common + '><rect x="3"y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg>',
+    audio:  '<svg ' + common + '><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>',
+    video:  '<svg ' + common + '><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg>',
+    image:  '<svg ' + common + '><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg>',
     mogrt:  '<svg ' + common + '><path d="M4 4h16v16H4z"/><path d="M4 9h16"/><path d="M9 4v16"/></svg>',
     preset: '<svg ' + common + '><path d="M12 2l2.4 6.9L21 9.3l-5.4 4.6L17.4 21 12 17.3 6.6 21l1.8-7.1L3 9.3l6.6-.4z"/></svg>',
-    lut:    '<svg ' + common + '><circle cx="12"cy="12" r="9"/><path d="M3 12h18M12 3v18"/></svg>',
-    ae:     '<svg ' + common + '><circle cx="12"cy="12" r="9"/><path d="M9 16l3-9 3 9M10 13h4"/></svg>',
+    lut:    '<svg ' + common + '><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3v18"/></svg>',
+    ae:     '<svg ' + common + '><circle cx="12" cy="12" r="9"/><path d="M9 16l3-9 3 9M10 13h4"/></svg>',
     project:'<svg ' + common + '><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>',
-    lumetri:'<svg ' + common + '><circle cx="12"cy="12" r="9"/><path d="M3 12a9 9 0 0 1 18 0"/></svg>',
+    lumetri:'<svg ' + common + '><circle cx="12" cy="12" r="9"/><path d="M3 12a9 9 0 0 1 18 0"/></svg>',
   };
   return icons[kind] || icons.video;
 }
@@ -2704,7 +2688,7 @@ function autoApplyAtCuts(effect, card) {
     : downloadEffectFile(effect).then(function (p) { effectCache[effect.id] = p; return p; });
 
   card.classList.add('downloading');
-  setStatus('loading', 'Aplicando "' + effect.name + '"nos cortes...');
+  setStatus('loading', 'Aplicando "' + effect.name + '" nos cortes...');
 
   downloadPromise
     .then(function (localPath) {
@@ -2720,8 +2704,8 @@ function autoApplyAtCuts(effect, card) {
           } else {
             var m = /CUTS_(\d+)_OF_(\d+)/.exec(result);
             var placed = m ? m[1] : '?', total = m ? m[2] : '?';
-            setStatus('ok', 'SFX em ' + placed + 'corte(s)!');
-            showToast('"' + effect.name + '"aplicado em ' + placed + 'de ' + total + 'corte(s)', 'success');
+            setStatus('ok', 'SFX em ' + placed + ' corte(s)!');
+            showToast('⚡ "' + effect.name + '" aplicado em ' + placed + ' de ' + total + ' corte(s)', 'success');
             trackUsage(effect.id);
             recordUsedFile(effect, localPath);
           }
@@ -2766,7 +2750,7 @@ function applyEffect(effect, card) {
             setStatus('error', 'Erro: ' + msg);
             showToast('Erro ao inserir: ' + humanizeError(msg), 'error');
           } else {
-            setStatus('ok', '"' + effect.name + '"pronto!');
+            setStatus('ok', '"' + effect.name + '" pronto!');
             showToast(successMessage(effect, result), 'success');
             trackUsage(effect.id);  // Recentes + counter
             recordUsedFile(effect, localPath);  // v1.0.4: protege do clear + permite restaurar
@@ -2808,7 +2792,7 @@ function silentPrefetch(effect, card) {
         card.classList.remove('prefetching');
         card.classList.add('cached');
         var hint = card.querySelector('.drag-hint');
-        if (hint) hint.textContent = 'arrastar';
+        if (hint) hint.textContent = '⇲ arrastar';
       }
       return localPath;
     })
@@ -2841,9 +2825,9 @@ function prepareForDrag(effect, card) {
       card.classList.remove('downloading');
       removeDownloadOverlay(card);
       card.classList.add('cached');
-      card.querySelector('.drag-hint').textContent = 'arrastar';
-      setStatus('ok', 'Pronto');
-      showToast('"' + effect.name + '"pronto — arraste agora pra timeline', 'success');
+      card.querySelector('.drag-hint').textContent = '⇲ arrastar';
+      setStatus('ok', '✓ Pronto');
+      showToast('"' + effect.name + '" pronto — arraste agora pra timeline', 'success');
     })
     .catch(function (err) {
       card.classList.remove('downloading');
@@ -3030,13 +3014,13 @@ function resolveEffectForCachePath(path) {
 function restorePaths(paths, btn) {
   function setBtn(txt, disabled) { if (btn) { btn.textContent = txt; btn.disabled = !!disabled; } }
   if (!paths.length) {
-    setBtn('Tudo no lugar', false);
+    setBtn('✓ Tudo no lugar', false);
     setStatus('ok', 'Nenhuma mídia faltando.');
     setTimeout(function () { setBtn('Restaurar mídias', false); }, 2500);
     return;
   }
   var ok = 0, fail = 0;
-  setStatus('loading', 'Restaurando ' + paths.length + 'mídia(s)...');
+  setStatus('loading', 'Restaurando ' + paths.length + ' mídia(s)...');
 
   function step(i) {
     if (i >= paths.length) return finish();
@@ -3054,10 +3038,10 @@ function restorePaths(paths, btn) {
       var relinked = m2 ? m2[1] : null;
       setBtn('Restaurar mídias', false);
       if (ok) {
-        setStatus('ok', ok + 'mídia(s) restaurada(s)');
-        showToast(ok + 'mídia(s) restaurada(s)' +
-                  (relinked && relinked !== '0' ? '· ' + relinked + 'religada(s) no projeto' : '') +
-                  (fail ? '· ' + fail + 'não estava(m) no catálogo' : ''), 'success');
+        setStatus('ok', ok + ' mídia(s) restaurada(s)');
+        showToast('✓ ' + ok + ' mídia(s) restaurada(s)' +
+                  (relinked && relinked !== '0' ? ' · ' + relinked + ' religada(s) no projeto' : '') +
+                  (fail ? ' · ' + fail + ' não estava(m) no catálogo' : ''), 'success');
       } else {
         setStatus('error', 'Não consegui restaurar');
         showToast('Falha ao restaurar. Verifique a conexão — ou o efeito não está mais no catálogo.', 'error');
@@ -3084,13 +3068,13 @@ function restoreMissingMedia(btn) {
     var selOffline = items.filter(function (x) { return x.offline; }).map(function (x) { return x.path; });
 
     if (selOffline.length) {
-      showToast('Restaurando ' + selOffline.length + 'selecionada(s)...', 'success');
+      showToast('Restaurando ' + selOffline.length + ' selecionada(s)...', 'success');
       return restorePaths(selOffline, btn);
     }
     if (items.length) {   // selecionou, mas nada offline
       setBtn('Restaurar mídias', false);
       setStatus('ok', 'Seleção já está no lugar.');
-      showToast('As mídias selecionadas já estão no cache.', 'success');
+      showToast('✓ As mídias selecionadas já estão no cache.', 'success');
       return;
     }
     // Sem seleção → projeto inteiro
@@ -3109,257 +3093,105 @@ function restoreMissingMedia(btn) {
 // Os limites (2s no vertical, 5s no horizontal) vêm de
 // knowledge/retencao-e-edicao.md, sintetizado do second brain.
 
-function openDiagnostics(selfTest) {
-  var panel = document.getElementById('diag-panel');
-  var grid  = document.getElementById('effects-container');
-  if (!panel) return;
+function runDiagnostics(btn, selfTest) {
+  function setLabel(t) { if (btn) btn.textContent = t; }
 
-  // Shift+clique: auto-teste. Existe porque depurar às cegas custou caro.
+  // Shift+clique roda o auto-teste em vez da analise: mostra o que o
+  // Premiere responde nesta instalacao, sem precisar de mim no meio.
   if (selfTest) {
     cs.evalScript('cineproSelfTest()', function (r) {
       console.log('[CinePRO] self-test:', r);
-      panel.classList.remove('hidden');
-      if (grid) grid.classList.add('hidden');
-      panel.innerHTML = '<div class="diag-verdict"><div class="diag-verdict-eyebrow">' +
-        'Auto-teste</div><div class="diag-verdict-title">Resposta do Premiere</div></div>' +
-        '<div class="diag-principle"style="white-space:pre-wrap;font-family:ui-monospace,monospace">' +
-        escapeHtmlLite(String(r)) + '</div>';
+      showToast('🔧 ' + String(r).slice(0, 200), 'success');
     });
     return;
   }
+  var original = btn ? btn.textContent : '';
+  function reset(ms) { setTimeout(function () { setLabel(original); }, ms || 4000); }
 
-  panel.classList.remove('hidden');
-  if (grid) grid.classList.add('hidden');
-  activeCategory = 'diagnostics';
-
-  // Passos visíveis: clicar e ver tela parada passa sensação de travado.
-  var STEPS = ['Lendo a montagem', 'Analisando o ritmo', 'Montando o briefing'];
-  panel.innerHTML =
-    '<div class="diag-verdict"><div class="diag-verdict-eyebrow">Diagnóstico</div>' +
-    '<div class="diag-verdict-title">Analisando sua sequência…</div></div>' +
-    '<div class="diag-loading">' + STEPS.map(function (s, i) {
-      return '<div class="diag-step' + (i === 0 ? 'is-active' : '') + '"data-step="' + i + '">' +
-             '<span class="diag-step-dot"></span>' + s + '</div>';
-    }).join('') + '</div>';
-
-  function step(i) {
-    var els = panel.querySelectorAll('.diag-step');
-    for (var k = 0; k < els.length; k++) {
-      els[k].className = 'diag-step' + (k < i ? 'is-done' : (k === i ? 'is-active' : ''));
-    }
+  if (!window.CinePRODiagnostics) {
+    showToast('Motor de diagnóstico não carregou — reabra o painel.', 'error');
+    return;
   }
+
+  setLabel('Analisando…');
+  setStatus('loading', 'Lendo a montagem...');
 
   cs.evalScript('getCutPoints()', function (raw) {
     var tl = null;
     try { tl = JSON.parse(raw); } catch (e) {}
 
     if (!tl || tl.error) {
+      // O MOTIVO precisa aparecer. A v1.0.9 falhou com "Não consegui ler
+      // a timeline" e sem o texto cru não deu pra saber que era
+      // seq.end.seconds lançando TypeError — foram horas às cegas.
       var cru = String((tl && tl.error) || raw || 'sem resposta');
-      console.error('[CinePRO] getCutPoints:', raw);
-      var msg, dica;
+      setLabel(original);
       if (cru.indexOf('NO_SEQUENCE') > -1) {
-        msg = 'Nenhuma sequência aberta';
-        dica = 'Abra uma sequência na timeline e rode de novo.';
+        setStatus('error', 'Sem sequência');
+        showToast('⚠ Abra uma sequência na timeline primeiro.', 'error');
       } else if (/EvalScript|is not defined|undefined is not a function/i.test(cru)) {
-        msg = 'Script desatualizado';
-        dica = 'Feche e reabra o Premiere — não só o painel. O ExtendScript ' +
-               'só recarrega quando o app reinicia.';
+        setStatus('error', 'Plugin desatualizado');
+        showToast('⚠ O Premiere está com uma versão antiga do script. ' +
+                  'Feche e reabra o Premiere (não só o painel).', 'error');
       } else {
-        msg = 'Não consegui ler a timeline';
-        dica = 'Resposta do Premiere: ' + cru.slice(0, 200);
+        setStatus('error', 'Falha ao ler a timeline');
+        showToast('⚠ Premiere: ' + cru.slice(0, 160), 'error');
       }
-      panel.innerHTML =
-        '<div class="diag-verdict"><div class="diag-verdict-eyebrow">Diagnóstico</div>' +
-        '<div class="diag-verdict-title tone-warn">' + escapeHtmlLite(msg) + '</div>' +
-        '<div class="diag-headline">' + escapeHtmlLite(dica) + '</div></div>';
+      console.error('[CinePRO] getCutPoints:', raw);
       return;
     }
-
-    step(1);
     if (!tl.clips) {
-      panel.innerHTML =
-        '<div class="diag-verdict"><div class="diag-verdict-eyebrow">Diagnóstico</div>' +
-        '<div class="diag-verdict-title tone-warn">Timeline vazia</div>' +
-        '<div class="diag-headline">Coloque seus takes na sequência primeiro.</div></div>';
+      setLabel(original);
+      setStatus('ok', 'Timeline vazia');
+      showToast('Timeline vazia — coloque seus takes primeiro.', 'error');
       return;
     }
 
-    var result = window.CinePRODiagnostics.analyze(tl, CINEPRO_DIAG_LIMITS || {});
-    step(2);
-    var brief = window.CinePRODiagnostics.buildBriefing(result);
-    setTimeout(function () { renderBriefing(panel, brief, result, tl); }, 220);
-  });
-}
+    var opts = (CINEPRO_DIAG_LIMITS || {});
+    var result = window.CinePRODiagnostics.analyze(tl, opts);
+    var markers = window.CinePRODiagnostics.toMarkers(result, tl.fps || 30);
+    var st = result.stats;
 
-/** Desenha o briefing. Veredito → números → ações → princípio. */
-function renderBriefing(panel, brief, result, tl) {
-  var h = [];
-
-  h.push('<div class="diag-verdict">' +
-    '<div class="diag-verdict-eyebrow">Diagnóstico de retenção</div>' +
-    '<div class="diag-verdict-title tone-' + brief.tone + '">' + escapeHtmlLite(brief.verdict) + '</div>' +
-    '<div class="diag-headline">' + escapeHtmlLite(brief.headline) + '</div></div>');
-
-  h.push('<div class="diag-cards">' + brief.cards.map(function (c) {
-    return '<div class="diag-card"><div class="diag-card-label">' + escapeHtmlLite(c.label) + '</div>' +
-      '<div class="diag-card-value' + (c.bad ? 'is-bad' : '') + '">' + escapeHtmlLite(c.value) + '</div>' +
-      '<div class="diag-card-hint">' + escapeHtmlLite(c.hint || '') + '</div></div>';
-  }).join('') + '</div>');
-
-  if (brief.acoes.length) {
-    h.push('<div class="diag-section-title">O que fazer — em ordem de impacto</div>');
-    brief.acoes.forEach(function (a) {
-      h.push('<div class="diag-action sev-' + a.severity + '">' +
-        '<div class="diag-action-head">' +
-          '<button class="diag-tc"data-at="' + a.at + '"title="Levar o playhead até aqui">' +
-            escapeHtmlLite(a.timecode) + '</button>' +
-          '<span class="diag-action-title">' + escapeHtmlLite(a.titulo) + '</span>' +
-        '</div>' +
-        '<div class="diag-action-body">' +
-          '<div class="diag-action-do">' + escapeHtmlLite(a.acao) + '</div>' +
-          (a.porque ? '<div class="diag-action-why">' + escapeHtmlLite(a.porque) + '</div>' : '') +
-          (a.cuidado ? '<div class="diag-action-care">' + escapeHtmlLite(a.cuidado) + '</div>' : '') +
-        '</div></div>');
-    });
-  } else {
-    h.push('<div class="diag-empty">Nada a corrigir. Siga para o próximo vídeo.</div>');
-  }
-
-  h.push('<div class="diag-principle"><strong>Princípio:</strong> ' +
-         escapeHtmlLite(brief.principio) + '</div>');
-
-  h.push('<div class="diag-footer">' +
-    (brief.acoes.length ? '<button class="btn btn--primary btn--md"id="diag-mark">Marcar na timeline</button>' : '') +
-    '<button class="btn btn--soft btn--md"id="diag-clear">Limpar marcadores</button>' +
-    '<button class="btn btn--ghost btn--md"id="diag-again">Analisar de novo</button>' +
-    '</div>');
-
-  panel.innerHTML = h.join('');
-
-  // Timecode leva o playhead até o ponto — o editor vê o problema, não lê sobre ele.
-  var tcs = panel.querySelectorAll('.diag-tc');
-  for (var i = 0; i < tcs.length; i++) {
-    tcs[i].addEventListener('click', function (ev) {
-      var sec = parseFloat(ev.currentTarget.getAttribute('data-at')) || 0;
-      cs.evalScript('setPlayheadTime(' + sec + ')', function () {});
-    });
-  }
-
-  var btnMark = panel.querySelector('#diag-mark');
-  if (btnMark) btnMark.addEventListener('click', function () {
-    applyDiagnosticMarkers(result, tl, btnMark);
-  });
-  panel.querySelector('#diag-clear').addEventListener('click', function (ev) {
-    var b = ev.currentTarget;
-    b.disabled = true; b.textContent = 'Limpando…';
-    cs.evalScript('clearDiagnosticMarkers()', function (r) {
-      var m = /CLEARED_(\d+)/.exec(String(r || ''));
-      b.disabled = false; b.textContent = 'Limpar marcadores';
-      showToast((m ? m[1] : 0) + 'marcador(es) removido(s).', 'success');
-    });
-  });
-  panel.querySelector('#diag-again').addEventListener('click', function () { openDiagnostics(false); });
-}
-
-function applyDiagnosticMarkers(result, tl, btn) {
-  btn.disabled = true;
-  btn.textContent = 'Marcando…';
-  var markers = window.CinePRODiagnostics.toMarkers(result, tl.fps || 30);
-  var payload = JSON.stringify(markers.map(function (m) {
-    return {
-      at: m.frame / (tl.fps || 30),
-      duration: m.durationFrames / (tl.fps || 30),
-      color: m.color, name: m.name, note: m.note,
-    };
-  })).replace(/\\/g, '\\\\').replace(/"/g, '\\"');
-
-  // Limpa os nossos antes: reexecutar não pode empilhar marcador.
-  cs.evalScript('clearDiagnosticMarkers()', function () {
-    cs.evalScript('addDiagnosticMarkers("' + payload + '")', function (r) {
-      var m2 = /MARKERS_(\d+)/.exec(String(r || ''));
-      btn.disabled = false;
-      if (m2 && m2[1] !== '0') {
-        btn.textContent = m2[1] + 'marcados na timeline';
-        showToast(m2[1] + 'marcador(es) escrito(s) na timeline.', 'success');
-      } else {
-        btn.textContent = 'Marcar na timeline';
-        console.error('[CinePRO] addDiagnosticMarkers:', r);
-        showToast('Premiere recusou os marcadores: ' + String(r).slice(0, 120), 'error');
+    // Limpa os NOSSOS marcadores antes: reexecutar não pode empilhar.
+    cs.evalScript('clearDiagnosticMarkers()', function () {
+      if (!markers.length) {
+        setLabel('✓ Ritmo ok');
+        setStatus('ok', 'Nenhum ponto de atenção');
+        showToast('✓ Ritmo segurando a atenção — nenhum trecho acima de ' +
+                  st.limit + 's (' + st.format + ').', 'success');
+        reset();
+        return;
       }
-    });
-  });
-}
 
+      var payload = JSON.stringify(markers.map(function (m) {
+        return {
+          at: m.frame / (tl.fps || 30),
+          duration: m.durationFrames / (tl.fps || 30),
+          color: m.color,
+          name: m.name,
+          note: m.note,
+        };
+      })).replace(/\\/g, '\\\\').replace(/"/g, '\\"');
 
-// ══ LEGENDAS (v1.0.8) ═══════════════════════════════════════════
-// Caminho NATIVO: Premiere e Resolve leem .srt direto, sem template.
-// O que agregamos é o arquivo LIMPO — o SRT de ASR (Whisper, CapCut,
-// YouTube) vem com sobreposição, cue de 0,1s e quebra no meio de
-// palavra. js/subtitles.js corrige isso antes de importar.
-
-function importSubtitleFile(btn) {
-  function setLabel(t) { if (btn) btn.textContent = t; }
-  var original = btn ? btn.textContent : '';
-  function reset(ms) { setTimeout(function () { setLabel(original); }, ms || 2500); }
-
-  if (!window.CinePROSubtitles) {
-    showToast('Motor de legendas não carregou — reabra o painel.', 'error');
-    return;
-  }
-
-  // File.openDialog do ExtendScript: o CEP não tem picker nativo e um
-  // <input type=file> num painel file:// não devolve caminho utilizável.
-  cs.evalScript('pickSubtitleFile()', function (raw) {
-    var srtPath = String(raw || '').trim();
-    if (!srtPath || srtPath === 'CANCEL' || srtPath.indexOf('ERR') === 0) {
-      if (srtPath.indexOf('ERR') === 0) showToast('Não consegui abrir o seletor.', 'error');
-      return;
-    }
-
-    var fsMod;
-    try { fsMod = window.require('fs'); } catch (e) {
-      showToast('Sem acesso ao disco neste painel.', 'error');
-      return;
-    }
-
-    var raw2;
-    try { raw2 = fsMod.readFileSync(srtPath, 'utf8'); }
-    catch (e) { showToast('Não consegui ler o arquivo.', 'error'); return; }
-
-    var cues = window.CinePROSubtitles.parse(raw2);
-    if (!cues.length) {
-      showToast('Nenhuma legenda válida nesse arquivo.', 'error');
-      return;
-    }
-
-    var norm = window.CinePROSubtitles.normalize(cues, { maxLines: 2 });
-    var st = window.CinePROSubtitles.stats(norm);
-
-    // Grava o normalizado ao lado do original — não sobrescreve o do usuário
-    var outPath = srtPath.replace(/\.(srt|vtt)$/i, '') + '(CinePRO).srt';
-    try { fsMod.writeFileSync(outPath, window.CinePROSubtitles.toSRT(norm), 'utf8'); }
-    catch (e) { showToast('Não consegui gravar o SRT limpo.', 'error'); return; }
-
-    setLabel('Importando ' + st.count + '…');
-    setStatus('loading', st.count + 'legendas — importando...');
-
-    cs.evalScript('importSubtitles("' + escapePath(outPath) + '")', function (r) {
-      r = String(r || '');
-      if (r.indexOf('OK:') === 0) {
-        var naBin = r.indexOf('IMPORTED_TO_BIN') > -1;
-        setLabel(st.count + 'legendas');
-        setStatus('ok', st.count + 'legendas importadas');
-        showToast(st.count + 'legendas' +
-          (st.cps > 20 ? '·  ' + st.cps + 'car/s (rápido demais pra ler)' : '') +
-          (naBin ? '— no painel do projeto, arraste pra timeline' : 'na timeline'), 'success');
-      } else {
-        setLabel(original);
-        setStatus('error', 'Falha ao importar');
-        showToast('' + (r.indexOf('NO_SEQUENCE') > -1
-          ? 'Abra uma sequência primeiro.'
-          : 'Premiere recusou: ' + r.replace(/^.*ERR:/, '')), 'error');
-      }
-      reset(4000);
+      cs.evalScript('addDiagnosticMarkers("' + payload + '")', function (r) {
+        var m2 = /MARKERS_(\d+)/.exec(String(r || ''));
+        var n = m2 ? parseInt(m2[1], 10) : 0;
+        if (!n) {
+          setLabel(original);
+          setStatus('error', 'Não consegui marcar');
+          showToast('⚠ Premiere recusou os marcadores: ' + String(r).replace(/^.*ERR:/, ''), 'error');
+          reset();
+          return;
+        }
+        setLabel('✓ ' + n + ' marcados');
+        setStatus('ok', st.total + ' ponto(s) de atenção');
+        var rit = result.rhythm ? ' · corte médio ' + result.rhythm.avgGap + 's' : '';
+        showToast('🔍 ' + st.total + ' ponto(s) de atenção' +
+                  (st.high ? ' (' + st.high + ' graves)' : '') +
+                  ' · pior: ' + st.worstGap + 's sem quebra' + rit +
+                  ' — veja os marcadores na timeline.', 'success');
+        reset(6000);
+      });
     });
   });
 }
@@ -3370,7 +3202,7 @@ function checkMissingMediaOnBoot() {
     cs.evalScript('findOfflineMedia()', function (raw) {
       var s = null; try { s = JSON.parse(raw); } catch (e) {}
       if (s && s.missing > 0) {
-        showToast('' + s.missing + 'mídia(s) do projeto estão offline. Selecione na timeline (ou nada) e clique "Restaurar mídias".', 'error');
+        showToast('⚠ ' + s.missing + ' mídia(s) do projeto estão offline. Selecione na timeline (ou nada) e clique "Restaurar mídias".', 'error');
       }
     });
   });
@@ -3394,7 +3226,7 @@ function downloadEffectFile(effect) {
   function tryRoute(i) {
     return _downloadWithRetry(effect, urls[i], 3).catch(function (err) {
       if (i + 1 < urls.length) {
-        console.warn('[CinePRO] rota ' + (i + 1) + '/' + urls.length + 'falhou ('
+        console.warn('[CinePRO] rota ' + (i + 1) + '/' + urls.length + ' falhou ('
           + (err && err.message) + ') — failover: ' + effect.name);
         return tryRoute(i + 1);
       }
@@ -3431,7 +3263,7 @@ function initBundleLookup() {
       BUNDLE_MANIFEST = JSON.parse(nodeFs.readFileSync(manifestPath, 'utf8'));
       var fileCount = Object.keys(BUNDLE_MANIFEST.files || {}).length;
       var thumbCount = Object.keys(BUNDLE_MANIFEST.thumbs || {}).length;
-      console.log('[CinePRO] bundle carregado: ' + fileCount + 'arquivos + ' + thumbCount + 'thumbs');
+      console.log('[CinePRO] bundle carregado: ' + fileCount + ' arquivos + ' + thumbCount + ' thumbs');
     } catch (e) {
       console.warn('[CinePRO] bundle manifest inválido:', e.message);
     }
@@ -3670,14 +3502,14 @@ function humanizeError(err) {
 /** Mensagem amigável de sucesso por tipo */
 function successMessage(effect, result) {
   if (result.indexOf('PRESET_IMPORTED') !== -1)
-    return '"' + effect.name + '"adicionado em Efeitos  Predefinições';
+    return '"' + effect.name + '" adicionado em Efeitos → Predefinições';
   if (result.indexOf('LUT_INSTALLED') !== -1)
-    return '"' + effect.name + '"instalado em Lumetri Color';
+    return '"' + effect.name + '" instalado em Lumetri Color';
   if (result.indexOf('APPLIED_TO_') !== -1) {
     var n = result.replace(/.*APPLIED_TO_/, '').trim();
-    return '"' + effect.name + '"aplicado em ' + n + 'clip' + (n === '1' ? '' : 's') + 'selecionado' + (n === '1' ? '' : 's');
+    return '"' + effect.name + '" aplicado em ' + n + ' clip' + (n === '1' ? '' : 's') + ' selecionado' + (n === '1' ? '' : 's');
   }
   if (result.indexOf('AUDIO_INSERTED') !== -1)
-    return '"' + effect.name + '"adicionado à trilha de áudio ';
-  return '"' + effect.name + '"adicionado à timeline ';
+    return '"' + effect.name + '" adicionado à trilha de áudio ✓';
+  return '"' + effect.name + '" adicionado à timeline ✓';
 }

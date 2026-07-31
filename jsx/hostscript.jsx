@@ -225,19 +225,6 @@ function cineproSelfTest() {
   return '{' + out.join(',') + '}';
 }
 
-/** Leva o playhead pra um tempo em segundos. Usado pelos timecodes
- *  clicaveis do briefing — o editor VE o problema em vez de ler sobre. */
-function setPlayheadTime(sec) {
-  try {
-    var seq = app.project.activeSequence;
-    if (!seq) return 'ERR:NO_SEQUENCE';
-    seq.setPlayerPosition(String(Math.round((Number(sec) || 0) * TICKS_PER_SECOND)));
-    return 'OK';
-  } catch (e) {
-    return 'ERR:PLAYHEAD:' + e.toString();
-  }
-}
-
 function collectCutPoints(seq, maxN) {
   var points = [];
   try {
@@ -381,59 +368,6 @@ function getTimelineStats() {
            ',"duration":' + seqDurationSec(seq).toFixed(3) + '}';
   } catch (e) {
     return '{"error":"' + String(e).replace(/"/g, "'") + '"}';
-  }
-}
-
-/** Seletor de arquivo de legenda. O CEP não tem picker nativo. */
-function pickSubtitleFile() {
-  try {
-    var f = File.openDialog('Escolha o arquivo de legenda (.srt ou .vtt)');
-    if (!f) return 'CANCEL';
-    return f.fsName;
-  } catch (e) {
-    return 'ERR:PICKER:' + e.toString();
-  }
-}
-
-/**
- * Importa um .srt como faixa de legenda e joga na sequência ativa.
- *
- * Caminho NATIVO de propósito: não depende de template .mogrt (que é
- * asset de terceiro e teria problema de licença). O Premiere lê .srt
- * direto como caption desde o CC2017, e o valor que agregamos é o
- * arquivo já limpo — timing corrigido, sobreposição resolvida e quebra
- * de linha equilibrada (js/subtitles.js).
- */
-function importSubtitles(srtPath) {
-  try {
-    var f = new File(srtPath);
-    if (!f.exists) return 'ERR:FILE_NOT_FOUND:' + srtPath;
-    var seq = app.project.activeSequence;
-    if (!seq) return 'ERR:NO_SEQUENCE';
-
-    var bin = app.project.rootItem;
-    var before = bin.children.numItems;
-    app.project.importFiles([srtPath], true, bin, false);
-    if (bin.children.numItems <= before) return 'ERR:IMPORT_FAILED';
-
-    var fileName = srtPath.split('/').pop().split('\\').pop();
-    var item = null;
-    for (var i = bin.children.numItems - 1; i >= 0; i--) {
-      if (bin.children[i].name === fileName) { item = bin.children[i]; break; }
-    }
-    if (!item) return 'WARN:IMPORTED_BUT_NOT_FOUND';
-
-    // Caption entra em faixa própria; se a API não expuser, o item fica
-    // no projeto e o editor arrasta — melhor que falhar.
-    try {
-      if (seq.createCaptionTrack) {
-        seq.createCaptionTrack(item, 0);
-        return 'OK:CAPTION_TRACK';
-      }
-    } catch (e) {}
-    return 'OK:IMPORTED_TO_BIN';
-  } catch (e) {
-    return 'ERR:SUBTITLES:' + e.toString();
   }
 }
 
