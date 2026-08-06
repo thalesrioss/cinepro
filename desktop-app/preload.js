@@ -17,6 +17,9 @@ contextBridge.exposeInMainWorld('cinepro', {
   libraryDownload:      (a)   => ipcRenderer.invoke('library:download', a),
   resolveSend:          (a)   => ipcRenderer.invoke('resolve:send', a),
   resolveStatus:        ()    => ipcRenderer.invoke('resolve:status'),
+  resolveOpenQueue:     ()    => ipcRenderer.invoke('resolve:openQueue'),
+  resolveClearQueue:    ()    => ipcRenderer.invoke('resolve:clearQueue'),
+  resolveReinstall:     ()    => ipcRenderer.invoke('resolve:reinstall'),
   startDrag:            (p)   => ipcRenderer.send('library:dragstart', p),
   // Auto-update: baixa o instalador no próprio app e abre
   updateDownload:       (a)   => ipcRenderer.invoke('update:download', a),

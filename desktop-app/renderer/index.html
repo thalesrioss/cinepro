@@ -142,8 +142,20 @@
     <!-- v1.0/DaVinci: Biblioteca — buscar, baixar e ARRASTAR pro editor -->
     <div class="installables hidden" id="library-section">
       <div class="installables-header">
-        <h2 class="installables-title">Biblioteca <span class="lib-badge" id="lib-resolve-badge"></span></h2>
-        <p class="installables-desc">Busque, baixe e <strong>arraste direto pra timeline</strong> do DaVinci Resolve ou Premiere. Ou use "→ Resolve" e rode <em>Workspace → Scripts → CinePRO Import</em> no Resolve.</p>
+        <h2 class="installables-title">Biblioteca</h2>
+        <p class="installables-desc">Busque, baixe e <strong>arraste direto pra timeline</strong> do DaVinci Resolve ou do Premiere.</p>
+      </div>
+
+      <!-- Estado do Resolve: mostra FALHA também, não só sucesso.
+           Antes o badge só aparecia quando dava certo — quando o script
+           não instalava, o usuário não tinha como saber. -->
+      <div class="resolve-box" id="resolve-box" hidden>
+        <div class="resolve-row">
+          <span class="resolve-dot" id="resolve-dot"></span>
+          <span class="resolve-state" id="resolve-state">Verificando DaVinci Resolve…</span>
+        </div>
+        <p class="resolve-help" id="resolve-help"></p>
+        <div class="resolve-actions" id="resolve-actions"></div>
       </div>
       <input type="text" id="lib-search" class="lib-search" placeholder="Buscar em 11.000+ efeitos… (ex: chuva, whoosh, épico)">
       <div class="inst-grid" id="lib-grid">

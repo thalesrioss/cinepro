@@ -322,15 +322,22 @@ function resolveInstalled() {
 // Instala/atualiza o script CinePRO Import.py na pasta de Scripts do Resolve.
 // Chamado no boot do app (silencioso, idempotente).
 function installResolveScript() {
+  // NAO condiciona a detectar o Resolve. O gate antigo (`if
+  // (!resolveInstalled()) return false`) fazia a instalacao falhar em
+  // SILENCIO quando o Resolve estava em caminho nao-padrao: o usuario
+  // clicava "-> Resolve", via "na fila", ia no Resolve e nao achava o
+  // script no menu. Escrever o .py numa pasta que talvez nao seja usada
+  // e inofensivo; nao escrever quebra o fluxo inteiro.
   try {
-    if (!resolveInstalled()) return false;
     const src = path.join(__dirname, 'resolve', 'CinePRO Import.py');
-    if (!fs.existsSync(src)) return false;
+    if (!fs.existsSync(src)) return { ok: false, error: 'script nao encontrado no app' };
     const dir = resolveScriptsDir();
     fs.mkdirSync(dir, { recursive: true });
     fs.copyFileSync(src, path.join(dir, 'CinePRO Import.py'));
-    return true;
-  } catch (e) { return false; }
+    return { ok: true, dir: dir };
+  } catch (e) {
+    return { ok: false, error: e.message || String(e) };
+  }
 }
 
 // Baixa um asset pro cache local (se ainda não estiver) e retorna o path.
@@ -372,15 +379,59 @@ ipcMain.handle('resolve:send', async (_e, asset) => {
     const p = await ensureCached(asset);
     fs.mkdirSync(RESOLVE_QUEUE, { recursive: true });
     fs.copyFileSync(p, path.join(RESOLVE_QUEUE, path.basename(p)));
-    installResolveScript();   // garante que o script está lá
-    return { ok: true, queued: true, resolve: resolveInstalled() };
+    const inst = installResolveScript();
+    return {
+      ok: true,
+      queued: countQueue(),
+      resolve: resolveInstalled(),
+      scriptOk: inst.ok,
+      scriptError: inst.error || null,
+    };
   } catch (e) { return { ok: false, error: e.message || String(e) }; }
 });
+
+// Quantos arquivos aguardam o script rodar. Sem isto o usuario clica
+// "-> Resolve" varias vezes, esquece, e depois caem todos de uma vez.
+function countQueue() {
+  try {
+    return fs.readdirSync(RESOLVE_QUEUE)
+      .filter((f) => !f.startsWith('.') && fs.statSync(path.join(RESOLVE_QUEUE, f)).isFile())
+      .length;
+  } catch (e) { return 0; }
+}
 
 ipcMain.handle('resolve:status', () => ({
   installed: resolveInstalled(),
   scriptInstalled: fs.existsSync(path.join(resolveScriptsDir(), 'CinePRO Import.py')),
+  scriptsDir: resolveScriptsDir(),
+  queueDir: RESOLVE_QUEUE,
+  queued: countQueue(),
 }));
+
+// Abrir a pasta da fila: quando algo da errado, o usuario precisa poder
+// olhar em vez de adivinhar.
+ipcMain.handle('resolve:openQueue', () => {
+  try {
+    fs.mkdirSync(RESOLVE_QUEUE, { recursive: true });
+    shell.openPath(RESOLVE_QUEUE);
+    return { ok: true };
+  } catch (e) { return { ok: false, error: e.message }; }
+});
+
+ipcMain.handle('resolve:clearQueue', () => {
+  try {
+    let n = 0;
+    for (const f of fs.readdirSync(RESOLVE_QUEUE)) {
+      const p = path.join(RESOLVE_QUEUE, f);
+      if (f.startsWith('.') || !fs.statSync(p).isFile()) continue;
+      fs.unlinkSync(p); n++;
+    }
+    return { ok: true, removed: n };
+  } catch (e) { return { ok: false, error: e.message }; }
+});
+
+// Reinstalar sob demanda — a saida do "reparar" na interface.
+ipcMain.handle('resolve:reinstall', () => installResolveScript());
 
 // Drag nativo: arrastar uma linha da biblioteca solta o ARQUIVO real
 // em qualquer app (Resolve, Premiere, Finder). Precisa estar cacheado.

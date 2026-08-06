@@ -631,3 +631,38 @@ html, body {
 .lib-row.lib-ready { border-color: rgba(0,184,255,0.35); cursor: grab; }
 .lib-row.lib-ready:active { cursor: grabbing; }
 .lib-dl, .lib-resolve { flex: none; white-space: nowrap; }
+
+/* ══ Estado do DaVinci Resolve ═══════════════════════════════
+   O fluxo do Resolve tem passos fora do app (rodar o script no
+   menu). Se algo falhar em silêncio, o usuário fica sem saída —
+   então este bloco mostra o estado real, inclusive quando é ruim. */
+.resolve-box {
+  margin: 0 0 14px;
+  padding: 12px 14px;
+  border: 1px solid var(--border-default, rgba(255,255,255,.10));
+  border-left: 3px solid var(--brand, #00B8FF);
+  border-radius: var(--radius-md, 8px);
+  background: var(--surface-1, #0E1218);
+}
+.resolve-box.is-warn { border-left-color: var(--warning, #FFC74D); }
+.resolve-row { display: flex; align-items: center; gap: 8px; }
+.resolve-dot {
+  width: 7px; height: 7px; border-radius: 50%;
+  background: var(--success, #22C55E); flex: none;
+}
+.resolve-box.is-warn .resolve-dot { background: var(--warning, #FFC74D); }
+.resolve-state {
+  font-size: 12px; font-weight: 600;
+  color: var(--text-strong, #fff);
+}
+.resolve-help {
+  margin: 6px 0 0; font-size: 11px; line-height: 1.55;
+  color: var(--text-muted, #8A95A8);
+}
+.resolve-help code {
+  font-family: ui-monospace, monospace; font-size: 10.5px;
+  color: var(--brand-bright, #4DD2FF);
+}
+.resolve-actions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+.resolve-actions:empty { display: none; }
+.resolve-actions .btn { font-size: 11px; padding: 5px 10px; }

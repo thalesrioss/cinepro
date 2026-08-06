@@ -649,13 +649,7 @@ function initLibrary() {
   if (LIB_INITED) return;
   LIB_INITED = true;
 
-  // badge de status do Resolve
-  if (window.cinepro && window.cinepro.resolveStatus) {
-    window.cinepro.resolveStatus().then(function (st) {
-      var b = document.getElementById('lib-resolve-badge');
-      if (b && st && st.installed) b.textContent = '· DaVinci Resolve detectado ✓';
-    }).catch(function () {});
-  }
+  renderResolveStatus();
 
   var input = document.getElementById('lib-search');
   var timer = null;
@@ -723,8 +717,15 @@ function renderLibResults(q) {
       btnRes.disabled = true; btnRes.textContent = 'Enviando…';
       window.cinepro.resolveSend(libAssetOf(f)).then(function (res) {
         if (res && res.ok) {
-          btnRes.textContent = '✓ na fila';
+          btnRes.textContent = 'na fila (' + (res.queued || 1) + ')';
           btnRes.title = 'No Resolve: Workspace → Scripts → CinePRO Import';
+          // Se o script não instalou, avisar AGORA — não deixar o usuário
+          // descobrir no Resolve que não existe item no menu.
+          if (res.scriptOk === false) {
+            showToast('Enfileirado, mas o script do Resolve não instalou. ' +
+                      'Veja o aviso acima da busca.', 'error');
+          }
+          renderResolveStatus();
         } else {
           btnRes.disabled = false; btnRes.textContent = '→ Resolve';
           btnRes.title = (res && res.error) || 'falha';
@@ -746,3 +747,86 @@ function renderLibResults(q) {
   grid.innerHTML = '';
   grid.appendChild(frag);
 }
+
+// ══ ESTADO DO DAVINCI RESOLVE ═══════════════════════════════════
+// O fluxo do Resolve tem um passo FORA do app (rodar o script no
+// menu). Antes, quando a instalação do script falhava, nada avisava:
+// o usuário clicava "→ Resolve", via "na fila", ia no Resolve e não
+// achava o script. Aqui o estado real aparece — inclusive quando é
+// ruim — e cada problema vem com uma saída.
+
+function renderResolveStatus() {
+  var box = document.getElementById('resolve-box');
+  if (!box || !window.cinepro || !window.cinepro.resolveStatus) return;
+
+  window.cinepro.resolveStatus().then(function (st) {
+    st = st || {};
+    var dot     = document.getElementById('resolve-dot');
+    var estado  = document.getElementById('resolve-state');
+    var ajuda   = document.getElementById('resolve-help');
+    var acoes   = document.getElementById('resolve-actions');
+    box.hidden = false;
+    acoes.innerHTML = '';
+
+    var problema = !st.scriptInstalled;
+    box.classList.toggle('is-warn', problema);
+
+    if (!st.scriptInstalled) {
+      estado.textContent = 'Script do Resolve não instalado';
+      ajuda.innerHTML = 'Sem ele o botão "→ Resolve" enfileira o arquivo mas ' +
+        'o Resolve não tem como importar. Clique em Reparar — vamos gravar o ' +
+        'script em <code>' + escaparHtml(st.scriptsDir || '') + '</code>.';
+      addBtn(acoes, 'Reparar instalação', 'btn--primary', function (b) {
+        b.disabled = true; b.textContent = 'Instalando…';
+        window.cinepro.resolveReinstall().then(function (r) {
+          if (r && r.ok) { showToast('Script instalado. Reinicie o Resolve.', 'success'); }
+          else { showToast('Não consegui instalar: ' + ((r && r.error) || 'erro'), 'error'); }
+          renderResolveStatus();
+        });
+      });
+    } else if (!st.installed) {
+      // Script no lugar, mas não achamos o Resolve. Não é bloqueio —
+      // a pasta de scripts é a mesma; só não dá pra confirmar.
+      estado.textContent = 'Script instalado · Resolve não detectado';
+      ajuda.innerHTML = 'Se o Resolve estiver instalado em outro lugar, ' +
+        'continua funcionando: abra <strong>Workspace → Scripts → CinePRO Import</strong>. ' +
+        'Se o item não aparecer no menu, reinicie o Resolve.';
+    } else {
+      estado.textContent = 'DaVinci Resolve pronto';
+      ajuda.innerHTML = 'Envie efeitos com <strong>"→ Resolve"</strong> e depois ' +
+        'rode <strong>Workspace → Scripts → CinePRO Import</strong>. ' +
+        'Os arquivos entram <strong>no playhead</strong>, em trilha de áudio livre.';
+    }
+
+    // Fila: o número precisa ser visível, senão o usuário clica várias
+    // vezes, esquece, e depois caem todos de uma vez.
+    if (st.queued > 0) {
+      ajuda.innerHTML += '<br><strong>' + st.queued + ' arquivo(s) na fila</strong>, ' +
+        'aguardando você rodar o script no Resolve.';
+      addBtn(acoes, 'Abrir pasta da fila', 'btn--ghost', function () {
+        window.cinepro.resolveOpenQueue();
+      });
+      addBtn(acoes, 'Esvaziar fila', 'btn--ghost', function (b) {
+        b.disabled = true;
+        window.cinepro.resolveClearQueue().then(function (r) {
+          showToast(((r && r.removed) || 0) + ' removido(s) da fila.', 'success');
+          renderResolveStatus();
+        });
+      });
+    }
+  }).catch(function () {});
+}
+
+function addBtn(pai, texto, cls, onClick) {
+  var b = document.createElement('button');
+  b.className = 'btn ' + cls + ' btn--sm';
+  b.textContent = texto;
+  b.addEventListener('click', function () { onClick(b); });
+  pai.appendChild(b);
+}
+
+function escaparHtml(t) {
+  return String(t == null ? '' : t)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+

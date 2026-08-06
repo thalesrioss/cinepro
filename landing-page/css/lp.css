@@ -1898,3 +1898,46 @@ section:not(:last-child) { border-bottom: 1px solid var(--border-subtle); }
 .founder-note p { font-size: 15px; line-height: 1.7; color: var(--text-main, #e8eff7); margin: 0 0 14px; }
 .founder-note .founder-sig { font-size: 13px; color: var(--text-dim, #8fa3bc); margin: 0; }
 .founder-note .founder-sig strong { color: var(--brand, #00B8FF); }
+
+/* ══ DaVinci Resolve ═════════════════════════════════════════ */
+.dv { padding: 88px 0; border-top: 1px solid var(--border, rgba(255,255,255,.08)); }
+.dv-head { max-width: 640px; margin-bottom: 40px; }
+.dv-eyebrow {
+  display: inline-block; font-size: 11px; letter-spacing: .14em;
+  text-transform: uppercase; color: var(--brand, #00B8FF);
+  font-weight: 700; margin-bottom: 12px;
+}
+.dv-title {
+  font-size: clamp(1.6rem, 4vw, 2.4rem); line-height: 1.15;
+  margin: 0 0 14px; font-weight: 700; letter-spacing: -.02em;
+  text-wrap: balance;
+}
+.dv-sub { margin: 0; font-size: 1rem; line-height: 1.65; color: var(--text-muted, #8A95A8); }
+
+.dv-ways {
+  display: grid; gap: 16px; margin-bottom: 20px;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+}
+.dv-way {
+  padding: 22px 24px;
+  border: 1px solid var(--border, rgba(255,255,255,.08));
+  border-radius: 12px;
+  background: var(--surface-1, #0E1218);
+}
+.dv-tag {
+  display: inline-block; font-size: 10px; letter-spacing: .08em;
+  text-transform: uppercase; font-weight: 700;
+  color: var(--brand-bright, #4DD2FF);
+  background: rgba(0,184,255,.14);
+  padding: 3px 9px; border-radius: 999px; margin-bottom: 12px;
+}
+.dv-way h3 { margin: 0 0 8px; font-size: 1.15rem; font-weight: 700; }
+.dv-way p { margin: 0; font-size: .9375rem; line-height: 1.65; color: var(--text-muted, #8A95A8); }
+
+.dv-note {
+  padding: 14px 18px; border-radius: 10px;
+  border: 1px solid rgba(0,184,255,.25);
+  background: rgba(0,184,255,.06);
+  font-size: .9rem; line-height: 1.6; color: var(--text-muted, #8A95A8);
+}
+.dv-note strong { color: var(--text-strong, #fff); }
