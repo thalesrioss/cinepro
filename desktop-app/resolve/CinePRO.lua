@@ -20,7 +20,9 @@
 
 local CDN_INDEX = "https://cdn.jsdelivr.net/gh/thalesrioss/cinepro@main/data/lua-index.tsv"
 local CDN_FILES = "https://pub-6ace91bcabf540f0a54bb6850d188ef4.r2.dev/"
-local MAX_RESULTADOS = 200
+-- Lote: o Qt fica lento se despejarmos 10 mil linhas de uma vez, e
+-- ninguem rola isso. O Premiere carrega em lotes pelo mesmo motivo.
+local LOTE = 300
 local MAX_RECENTES = 30
 
 -- ── Ambiente ────────────────────────────────────────────────
@@ -252,13 +254,8 @@ local function filtrar(categoria, termo)
       for p in e.packs:gmatch("[^,]+") do if p == pack then ok = true; break end end
     elseif cat then
       ok = (e.cat == cat)
-    elseif not t then
-      ok = false   -- "Todos" sem busca nao despeja 10 mil linhas
-    end
-    if ok and cabe(e) then
-      achados[#achados + 1] = e
-      if #achados >= MAX_RESULTADOS then break end
-    end
+    end   -- "Todos" sem filtro mostra tudo; o lote limita o que entra na arvore
+    if ok and cabe(e) then achados[#achados + 1] = e end
   end
   return achados
 end
@@ -382,6 +379,7 @@ local win = disp:AddWindow({
     Spacing = 6,
     ui:Button{ ID = "Colocar",  Text = "Colocar no playhead" },
     ui:Button{ ID = "Favorito", Text = "Favoritar" },
+    ui:Button{ ID = "Mais",      Text = "Carregar mais" },
     ui:Button{ ID = "Atualizar", Text = "Atualizar catálogo" },
   },
 
@@ -435,32 +433,77 @@ local function montarLateral()
   end
 end
 
-local function mostrar(achados)
+-- Desenha ATE `quantos` efeitos, agrupados por categoria — mesma
+-- leitura do Premiere, onde cada grupo tem cabecalho com contagem.
+-- Agrupa so quando faz sentido: buscando ou dentro de uma categoria,
+-- cabecalho unico so atrapalha.
+local function mostrar(achados, quantos)
   pcall(function() itm.Lista:Clear() end)
-  visiveis = achados
-  for i = 1, #achados do
-    local e = achados[i]
+  visiveis = {}
+
+  local limite = math.min(quantos or LOTE, #achados)
+  local agrupar = (ativa == "todos") and (itm.Busca.Text == "")
+
+  local function novoFilho(pai, e)
     local it = itm.Lista:NewItem()
     it.Text[0] = (ehFav[e.id] and "★ " or "") .. e.nome
     it.Text[1] = string.format("%.2fs", e.dur)
-    itm.Lista:AddTopLevelItem(it)
+    if pai then pai:AddChild(it) else itm.Lista:AddTopLevelItem(it) end
+    visiveis[#visiveis + 1] = e
   end
+
+  if not agrupar then
+    for i = 1, limite do novoFilho(nil, achados[i]) end
+    return limite
+  end
+
+  -- Agrupado: conta o total de cada categoria antes de cortar,
+  -- pra o cabecalho mostrar o numero real e nao o do lote.
+  local totalPorCat = {}
+  for i = 1, #achados do
+    local c = achados[i].cat ~= "" and achados[i].cat or "Sem categoria"
+    totalPorCat[c] = (totalPorCat[c] or 0) + 1
+  end
+
+  local catAtual, pai = nil, nil
+  for i = 1, limite do
+    local e = achados[i]
+    local c = e.cat ~= "" and e.cat or "Sem categoria"
+    if c ~= catAtual then
+      catAtual = c
+      pai = itm.Lista:NewItem()
+      pai.Text[0] = c
+      pai.Text[1] = tostring(totalPorCat[c])
+      itm.Lista:AddTopLevelItem(pai)
+      pcall(function() pai.Expanded = true end)
+    end
+    novoFilho(pai, e)
+  end
+  return limite
+end
+
+local conjunto, mostrados = {}, 0
+
+local function atualizarStatus()
+  if #conjunto == 0 then
+    status("Nenhum efeito encontrado.")
+  elseif mostrados < #conjunto then
+    status(mostrados .. " de " .. #conjunto .. " efeitos — clique em Carregar mais.")
+  else
+    status(#conjunto .. " efeito(s).")
+  end
+  pcall(function() itm.Mais.Enabled = (mostrados < #conjunto) end)
 end
 
 local function atualizarLista()
-  local achados = filtrar(ativa, itm.Busca.Text)
-  mostrar(achados)
-  if #achados == 0 then
-    if ativa == "todos" and itm.Busca.Text == "" then
-      status("Escolha uma categoria ao lado ou digite pra buscar.")
-    else
-      status("Nenhum efeito encontrado.")
-    end
-  elseif #achados >= MAX_RESULTADOS then
-    status(MAX_RESULTADOS .. "+ resultados — refine a busca.")
-  else
-    status(#achados .. " efeito(s).")
-  end
+  conjunto = filtrar(ativa, itm.Busca.Text)
+  mostrados = mostrar(conjunto, LOTE)
+  atualizarStatus()
+end
+
+local function carregarMais()
+  mostrados = mostrar(conjunto, mostrados + LOTE)
+  atualizarStatus()
 end
 
 local function selecionado()
@@ -471,7 +514,11 @@ local function selecionado()
   if n == 0 then return nil end
   local alvo = sel[1]
   if not alvo or type(alvo) == "number" then return nil end
+  -- Cabecalho de grupo tem a contagem na 2a coluna, nao duracao —
+  -- clicar nele nao pode virar "colocar categoria no playhead".
   local nome = tostring(alvo.Text[0]):gsub("^★ ", "")
+  local col2 = tostring(alvo.Text[1] or "")
+  if not col2:find("s$") then return nil end
   for i = 1, #visiveis do
     if visiveis[i].nome == nome then return visiveis[i] end
   end
@@ -486,7 +533,8 @@ if erro then
   status("Erro: " .. erro)
 else
   montarLateral()
-  status(total .. " efeitos prontos.")
+  -- Mostra o acervo de cara: painel vazio parece quebrado.
+  atualizarLista()
 end
 
 -- ── Eventos ─────────────────────────────────────────────────
@@ -526,10 +574,12 @@ win.On.Favorito.Clicked = function(ev)
                      or  ('"' .. e.nome .. '" saiu dos favoritos.'))
 end
 
+win.On.Mais.Clicked = function(ev) carregarMais() end
+
 win.On.Atualizar.Clicked = function(ev)
   status("Baixando catálogo…")
   local n, err = carregarIndice(true)
-  if err then status("Erro: " .. err) else montarLateral(); status(n .. " efeitos atualizados.") end
+  if err then status("Erro: " .. err) else montarLateral(); atualizarLista() end
 end
 
 win.On.CineProPainel.Close = function(ev) disp:ExitLoop() end
