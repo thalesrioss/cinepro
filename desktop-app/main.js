@@ -329,11 +329,20 @@ function installResolveScript() {
   // script no menu. Escrever o .py numa pasta que talvez nao seja usada
   // e inofensivo; nao escrever quebra o fluxo inteiro.
   try {
-    const src = path.join(__dirname, 'resolve', 'CinePRO Import.py');
-    if (!fs.existsSync(src)) return { ok: false, error: 'script nao encontrado no app' };
     const dir = resolveScriptsDir();
     fs.mkdirSync(dir, { recursive: true });
-    fs.copyFileSync(src, path.join(dir, 'CinePRO Import.py'));
+    // Import.py e o fluxo de producao. Painel (teste).py e a prova de
+    // conceito do UIManager — responde se da pra ter interface DENTRO
+    // do Resolve, que decide o proximo passo da plataforma.
+    const scripts = ['CinePRO.lua', 'CinePRO Import.py'];
+    let principal = false;
+    for (const nome of scripts) {
+      const src = path.join(__dirname, 'resolve', nome);
+      if (!fs.existsSync(src)) continue;
+      fs.copyFileSync(src, path.join(dir, nome));
+      if (nome === 'CinePRO.lua') principal = true;
+    }
+    if (!principal) return { ok: false, error: 'script nao encontrado no app' };
     return { ok: true, dir: dir };
   } catch (e) {
     return { ok: false, error: e.message || String(e) };
