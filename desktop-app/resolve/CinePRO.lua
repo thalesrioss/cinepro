@@ -1,24 +1,27 @@
 -- =============================================================
 --  CinePRO — painel para DaVinci Resolve
 --
---  Busca nos 10.000+ efeitos, baixa e coloca NO PLAYHEAD, tudo
---  de dentro do Resolve. Sem fila, sem trocar de app.
+--  Mesmo fluxo do plugin do Premiere: barra lateral (Todos,
+--  Favoritos, Recentes, Packs, Categorias), busca no topo, lista
+--  de resultados e barra de status embaixo.
 --
 --  POR QUE LUA: o Resolve so enumera scripts .py se achar um
---  Python.framework instalado. Sem ele, ignora em silencio — nem
+--  Python.framework instalado. Sem ele, IGNORA EM SILENCIO — nem
 --  erro aparece. Lua e nativo do Fusion: zero pre-requisito.
 --
 --  POR QUE TSV E NAO JSON: o Lua do Resolve nao tem biblioteca
---  JSON (testado nesta maquina). O indice vem em linhas com TAB.
+--  JSON (testado). O indice vem em linhas com TAB, e os packs sao
+--  pre-calculados pelo MESMO motor do Premiere (js/sfx-engine.js)
+--  — assim nao existem duas implementacoes da regra pra divergir.
 --
---  Rede: io.popen + curl (confirmado funcionando).
---  Cache: MESMA pasta do app e do plugin do Premiere, entao
---  efeito ja usado num editor nao baixa de novo no outro.
+--  Cache: MESMA pasta do app e do plugin, entao efeito ja baixado
+--  num editor nao baixa de novo no outro.
 -- =============================================================
 
 local CDN_INDEX = "https://cdn.jsdelivr.net/gh/thalesrioss/cinepro@main/data/lua-index.tsv"
 local CDN_FILES = "https://pub-6ace91bcabf540f0a54bb6850d188ef4.r2.dev/"
-local MAX_RESULTADOS = 150   -- alem disso a arvore fica lenta e ninguem le
+local MAX_RESULTADOS = 200
+local MAX_RECENTES = 30
 
 -- ── Ambiente ────────────────────────────────────────────────
 local resolve = bmd.scriptapp("Resolve")
@@ -39,7 +42,47 @@ if not ui or not disp then print("[CinePRO] UIManager indisponivel.") return end
 local HOME = os.getenv("HOME") or ""
 local BASE = HOME .. "/Library/Application Support/CinePRO"
 local CACHE = BASE .. "/cache"
-local INDICE_LOCAL = BASE .. "/lua-index.tsv"
+local INDICE = BASE .. "/lua-index.tsv"
+local FAVS   = BASE .. "/favoritos.txt"
+local RECS   = BASE .. "/recentes.txt"
+
+-- ── Paleta (brandbook do CinePRO) ───────────────────────────
+-- Os mesmos tokens de css/tokens.css. Se o Qt do Fusion nao
+-- aceitar stylesheet, o painel continua funcionando com a
+-- aparencia padrao — por isso tudo entra via pcall.
+local COR = {
+  brand   = "#00B8FF",
+  bright  = "#4DD2FF",
+  s0      = "#07090F",
+  s1      = "#0E1218",
+  s2      = "#161B23",
+  s3      = "#11161D",
+  texto   = "#E5E9F0",
+  fraco   = "#8A95A8",
+  borda   = "rgba(255,255,255,0.10)",
+}
+
+local ESTILO = [[
+  QWidget      { background-color: ]] .. COR.s0 .. [[; color: ]] .. COR.texto .. [[;
+                 font-size: 12px; }
+  QLineEdit    { background-color: ]] .. COR.s3 .. [[; border: 1px solid ]] .. COR.borda .. [[;
+                 border-radius: 8px; padding: 7px 10px; color: ]] .. COR.texto .. [[; }
+  QLineEdit:focus { border: 1px solid ]] .. COR.brand .. [[; }
+  QTreeWidget  { background-color: ]] .. COR.s1 .. [[; border: 1px solid ]] .. COR.borda .. [[;
+                 border-radius: 8px; }
+  QTreeWidget::item { padding: 5px 4px; }
+  QTreeWidget::item:selected { background-color: ]] .. COR.brand .. [[; color: #000; }
+  QHeaderView::section { background-color: ]] .. COR.s2 .. [[; color: ]] .. COR.fraco .. [[;
+                 border: 0px; padding: 5px; font-size: 10px; }
+  QPushButton  { background-color: ]] .. COR.s2 .. [[; color: ]] .. COR.texto .. [[;
+                 border: 1px solid ]] .. COR.borda .. [[; border-radius: 8px;
+                 padding: 7px 14px; font-weight: 600; }
+  QPushButton:hover  { border: 1px solid ]] .. COR.brand .. [[; }
+  QPushButton:default, QPushButton#Colocar {
+                 background-color: ]] .. COR.brand .. [[; color: #000; border: 0px; }
+  QLabel       { color: ]] .. COR.fraco .. [[; }
+  QLabel#Status { color: ]] .. COR.fraco .. [[; font-size: 11px; }
+]]
 
 -- ── Utilidades ──────────────────────────────────────────────
 local function shell(cmd)
@@ -57,13 +100,13 @@ local function existe(caminho)
 end
 
 local function baixar(url, destino)
-  os.execute('mkdir -p "' .. destino:match("^(.*)/[^/]*$") .. '"')
+  local pasta = destino:match("^(.*)/[^/]*$")
+  if pasta then os.execute('mkdir -p "' .. pasta .. '"') end
   shell('curl -sL --max-time 120 -o "' .. destino .. '" "' .. url .. '"')
   return existe(destino)
 end
 
--- Mesmo nome de arquivo que o app usa, senao o cache nao e compartilhado.
--- App: <8 primeiros do id> _ <nome sanitizado> . <ext>
+-- Mesmo nome do app, senao o cache nao e compartilhado entre editores.
 local function nomeCache(id, nome, ext)
   local seguro = nome:gsub("[^%w%s%-%._]", "_")
   return CACHE .. "/" .. id:sub(1, 8) .. "_" .. seguro .. "." .. ext
@@ -77,41 +120,142 @@ local function semAcento(s)
   return s
 end
 
--- ── Indice ──────────────────────────────────────────────────
-local EFEITOS = {}
+local function lerLinhas(caminho)
+  local out = {}
+  local f = io.open(caminho, "r")
+  if not f then return out end
+  for l in f:lines() do if l ~= "" then out[#out + 1] = l end end
+  f:close()
+  return out
+end
+
+local function gravarLinhas(caminho, lista)
+  os.execute('mkdir -p "' .. BASE .. '"')
+  local f = io.open(caminho, "w")
+  if not f then return end
+  for i = 1, #lista do f:write(lista[i], "\n") end
+  f:close()
+end
+
+-- ── Estado ──────────────────────────────────────────────────
+local EFEITOS, PORID = {}, {}
+local CATEGORIAS, PACKS = {}, {}
+local favoritos, recentes = {}, {}
+local ehFav = {}
+
+local NOME_PACK = {
+  trailer = "Trailer Cinematográfico", terror = "Terror / Suspense",
+  vlog = "Vlog Dinâmico", reels = "Reels / TikTok",
+  gaming = "Gaming / Highlights", tutorial = "Tutorial / Educacional",
+  corporativo = "Corporativo", documentario = "Documentário / Emocional",
+}
 
 local function carregarIndice(forcar)
-  -- Usa a copia local se existir; so baixa quando falta ou o
-  -- usuario pede. Abrir o painel nao deve custar 300KB toda vez.
-  if forcar or not existe(INDICE_LOCAL) then
-    if not baixar(CDN_INDEX, INDICE_LOCAL) then return 0, "falha ao baixar o indice" end
+  if forcar or not existe(INDICE) then
+    if not baixar(CDN_INDEX, INDICE) then return 0, "falha ao baixar o catálogo" end
   end
+  local f = io.open(INDICE, "r")
+  if not f then return 0, "não consegui abrir o catálogo" end
 
-  local f = io.open(INDICE_LOCAL, "r")
-  if not f then return 0, "nao consegui abrir o indice" end
+  EFEITOS, PORID = {}, {}
+  local vistasCat, vistosPack = {}, {}
+  CATEGORIAS, PACKS = {}, {}
 
-  EFEITOS = {}
   for linha in f:lines() do
-    local id, nome, ext, dur = linha:match("^([^\t]+)\t([^\t]+)\t([^\t]+)\t([^\t]+)$")
-    if id then
-      EFEITOS[#EFEITOS + 1] = {
-        id = id, nome = nome, ext = ext,
-        dur = tonumber(dur) or 0,
-        busca = semAcento(nome),
+    local id, nome, ext, dur, cat, packs =
+      linha:match("^([^\t]*)\t([^\t]*)\t([^\t]*)\t([^\t]*)\t([^\t]*)\t([^\t]*)$")
+    if id and id ~= "" then
+      local e = {
+        id = id, nome = nome, ext = ext, dur = tonumber(dur) or 0,
+        cat = cat, packs = packs, busca = semAcento(nome),
       }
+      EFEITOS[#EFEITOS + 1] = e
+      PORID[id] = e
+      if cat ~= "" and not vistasCat[cat] then
+        vistasCat[cat] = true
+        CATEGORIAS[#CATEGORIAS + 1] = cat
+      end
+      for p in packs:gmatch("[^,]+") do
+        if not vistosPack[p] then vistosPack[p] = true; PACKS[#PACKS + 1] = p end
+      end
     end
   end
   f:close()
+  table.sort(CATEGORIAS)
+  table.sort(PACKS)
   return #EFEITOS, nil
 end
 
-local function buscar(termo)
+local function carregarPrefs()
+  favoritos = lerLinhas(FAVS)
+  recentes  = lerLinhas(RECS)
+  ehFav = {}
+  for i = 1, #favoritos do ehFav[favoritos[i]] = true end
+end
+
+local function alternarFavorito(id)
+  if ehFav[id] then
+    ehFav[id] = nil
+    for i = #favoritos, 1, -1 do
+      if favoritos[i] == id then table.remove(favoritos, i) end
+    end
+  else
+    ehFav[id] = true
+    favoritos[#favoritos + 1] = id
+  end
+  gravarLinhas(FAVS, favoritos)
+end
+
+local function registrarUso(id)
+  for i = #recentes, 1, -1 do
+    if recentes[i] == id then table.remove(recentes, i) end
+  end
+  table.insert(recentes, 1, id)
+  while #recentes > MAX_RECENTES do table.remove(recentes) end
+  gravarLinhas(RECS, recentes)
+end
+
+-- ── Filtro ──────────────────────────────────────────────────
+-- categoria: "todos" | "favoritos" | "recentes" | "pack:<id>" | "cat:<nome>"
+local function filtrar(categoria, termo)
   local achados = {}
-  if not termo or termo == "" then return achados end
-  local t = semAcento(termo)
+  local t = (termo and termo ~= "") and semAcento(termo) or nil
+
+  local function cabe(e)
+    if t and not e.busca:find(t, 1, true) then return false end
+    return true
+  end
+
+  if categoria == "favoritos" then
+    for i = 1, #favoritos do
+      local e = PORID[favoritos[i]]
+      if e and cabe(e) then achados[#achados + 1] = e end
+    end
+    return achados
+  end
+  if categoria == "recentes" then
+    for i = 1, #recentes do
+      local e = PORID[recentes[i]]
+      if e and cabe(e) then achados[#achados + 1] = e end
+    end
+    return achados
+  end
+
+  local pack = categoria:match("^pack:(.+)$")
+  local cat  = categoria:match("^cat:(.+)$")
+
   for i = 1, #EFEITOS do
     local e = EFEITOS[i]
-    if e.busca:find(t, 1, true) then
+    local ok = true
+    if pack then
+      ok = false
+      for p in e.packs:gmatch("[^,]+") do if p == pack then ok = true; break end end
+    elseif cat then
+      ok = (e.cat == cat)
+    elseif not t then
+      ok = false   -- "Todos" sem busca nao despeja 10 mil linhas
+    end
+    if ok and cabe(e) then
       achados[#achados + 1] = e
       if #achados >= MAX_RESULTADOS then break end
     end
@@ -120,19 +264,14 @@ local function buscar(termo)
 end
 
 -- ── Timeline ────────────────────────────────────────────────
-local function projetoAtual()
-  local pm = resolve:GetProjectManager()
-  return pm and pm:GetCurrentProject() or nil
-end
-
 local function tcParaFrames(tc, fps)
   local h, m, s, f = tostring(tc):gsub(";", ":"):match("(%d+):(%d+):(%d+):(%d+)")
   if not h then return nil end
   return math.floor(((tonumber(h) * 3600 + tonumber(m) * 60 + tonumber(s)) * fps) + tonumber(f) + 0.5)
 end
 
--- Primeira trilha de audio livre na janela desejada. Sem isto o
--- Resolve usa a trilha corrente e pode cobrir a voz do editor.
+-- Primeira trilha de audio livre. Sem isto o Resolve usa a trilha
+-- corrente e pode cobrir a voz do editor.
 local function trilhaLivre(tl, inicio, dur)
   local total = tl:GetTrackCount("audio")
   local fim = inicio + math.max(1, dur)
@@ -144,10 +283,12 @@ local function trilhaLivre(tl, inicio, dur)
       pcall(function() n = #itens end)
       for i = 1, n do
         local it = itens[i]
+        -- pairs() nesta lista devolve NUMERO, nao o objeto — por isso
+        -- indice numerico e checagem de tipo antes de chamar metodo.
         if it and type(it) ~= "number" then
-          local ok, ini = pcall(function() return it:GetStart() end)
-          local ok2, f2 = pcall(function() return it:GetEnd() end)
-          if ok and ok2 and ini < fim and f2 > inicio then ocupada = true; break end
+          local ok1, ini = pcall(function() return it:GetStart() end)
+          local ok2, f2  = pcall(function() return it:GetEnd() end)
+          if ok1 and ok2 and ini < fim and f2 > inicio then ocupada = true; break end
         end
       end
     end
@@ -156,23 +297,22 @@ local function trilhaLivre(tl, inicio, dur)
   return nil
 end
 
--- Coloca o efeito no playhead. Devolve (sucesso, mensagem).
 local function colocar(efeito)
-  local proj = projetoAtual()
+  local pm = resolve:GetProjectManager()
+  local proj = pm and pm:GetCurrentProject() or nil
   if not proj then return false, "Abra um projeto primeiro." end
   local tl = proj:GetCurrentTimeline()
   if not tl then return false, "Abra uma timeline primeiro." end
 
   local caminho = nomeCache(efeito.id, efeito.nome, efeito.ext)
   if not existe(caminho) then
-    local url = CDN_FILES .. efeito.id .. "." .. efeito.ext
-    if not baixar(url, caminho) then return false, "Falha ao baixar o efeito." end
+    if not baixar(CDN_FILES .. efeito.id .. "." .. efeito.ext, caminho) then
+      return false, "Falha ao baixar o efeito."
+    end
   end
 
   local mp = proj:GetMediaPool()
   local raiz = mp:GetRootFolder()
-
-  -- Bin "CinePRO" — mantem o projeto do editor organizado
   local destino = nil
   local subs = raiz:GetSubFolderList()
   if subs then
@@ -187,15 +327,13 @@ local function colocar(efeito)
   if destino then mp:SetCurrentFolder(destino) end
 
   local itens = mp:ImportMedia({ caminho })
-  if not itens then return false, "O Resolve recusou o arquivo." end
   local n = 0
-  pcall(function() n = #itens end)
+  if itens then pcall(function() n = #itens end) end
   if n == 0 then return false, "O Resolve recusou o arquivo." end
-  local item = itens[1]
 
   local fps = tonumber(proj:GetSetting("timelineFrameRate")) or 24
   local playhead = tcParaFrames(tl:GetCurrentTimecode(), fps)
-  if not playhead then return false, "Nao consegui ler o playhead." end
+  if not playhead then return false, "Não consegui ler o playhead." end
 
   local durFrames = math.max(1, math.floor(efeito.dur * fps + 0.5))
   local trilha = trilhaLivre(tl, playhead, durFrames)
@@ -204,120 +342,194 @@ local function colocar(efeito)
     trilha = tl:GetTrackCount("audio")
   end
 
-  local info = {
-    mediaPoolItem = item,
-    startFrame = 0,
-    endFrame = durFrames - 1,
-    recordFrame = playhead,
-    mediaType = 2,           -- so audio
-    trackIndex = trilha,
-  }
-  local ok, r = pcall(function() return mp:AppendToTimeline({ info }) end)
+  local ok, r = pcall(function()
+    return mp:AppendToTimeline({{
+      mediaPoolItem = itens[1],
+      startFrame = 0, endFrame = durFrames - 1,
+      recordFrame = playhead, mediaType = 2, trackIndex = trilha,
+    }})
+  end)
   if ok and r then
+    registrarUso(efeito.id)
     return true, string.format('"%s" na A%d, no playhead.', efeito.nome, trilha)
   end
-  return false, "Importado no bin CinePRO, mas nao entrou na timeline."
+  return false, "Importado no bin CinePRO, mas não entrou na timeline."
 end
 
 -- ── Interface ───────────────────────────────────────────────
 local win = disp:AddWindow({
   ID = "CineProPainel",
   WindowTitle = "CinePRO",
-  Geometry = { 200, 150, 520, 560 },
+  Geometry = { 150, 120, 780, 600 },
 }, ui:VGroup{
-  Spacing = 6,
+  Spacing = 8,
+  Margin = 10,
+
   ui:HGroup{
     Weight = 0,
-    ui:LineEdit{ ID = "Busca", PlaceholderText = "Buscar efeito (ex: whoosh, impacto, chuva)" },
+    ui:LineEdit{ ID = "Busca", PlaceholderText = "Buscar em 10.000+ efeitos…" },
   },
-  ui:Tree{ ID = "Lista", Weight = 1 },
+
+  ui:HGroup{
+    Weight = 1,
+    Spacing = 8,
+    ui:Tree{ ID = "Lateral", Weight = 0.32 },
+    ui:Tree{ ID = "Lista",   Weight = 0.68 },
+  },
+
   ui:HGroup{
     Weight = 0,
-    ui:Button{ ID = "Colocar", Text = "Colocar no playhead" },
+    Spacing = 6,
+    ui:Button{ ID = "Colocar",  Text = "Colocar no playhead" },
+    ui:Button{ ID = "Favorito", Text = "Favoritar" },
     ui:Button{ ID = "Atualizar", Text = "Atualizar catálogo" },
   },
-  ui:Label{ ID = "Status", Text = "", Weight = 0 },
+
+  ui:Label{ ID = "Status", Text = "Carregando…", Weight = 0 },
 })
 
 local itm = win:GetItems()
-local lista = itm.Lista
+
+-- Estilo: se o Qt do Fusion nao aceitar, o painel segue funcional
+pcall(function() win:SetStyleSheet(ESTILO) end)
+pcall(function() itm.CineProPainel.StyleSheet = ESTILO end)
+
 pcall(function()
-  lista.ColumnCount = 2
-  lista:SetHeaderLabels({ "Efeito", "Duração" })
+  itm.Lateral.ColumnCount = 1
+  itm.Lateral:SetHeaderLabels({ "Biblioteca" })
+  itm.Lista.ColumnCount = 2
+  itm.Lista:SetHeaderLabels({ "Efeito", "Duração" })
 end)
 
-local visiveis = {}
+local visiveis, ativa = {}, "todos"
+local chaveDaLinha = {}
 
 local function status(t) itm.Status.Text = t end
 
+local function montarLateral()
+  pcall(function() itm.Lateral:Clear() end)
+  chaveDaLinha = {}
+
+  local function add(rotulo, chave, contagem)
+    local it = itm.Lateral:NewItem()
+    it.Text[0] = contagem and (rotulo .. "   " .. contagem) or rotulo
+    itm.Lateral:AddTopLevelItem(it)
+    chaveDaLinha[it.Text[0]] = chave
+  end
+
+  add("Todos", "todos", #EFEITOS)
+  add("Favoritos", "favoritos", #favoritos)
+  add("Recentes", "recentes", #recentes)
+
+  if #PACKS > 0 then
+    add("— PACKS PRONTOS —", nil)
+    for i = 1, #PACKS do
+      add(NOME_PACK[PACKS[i]] or PACKS[i], "pack:" .. PACKS[i])
+    end
+  end
+  if #CATEGORIAS > 0 then
+    add("— CATEGORIAS —", nil)
+    for i = 1, #CATEGORIAS do
+      add(CATEGORIAS[i], "cat:" .. CATEGORIAS[i])
+    end
+  end
+end
+
 local function mostrar(achados)
-  pcall(function() lista:Clear() end)
+  pcall(function() itm.Lista:Clear() end)
   visiveis = achados
   for i = 1, #achados do
     local e = achados[i]
-    local linha = lista:NewItem()
-    linha.Text[0] = e.nome
-    linha.Text[1] = string.format("%.2fs", e.dur)
-    lista:AddTopLevelItem(linha)
+    local it = itm.Lista:NewItem()
+    it.Text[0] = (ehFav[e.id] and "★ " or "") .. e.nome
+    it.Text[1] = string.format("%.2fs", e.dur)
+    itm.Lista:AddTopLevelItem(it)
+  end
+end
+
+local function atualizarLista()
+  local achados = filtrar(ativa, itm.Busca.Text)
+  mostrar(achados)
+  if #achados == 0 then
+    if ativa == "todos" and itm.Busca.Text == "" then
+      status("Escolha uma categoria ao lado ou digite pra buscar.")
+    else
+      status("Nenhum efeito encontrado.")
+    end
+  elseif #achados >= MAX_RESULTADOS then
+    status(MAX_RESULTADOS .. "+ resultados — refine a busca.")
+  else
+    status(#achados .. " efeito(s).")
   end
 end
 
 local function selecionado()
-  local sel = lista:SelectedItems()
+  local sel = itm.Lista:SelectedItems()
   if not sel then return nil end
   local n = 0
   pcall(function() n = #sel end)
   if n == 0 then return nil end
   local alvo = sel[1]
   if not alvo or type(alvo) == "number" then return nil end
-  local nome = alvo.Text[0]
+  local nome = tostring(alvo.Text[0]):gsub("^★ ", "")
   for i = 1, #visiveis do
     if visiveis[i].nome == nome then return visiveis[i] end
   end
   return nil
 end
 
--- Carga inicial
+-- ── Carga inicial ───────────────────────────────────────────
 status("Carregando catálogo…")
+carregarPrefs()
 local total, erro = carregarIndice(false)
 if erro then
   status("Erro: " .. erro)
 else
-  status(total .. " efeitos prontos. Digite pra buscar.")
+  montarLateral()
+  status(total .. " efeitos prontos.")
 end
 
-win.On.Busca.TextChanged = function(ev)
-  local termo = itm.Busca.Text
-  if termo == "" then
-    mostrar({})
-    status(#EFEITOS .. " efeitos prontos. Digite pra buscar.")
-    return
-  end
-  local achados = buscar(termo)
-  mostrar(achados)
-  if #achados >= MAX_RESULTADOS then
-    status(MAX_RESULTADOS .. "+ resultados — refine a busca.")
-  else
-    status(#achados .. " resultado(s).")
-  end
+-- ── Eventos ─────────────────────────────────────────────────
+win.On.Busca.TextChanged = function(ev) atualizarLista() end
+
+win.On.Lateral.ItemClicked = function(ev)
+  local sel = itm.Lateral:SelectedItems()
+  local n = 0
+  if sel then pcall(function() n = #sel end) end
+  if n == 0 then return end
+  local alvo = sel[1]
+  if not alvo or type(alvo) == "number" then return end
+  local chave = chaveDaLinha[tostring(alvo.Text[0])]
+  if not chave then return end   -- separador
+  ativa = chave
+  atualizarLista()
 end
 
 win.On.Colocar.Clicked = function(ev)
   local e = selecionado()
   if not e then status("Selecione um efeito na lista.") return end
-  status("Colocando “" .. e.nome .. "”…")
+  status('Colocando "' .. e.nome .. '"…')
   local ok, msg = colocar(e)
   status(msg)
+  if ok then montarLateral() end
 end
 
-win.On.Lista.ItemDoubleClicked = function(ev)
-  win.On.Colocar.Clicked(ev)
+win.On.Lista.ItemDoubleClicked = function(ev) win.On.Colocar.Clicked(ev) end
+
+win.On.Favorito.Clicked = function(ev)
+  local e = selecionado()
+  if not e then status("Selecione um efeito pra favoritar.") return end
+  alternarFavorito(e.id)
+  montarLateral()
+  atualizarLista()
+  status(ehFav[e.id] and ('"' .. e.nome .. '" nos favoritos.')
+                     or  ('"' .. e.nome .. '" saiu dos favoritos.'))
 end
 
 win.On.Atualizar.Clicked = function(ev)
   status("Baixando catálogo…")
   local n, err = carregarIndice(true)
-  status(err and ("Erro: " .. err) or (n .. " efeitos atualizados."))
+  if err then status("Erro: " .. err) else montarLateral(); status(n .. " efeitos atualizados.") end
 end
 
 win.On.CineProPainel.Close = function(ev) disp:ExitLoop() end

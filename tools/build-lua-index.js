@@ -9,8 +9,13 @@
 //  e frágil.
 //
 //  Formato: uma linha por efeito, campos separados por TAB.
-//    id \t nome \t ext \t duração
-//  O Lua lê com string.gmatch линha a linha — rápido e sem parser.
+//    id \t nome \t ext \t duração \t categoria \t packs
+//  O Lua lê linha a linha com string.match — rápido e sem parser.
+//
+//  A coluna `packs` é pré-calculada AQUI, com o mesmo motor que o
+//  plugin do Premiere usa (js/sfx-engine.js). Assim o painel do
+//  Resolve tem os mesmos packs sem precisar do motor em Lua — e não
+//  existem duas implementações da regra pra divergir.
 //
 //  Uso:  node tools/build-lua-index.js
 // =============================================================
@@ -22,6 +27,8 @@ const path = require('path');
 const zlib = require('zlib');
 
 const ROOT = path.join(__dirname, '..');
+const E = require(path.join(ROOT, 'js', 'sfx-engine.js'));
+const RC = require(path.join(ROOT, 'js', 'remote-config.js'));
 const manifest = JSON.parse(
   fs.readFileSync(path.join(ROOT, 'manifest', 'dist', 'manifest.json'), 'utf8')
 );
@@ -32,11 +39,34 @@ const itens = manifest.files.filter(
   (f) => f.kind === 'audio' && typeof f.dur === 'number' && f.dur > 0
 );
 
+// ── Packs: mesma pontuação do plugin (cosseno sobre os conceitos) ──
+const recipes = RC.validateRecipes(
+  JSON.parse(fs.readFileSync(path.join(ROOT, 'data', 'recipes.json'), 'utf8'))
+).value;
+const cIdx = E.conceptIndex(manifest.concepts);
+
+// Pra cada pack, os N melhores. Um efeito pode estar em vários.
+const PACK_TAM = 120;
+const packDe = new Map();
+for (const r of recipes) {
+  const pontuados = itens
+    .map((f) => ({ f, s: E.genreFit(f, r, cIdx) }))
+    .filter((x) => x.s > 0)
+    .sort((a, b) => b.s - a.s)
+    .slice(0, PACK_TAM);
+  for (const { f } of pontuados) {
+    if (!packDe.has(f.id)) packDe.set(f.id, []);
+    packDe.get(f.id).push(r.id);
+  }
+}
+
 const linhas = itens.map((f) => {
   // TAB e quebra de linha destruiriam o formato — o nome vem do
   // Drive e já teve surpresa antes (nome com barra, com aspas).
   const nome = String(f.name).replace(/[\t\r\n]+/g, ' ').trim();
-  return [f.id, nome, f.ext, f.dur].join('\t');
+  const cat = String(f.category || '').replace(/[\t\r\n]+/g, ' ').trim();
+  const packs = (packDe.get(f.id) || []).join(',');
+  return [f.id, nome, f.ext, f.dur, cat, packs].join('\t');
 });
 
 // Ordena por nome pra busca ficar previsível
@@ -52,12 +82,14 @@ console.log(`✓ ${linhas.length} efeitos → data/lua-index.tsv`);
 console.log(`  ${kb}KB (${gz}KB gzip)`);
 
 // Verificação de integridade: nenhum campo pode ter TAB a mais
-const ruins = linhas.filter((l) => l.split('\t').length !== 4);
+const ruins = linhas.filter((l) => l.split('\t').length !== 6);
 if (ruins.length) {
   console.error(`✗ ${ruins.length} linha(s) com número errado de campos`);
   process.exit(1);
 }
-console.log('  ✓ todas as linhas com 4 campos');
+console.log('  ✓ todas as linhas com 6 campos');
+const comPack = linhas.filter((l) => l.split('\t')[5]).length;
+console.log(`  ${comPack} efeitos em pelo menos um pack`);
 
 const curtos = itens.filter((f) => f.dur <= 1.2).length;
 const longos = itens.filter((f) => f.dur >= 20).length;
