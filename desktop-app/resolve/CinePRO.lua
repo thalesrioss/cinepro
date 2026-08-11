@@ -182,19 +182,40 @@ local function carregarConfig()
   f:close()
 end
 
+local function trocarArquivo(de, para)
+  local ok = pcall(function() return os.rename(de, para) end)
+  if not ok or existe(de) then
+    os.execute('mv -f "' .. de .. '" "' .. para .. '"')
+  end
+end
+
 -- `tentativa` e interno: o painel chama sem, e a recuperacao de
 -- formato antigo rechama com 2 pra nao poder ficar em loop.
+--
+-- NADA e publicado nos globais antes do arquivo ler inteiro. Um
+-- download truncado (ja aconteceu, o r2.dev devolveu 429 em 8 mil
+-- pedidos) ou um catalogo de formato antigo nao pode derrubar o
+-- catalogo que ja estava funcionando na tela.
 local function carregarIndice(forcar, tentativa)
+  local origem, temp = INDICE, nil
   if forcar or not existe(INDICE) then
-    if not baixar(CDN_INDEX, INDICE) then return 0, "falha ao baixar o catálogo" end
+    temp = INDICE .. ".novo"
+    if baixar(CDN_INDEX, temp) then
+      origem = temp
+    else
+      os.remove(temp)
+      temp = nil
+      if not existe(INDICE) then return 0, "falha ao baixar o catálogo" end
+    end
   end
-  local f = io.open(INDICE, "r")
+
+  local f = io.open(origem, "r")
   if not f then return 0, "não consegui abrir o catálogo" end
 
-  EFEITOS, PORID, PORPREFIXO = {}, {}, {}
+  local efeitos, porId, porPrefixo = {}, {}, {}
+  local categorias, packs_ = {}, {}
+  local subs, contaCat = {}, {}
   local vistasCat, vistosPack = {}, {}
-  CATEGORIAS, PACKS = {}, {}
-  SUBS, CONTA_CAT = {}, {}
   local vistasSub = {}
 
   for linha in f:lines() do
@@ -205,52 +226,61 @@ local function carregarIndice(forcar, tentativa)
         id = id, nome = nome, ext = ext, dur = tonumber(dur) or 0,
         cat = cat, sub = sub, packs = packs, busca = semAcento(nome),
       }
-      EFEITOS[#EFEITOS + 1] = e
-      PORID[id] = e
+      efeitos[#efeitos + 1] = e
+      porId[id] = e
       -- O cache guarda so os 8 primeiros chars do id no nome do
       -- arquivo. E por este mapa que "Restaurar midias" descobre
       -- qual efeito era, olhando so o caminho que sobrou no projeto.
-      PORPREFIXO[id:sub(1, 8)] = e
+      porPrefixo[id:sub(1, 8)] = e
       if cat ~= "" then
         if not vistasCat[cat] then
           vistasCat[cat] = true
-          CATEGORIAS[#CATEGORIAS + 1] = cat
-          SUBS[cat] = {}
+          categorias[#categorias + 1] = cat
+          subs[cat] = {}
           vistasSub[cat] = {}
         end
-        CONTA_CAT[cat] = (CONTA_CAT[cat] or 0) + 1
+        contaCat[cat] = (contaCat[cat] or 0) + 1
         if sub ~= "" then
           local vs = vistasSub[cat]
           if not vs[sub] then
             vs[sub] = { nome = sub, n = 0 }
-            SUBS[cat][#SUBS[cat] + 1] = vs[sub]
+            subs[cat][#subs[cat] + 1] = vs[sub]
           end
           vs[sub].n = vs[sub].n + 1
         end
       end
       for p in packs:gmatch("[^,]+") do
-        if not vistosPack[p] then vistosPack[p] = true; PACKS[#PACKS + 1] = p end
+        if not vistosPack[p] then vistosPack[p] = true; packs_[#packs_ + 1] = p end
       end
     end
   end
   f:close()
 
-  -- Catalogo em cache do formato antigo (sem a coluna subcategoria)
-  -- nao casa com o match e devolveria ZERO efeitos — painel vazio,
-  -- sem erro, sem pista. Quem ja usou o painel antes tem esse
-  -- arquivo em disco, entao a recuperacao precisa ser automatica.
-  if #EFEITOS == 0 and not forcar and (tentativa or 1) < 2 then
-    return carregarIndice(true, 2)
-  end
-  if #EFEITOS == 0 then
-    return 0, "catálogo ilegível — clique em Atualizar catálogo"
+  -- Zero efeitos = arquivo ilegivel (formato antigo em cache, ou
+  -- download truncado). Painel vazio SEM erro nao seria diagnostico
+  -- nenhum — o usuario acharia que a biblioteca sumiu.
+  if #efeitos == 0 then
+    if temp then os.remove(temp) end
+    if not forcar and (tentativa or 1) < 2 then return carregarIndice(true, 2) end
+    if #EFEITOS > 0 then
+      -- Ja tinha catalogo bom carregado: mantem o que funciona.
+      return #EFEITOS, "catálogo novo veio ilegível — mantive o anterior"
+    end
+    return 0, "catálogo ilegível — tente Atualizar catálogo"
   end
 
-  table.sort(CATEGORIAS)
-  table.sort(PACKS)
-  for _, lista in pairs(SUBS) do
+  -- Leu inteiro: agora sim o arquivo novo vira o oficial.
+  if temp then trocarArquivo(temp, INDICE) end
+
+  table.sort(categorias)
+  table.sort(packs_)
+  for _, lista in pairs(subs) do
     table.sort(lista, function(a, b) return a.nome < b.nome end)
   end
+
+  EFEITOS, PORID, PORPREFIXO = efeitos, porId, porPrefixo
+  CATEGORIAS, PACKS = categorias, packs_
+  SUBS, CONTA_CAT = subs, contaCat
   return #EFEITOS, nil
 end
 
@@ -1069,12 +1099,13 @@ else
 end
 
 local total, erro = carregarIndice(false)
-if erro then
-  status("Erro: " .. erro)
-else
+if total > 0 then
   montarLateral()
   -- Mostra o acervo de cara: painel vazio parece quebrado.
   atualizarLista()
+  if erro then status(erro) end
+else
+  status("Erro: " .. (erro or "catálogo vazio"))
 end
 
 -- ── Eventos ─────────────────────────────────────────────────
@@ -1155,7 +1186,13 @@ win.On.Mais.Clicked = function(ev) carregarMais() end
 win.On.Atualizar.Clicked = function(ev)
   status("Baixando catálogo…")
   local n, err = carregarIndice(true)
-  if err then status("Erro: " .. err) else montarLateral(); atualizarLista() end
+  if n > 0 then
+    montarLateral()
+    atualizarLista()
+    if err then status(err) end
+  else
+    status("Erro: " .. (err or "catálogo vazio"))
+  end
 end
 
 win.On.CineProPainel.Close = function(ev) disp:ExitLoop() end
