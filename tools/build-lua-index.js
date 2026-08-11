@@ -9,7 +9,7 @@
 //  e frágil.
 //
 //  Formato: uma linha por efeito, campos separados por TAB.
-//    id \t nome \t ext \t duração \t categoria \t packs
+//    id \t nome \t ext \t duração \t categoria \t subcategoria \t packs
 //  O Lua lê linha a linha com string.match — rápido e sem parser.
 //
 //  A coluna `packs` é pré-calculada AQUI, com o mesmo motor que o
@@ -60,13 +60,18 @@ for (const r of recipes) {
   }
 }
 
+const limpa = (s) => String(s || '').replace(/[\t\r\n]+/g, ' ').trim();
+
 const linhas = itens.map((f) => {
   // TAB e quebra de linha destruiriam o formato — o nome vem do
   // Drive e já teve surpresa antes (nome com barra, com aspas).
-  const nome = String(f.name).replace(/[\t\r\n]+/g, ' ').trim();
-  const cat = String(f.category || '').replace(/[\t\r\n]+/g, ' ').trim();
+  const nome = limpa(f.name);
+  const cat = limpa(f.category);
+  // Subcategoria: é o que faz a categoria da lateral EXPANDIR, igual
+  // ao Premiere. Sem ela o painel do Resolve teria hierarquia rasa.
+  const sub = limpa(f.subcategory);
   const packs = (packDe.get(f.id) || []).join(',');
-  return [f.id, nome, f.ext, f.dur, cat, packs].join('\t');
+  return [f.id, nome, f.ext, f.dur, cat, sub, packs].join('\t');
 });
 
 // Ordena por nome pra busca ficar previsível
@@ -82,15 +87,32 @@ console.log(`✓ ${linhas.length} efeitos → data/lua-index.tsv`);
 console.log(`  ${kb}KB (${gz}KB gzip)`);
 
 // Verificação de integridade: nenhum campo pode ter TAB a mais
-const ruins = linhas.filter((l) => l.split('\t').length !== 6);
+const ruins = linhas.filter((l) => l.split('\t').length !== 7);
 if (ruins.length) {
   console.error(`✗ ${ruins.length} linha(s) com número errado de campos`);
   process.exit(1);
 }
-console.log('  ✓ todas as linhas com 6 campos');
-const comPack = linhas.filter((l) => l.split('\t')[5]).length;
+console.log('  ✓ todas as linhas com 7 campos');
+const comPack = linhas.filter((l) => l.split('\t')[6]).length;
 console.log(`  ${comPack} efeitos em pelo menos um pack`);
+const comSub = linhas.filter((l) => l.split('\t')[5]).length;
+console.log(`  ${comSub} efeitos com subcategoria (expandem na lateral)`);
 
 const curtos = itens.filter((f) => f.dur <= 1.2).length;
 const longos = itens.filter((f) => f.dur >= 20).length;
 console.log(`  ${curtos} curtos (cabem em corte) · ${longos} longos (cama sonora)`);
+
+// ── Config pro painel (chave<TAB>valor) ──────────────────────
+// O Lua do Resolve não tem parser JSON, e o diagnóstico precisa dos
+// MESMOS limites que o plugin usa. Em vez de repetir os números no
+// Lua (que divergiriam na primeira mudança), exportamos daqui —
+// data/diagnostics.json continua sendo a única fonte de verdade.
+const diag = RC.validateDiagnostics(
+  JSON.parse(fs.readFileSync(path.join(ROOT, 'data', 'diagnostics.json'), 'utf8'))
+).value;
+
+const cfg = Object.entries(diag).map(([k, v]) => `${k}\t${v}`);
+for (const r of recipes) cfg.push(`pack.${r.id}\t${r.label}`);
+
+fs.writeFileSync(path.join(ROOT, 'data', 'lua-config.tsv'), cfg.join('\n') + '\n', 'utf8');
+console.log(`✓ config do painel → data/lua-config.tsv (${cfg.length} chaves)`);
