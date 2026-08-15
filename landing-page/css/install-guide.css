@@ -1,0 +1,603 @@
+/* ==========================================================================
+   CinePRO — Guia de instalação animado (7 passos)
+
+   Porte em CSS/JS puro do componente feito no Claude Design. O original
+   dependia de React + ReactDOM (unpkg) e de Babel pra transpilar JSX no
+   navegador — ~1 MB de terceiros e um ponto de falha externo numa página
+   de vendas. Aqui não entra nada além destes bytes.
+
+   Prefixo .ig- em tudo: esta folha convive com lp.css e não pode
+   sequestrar classe de nome parecido.
+   ========================================================================== */
+
+.ig { padding: 96px 0; border-top: 1px solid var(--border-subtle); }
+
+.ig-intro {
+  max-width: 720px;
+  font-size: 16px;
+  line-height: 1.6;
+  color: var(--text-muted);
+  margin: 0 0 8px;
+}
+.ig-intro strong { color: var(--text); font-weight: 600; }
+
+/* ─── Seletor de sistema ────────────────────────────────────── */
+.ig-os {
+  display: inline-flex;
+  gap: 4px;
+  padding: 4px;
+  margin: 28px 0 10px;
+  background: var(--surface-2);
+  border: 1px solid var(--border-default);
+  border-radius: 10px;
+}
+.ig-os button {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 9px 18px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background .18s ease, color .18s ease;
+}
+.ig-os button:hover { color: var(--text); }
+.ig-os button[aria-pressed="true"] { background: var(--brand); color: #04121A; }
+.ig-os svg { width: 14px; height: 14px; }
+
+.ig-os-note { font-size: 12px; color: var(--text-faint); margin: 0 0 28px; }
+
+/* ─── Trilha de passos ──────────────────────────────────────── */
+.ig-trail {
+  display: flex;
+  gap: 6px;
+  overflow-x: auto;
+  padding-bottom: 6px;
+  margin-bottom: 20px;
+  scrollbar-width: thin;
+}
+.ig-trail::-webkit-scrollbar { height: 4px; }
+.ig-trail::-webkit-scrollbar-thumb { background: var(--border-default); border-radius: 2px; }
+
+.ig-trail button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 0 0 auto;
+  padding: 8px 13px 8px 8px;
+  background: var(--surface-2);
+  border: 1px solid var(--border-default);
+  border-radius: 999px;
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: border-color .18s ease, color .18s ease, background .18s ease;
+}
+.ig-trail button:hover { color: var(--text); border-color: var(--border-brand); }
+.ig-trail button[aria-current="step"] {
+  background: var(--brand-glow-1);
+  border-color: var(--brand);
+  color: var(--text-strong);
+}
+.ig-trail .ig-num {
+  display: grid;
+  place-items: center;
+  width: 20px; height: 20px;
+  border-radius: 50%;
+  background: rgba(255,255,255,.06);
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-muted);
+}
+.ig-trail button[aria-current="step"] .ig-num { background: var(--brand); color: #04121A; }
+.ig-trail button.is-done .ig-num { background: var(--success-glow); color: var(--success); }
+.ig-trail button.is-done { color: var(--text); }
+
+/* ─── Palco ─────────────────────────────────────────────────── */
+.ig-stage {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.05fr);
+  gap: 28px;
+  align-items: start;
+  background: var(--surface-1);
+  border: 1px solid var(--border-default);
+  border-radius: 14px;
+  padding: 28px;
+  min-height: 480px;
+}
+
+.ig-kicker {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: .10em;
+  text-transform: uppercase;
+  color: var(--brand);
+  margin: 0 0 10px;
+}
+.ig-h {
+  font-size: 24px;
+  line-height: 1.2;
+  font-weight: 700;
+  color: var(--text-strong);
+  margin: 0 0 14px;
+  letter-spacing: -.01em;
+}
+.ig-p { font-size: 14px; line-height: 1.65; color: var(--text-muted); margin: 0 0 12px; }
+.ig-p strong { color: var(--text); font-weight: 600; }
+.ig-p code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12.5px;
+  color: var(--brand-bright);
+  background: var(--surface-3);
+  padding: 1px 5px;
+  border-radius: 4px;
+}
+
+/* Caixa de atenção — onde as pessoas travam */
+.ig-warn {
+  margin-top: 18px;
+  padding: 13px 15px;
+  background: var(--warning-glow);
+  border: 1px solid rgba(255,199,77,.28);
+  border-left: 3px solid var(--warning);
+  border-radius: 0 8px 8px 0;
+}
+.ig-warn-t {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  color: var(--warning);
+  margin: 0 0 5px;
+}
+.ig-warn p { font-size: 13px; line-height: 1.55; color: var(--text); margin: 0; }
+
+.ig-info {
+  margin-top: 14px;
+  padding: 13px 15px;
+  background: var(--surface-2);
+  border: 1px solid var(--border-default);
+  border-radius: 8px;
+}
+.ig-info-t { font-size: 12px; font-weight: 700; color: var(--text); margin: 0 0 4px; }
+.ig-info p { font-size: 12.5px; line-height: 1.55; color: var(--text-muted); margin: 0; }
+
+/* Lista numerada de ações */
+.ig-steps { list-style: none; margin: 16px 0 0; padding: 0; display: grid; gap: 12px; }
+.ig-steps li { display: flex; gap: 11px; align-items: flex-start; min-width: 0; }
+/* Sem isto o item de flex assume min-width:auto e ESTICA pra caber o
+   comando do xattr inteiro — a página ganhava 180px de rolagem lateral
+   em 375px. O comando tem que rolar dentro da caixa dele, não empurrar
+   a tela. */
+.ig-steps li > div { flex: 1 1 auto; min-width: 0; }
+.ig-steps .ig-n {
+  flex: 0 0 auto;
+  display: grid; place-items: center;
+  width: 21px; height: 21px;
+  margin-top: 1px;
+  border-radius: 50%;
+  background: var(--brand-glow-2);
+  border: 1px solid var(--border-brand);
+  color: var(--brand);
+  font-size: 11px; font-weight: 700;
+}
+.ig-steps p { margin: 0; font-size: 13.5px; line-height: 1.55; color: var(--text); }
+
+/* Comando com botão de copiar */
+.ig-cmd {
+  margin-top: 8px;
+  max-width: 100%;
+  background: #05070B;
+  border: 1px solid var(--border-default);
+  border-radius: 8px;
+  overflow: hidden;
+}
+.ig-cmd-row { display: flex; align-items: stretch; min-width: 0; }
+.ig-cmd code {
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: 10px 12px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--brand-bright);
+  overflow-x: auto;
+  white-space: pre;
+}
+.ig-cmd button {
+  flex: 0 0 auto;
+  padding: 0 14px;
+  background: var(--surface-2);
+  border: 0;
+  border-left: 1px solid var(--border-default);
+  color: var(--text);
+  font-size: 12px; font-weight: 600;
+  cursor: pointer;
+  transition: background .18s ease, color .18s ease;
+}
+.ig-cmd button:hover { background: var(--surface-3); }
+.ig-cmd button.is-copied { background: var(--success-glow); color: var(--success); }
+
+/* ─── Painel de reprodução (direita) ────────────────────────── */
+.ig-repro { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.ig-repro-bar {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 10px;
+  font-size: 10px;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+}
+.ig-repro-beat { color: var(--brand); font-weight: 700; letter-spacing: .04em; }
+
+.ig-screen {
+  position: relative;
+  background: var(--surface-0);
+  border: 1px solid var(--border-default);
+  border-radius: 10px;
+  overflow: hidden;
+  min-height: 360px;
+}
+
+/* Cromo de janela genérico */
+.ig-chrome {
+  display: flex; align-items: center; gap: 7px;
+  padding: 9px 12px;
+  background: var(--surface-2);
+  border-bottom: 1px solid var(--border-default);
+}
+.ig-dot { width: 9px; height: 9px; border-radius: 50%; background: rgba(255,255,255,.14); }
+.ig-chrome-title {
+  font-size: 11px; color: var(--text-muted);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.ig-body { padding: 18px; }
+
+/* Campos falsos */
+.ig-field { margin-bottom: 11px; }
+.ig-label { font-size: 10px; text-transform: uppercase; letter-spacing: .07em; color: var(--text-faint); margin-bottom: 5px; }
+.ig-input {
+  height: 34px;
+  display: flex; align-items: center;
+  padding: 0 11px;
+  background: var(--surface-3);
+  border: 1px solid var(--border-default);
+  border-radius: 7px;
+  font-size: 13px;
+  color: var(--text);
+  transition: border-color .3s ease;
+}
+.ig-input.is-filled { border-color: var(--border-brand); }
+.ig-caret {
+  display: inline-block; width: 1px; height: 14px;
+  background: var(--brand);
+  margin-left: 1px;
+  animation: ig-caret 1s steps(1) infinite;
+}
+@keyframes ig-caret { 0%,49% { opacity: 1 } 50%,100% { opacity: 0 } }
+
+/* Botão falso */
+.ig-btn {
+  display: flex; align-items: center; justify-content: center; gap: 7px;
+  height: 38px;
+  border-radius: 8px;
+  background: var(--surface-2);
+  border: 1px solid var(--border-default);
+  color: var(--text-muted);
+  font-size: 13px; font-weight: 600;
+  transition: background .35s ease, color .35s ease, border-color .35s ease;
+}
+.ig-btn.is-on { background: var(--brand); border-color: var(--brand); color: #04121A; }
+.ig-btn.is-ok { background: var(--success-glow); border-color: rgba(34,197,94,.4); color: var(--success); }
+
+.ig-status { font-size: 11.5px; margin-top: 9px; color: var(--text-muted); transition: color .3s ease; }
+.ig-status.is-ok { color: var(--success); }
+.ig-status.is-warn { color: var(--warning); }
+
+/* Barra de progresso */
+.ig-bar { height: 6px; border-radius: 3px; background: rgba(255,255,255,.07); overflow: hidden; }
+.ig-bar span {
+  display: block; height: 100%; width: 0;
+  background: var(--brand);
+  border-radius: 3px;
+  transition: width .18s linear, background .3s ease;
+}
+.ig-bar span.is-done { background: var(--success); }
+
+.ig-file { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 9px; }
+.ig-file-n { font-size: 13px; font-weight: 600; color: var(--text); }
+.ig-file-s { font-size: 11px; color: var(--text-faint); }
+
+.ig-stat-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 18px; }
+.ig-stat {
+  padding: 12px;
+  background: var(--surface-2);
+  border: 1px solid var(--border-default);
+  border-radius: 8px;
+  text-align: center;
+}
+.ig-stat b { display: block; font-size: 20px; color: var(--brand); font-weight: 700; }
+.ig-stat span { font-size: 10.5px; line-height: 1.35; color: var(--text-faint); display: block; margin-top: 3px; }
+
+/* ─── Diálogo do macOS (reprodução) ─────────────────────────── */
+.ig-mac-dlg {
+  width: 268px;
+  margin: 26px auto;
+  padding: 20px 18px 14px;
+  background: #ECECEC;
+  border-radius: 12px;
+  box-shadow: 0 18px 44px rgba(0,0,0,.55);
+  text-align: center;
+  color: #1D1D1F;
+  transition: opacity .4s ease, transform .4s ease;
+}
+.ig-mac-icon {
+  width: 44px; height: 44px;
+  margin: 0 auto 11px;
+  border-radius: 10px;
+  background: #D8D8DA;
+  display: grid; place-items: center;
+  font-size: 22px;
+}
+.ig-mac-dlg p { margin: 0 0 7px; font-size: 12px; line-height: 1.45; font-weight: 600; }
+.ig-mac-dlg .ig-mac-sub { font-weight: 400; color: #5A5A5E; font-size: 11px; }
+.ig-mac-btns { display: grid; gap: 6px; margin-top: 13px; }
+.ig-mac-btns b {
+  padding: 6px; border-radius: 6px;
+  background: #FFF; border: 1px solid #C6C6C8;
+  font-size: 12px; font-weight: 500;
+}
+
+/* Terminal */
+.ig-term {
+  position: absolute; left: 14px; right: 14px; bottom: 14px;
+  background: #0B0E13;
+  border: 1px solid var(--border-default);
+  border-radius: 9px;
+  overflow: hidden;
+  box-shadow: 0 14px 34px rgba(0,0,0,.5);
+  transition: opacity .4s ease, transform .4s ease;
+}
+.ig-term-top {
+  display: flex; align-items: center; gap: 6px;
+  padding: 7px 10px;
+  background: #171B22;
+  font-size: 10px; color: var(--text-faint);
+}
+.ig-term-body {
+  padding: 11px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 11px; line-height: 1.6;
+  color: #C8D3E0;
+  word-break: break-all;
+}
+.ig-term-body .ig-prompt { color: var(--success); }
+.ig-term-ok { color: var(--text-faint); font-size: 10.5px; margin-top: 6px; }
+
+/* ─── SmartScreen (reprodução) ──────────────────────────────── */
+.ig-win {
+  position: absolute; inset: 0;
+  background: #0C4B8E;
+  color: #FFF;
+  padding: 26px 22px;
+  transition: opacity .4s ease;
+}
+.ig-win h4 { margin: 0 0 12px; font-size: 19px; font-weight: 400; line-height: 1.25; }
+.ig-win p { margin: 0; font-size: 12px; line-height: 1.55; color: rgba(255,255,255,.88); }
+.ig-win-more {
+  display: inline-block;
+  margin-top: 14px;
+  font-size: 12px;
+  text-decoration: underline;
+  cursor: default;
+  padding: 3px 5px;
+  border-radius: 3px;
+  transition: background .2s ease;
+}
+.ig-win-more.is-hot { background: rgba(255,255,255,.16); }
+.ig-win-info {
+  margin-top: 12px;
+  font-size: 11.5px;
+  line-height: 1.7;
+  color: rgba(255,255,255,.82);
+  transition: opacity .35s ease, transform .35s ease;
+}
+.ig-win-btns {
+  position: absolute; right: 22px; bottom: 22px;
+  display: flex; gap: 9px;
+  transition: opacity .35s ease, transform .35s ease;
+}
+.ig-win-btns b {
+  padding: 7px 15px;
+  border: 1px solid rgba(255,255,255,.55);
+  font-size: 12px; font-weight: 400;
+  transition: background .25s ease, color .25s ease;
+}
+.ig-win-btns b.is-hot { background: #FFF; color: #0C4B8E; }
+
+/* Cursor animado */
+.ig-cursor {
+  position: absolute;
+  width: 16px; height: 16px;
+  pointer-events: none;
+  transition: left .55s cubic-bezier(.4,0,.2,1), top .55s cubic-bezier(.4,0,.2,1), opacity .3s ease;
+  z-index: 5;
+}
+.ig-cursor svg { width: 100%; height: 100%; filter: drop-shadow(0 1px 2px rgba(0,0,0,.6)); }
+.ig-ripple {
+  position: absolute; left: -9px; top: -9px;
+  width: 34px; height: 34px;
+  border-radius: 50%;
+  border: 2px solid rgba(255,255,255,.8);
+  animation: ig-ripple .6s ease-out forwards;
+}
+@keyframes ig-ripple {
+  0%   { transform: scale(.3); opacity: .7 }
+  100% { transform: scale(2.4); opacity: 0 }
+}
+
+/* Instalador que abre no fim */
+.ig-inst {
+  position: absolute; left: 18px; right: 18px; top: 50%;
+  transform: translateY(-50%);
+  background: var(--surface-1);
+  border: 1px solid var(--border-brand);
+  border-radius: 10px;
+  padding: 18px;
+  box-shadow: 0 16px 40px rgba(0,0,0,.6);
+  transition: opacity .4s ease, transform .4s ease;
+}
+.ig-inst h5 { margin: 0 0 7px; font-size: 13px; color: var(--text-strong); font-weight: 700; }
+.ig-inst p { margin: 0 0 13px; font-size: 12px; color: var(--text-muted); }
+
+/* ─── Menu do Premiere (reprodução) ─────────────────────────── */
+.ig-pr { background: #2B2B2B; border-radius: 8px; overflow: hidden; border: 1px solid #3C3C3C; }
+.ig-pr-bar { display: flex; gap: 2px; padding: 5px 7px; background: #363636; font-size: 11px; color: #D7D7D7; }
+.ig-pr-bar span { padding: 3px 8px; border-radius: 3px; transition: background .25s ease, color .25s ease; }
+.ig-pr-bar span.is-hot { background: #4A4A4A; color: #FFF; }
+.ig-pr-menus { display: flex; align-items: flex-start; padding: 0 7px 12px; }
+.ig-pr-drop {
+  width: 152px;
+  background: #383838;
+  border: 1px solid #4A4A4A;
+  border-radius: 4px;
+  padding: 4px 0;
+  transition: opacity .3s ease, transform .3s ease;
+}
+.ig-pr-drop i {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 5px 10px;
+  font-size: 11px; font-style: normal; color: #D7D7D7;
+  transition: background .25s ease, color .25s ease;
+}
+.ig-pr-drop i.is-hot { background: #0F6CBD; color: #FFF; }
+.ig-pr-sub {
+  width: 128px;
+  margin-top: 26px;
+  background: #383838;
+  border: 1px solid #4A4A4A;
+  border-radius: 4px;
+  padding: 4px 0;
+  transition: opacity .3s ease, transform .3s ease;
+}
+.ig-pr-cap { font-size: 10px; color: var(--text-faint); text-align: center; padding: 8px 0 10px; }
+
+/* ─── Trial ─────────────────────────────────────────────────── */
+.ig-trial-track { position: relative; height: 5px; border-radius: 3px; background: rgba(255,255,255,.07); margin: 22px 0 8px; }
+.ig-trial-track > span { display: block; height: 100%; border-radius: 3px; background: var(--brand); width: 0; transition: width .6s ease; }
+.ig-trial-marks { display: flex; justify-content: space-between; }
+.ig-trial-marks div { text-align: center; flex: 1; }
+.ig-trial-marks b { display: block; font-size: 10.5px; color: var(--text); font-weight: 600; }
+.ig-trial-marks span { font-size: 10px; color: var(--text-faint); }
+.ig-trial-dot { width: 8px; height: 8px; border-radius: 50%; background: rgba(255,255,255,.18); margin: 0 auto 6px; transition: background .4s ease; }
+
+/* ─── Resolve ───────────────────────────────────────────────── */
+.ig-tabs { display: inline-flex; gap: 4px; padding: 3px; background: var(--surface-2); border: 1px solid var(--border-default); border-radius: 8px; margin-bottom: 14px; }
+.ig-tabs button {
+  padding: 6px 13px; border: 0; border-radius: 6px;
+  background: transparent; color: var(--text-muted);
+  font-size: 12px; font-weight: 600; cursor: pointer;
+  transition: background .18s ease, color .18s ease;
+}
+.ig-tabs button[aria-selected="true"] { background: var(--brand); color: #04121A; }
+
+.ig-row {
+  display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  padding: 9px 11px;
+  background: var(--surface-2);
+  border: 1px solid var(--border-default);
+  border-radius: 7px;
+  margin-bottom: 7px;
+  font-size: 12px;
+  color: var(--text);
+  transition: border-color .35s ease;
+}
+.ig-row.is-hot { border-color: var(--border-brand); }
+.ig-chip { font-size: 10.5px; font-weight: 700; color: var(--text-muted); transition: color .35s ease; }
+.ig-chip.is-hot { color: var(--brand); }
+
+.ig-tl { margin-top: 14px; background: var(--surface-3); border: 1px solid var(--border-default); border-radius: 8px; padding: 10px; }
+.ig-tl-track { position: relative; height: 22px; border-radius: 4px; background: rgba(255,255,255,.04); margin-bottom: 5px; }
+.ig-tl-track b {
+  position: absolute; left: 8px; top: 50%; transform: translateY(-50%);
+  font-size: 9px; color: var(--text-faint); font-weight: 700;
+}
+.ig-clip {
+  position: absolute; top: 3px; bottom: 3px;
+  border-radius: 3px;
+  background: var(--brand-glow-2);
+  border: 1px solid var(--border-brand);
+  transition: left .6s cubic-bezier(.4,0,.2,1), opacity .4s ease;
+}
+.ig-playhead { position: absolute; top: -3px; bottom: -3px; width: 1px; background: var(--brand); transition: left .5s ease, opacity .3s ease; }
+
+/* ─── Navegação ─────────────────────────────────────────────── */
+.ig-nav {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 14px;
+  margin-top: 18px;
+}
+.ig-nav-mid { display: flex; align-items: center; gap: 14px; }
+.ig-counter { font-size: 12px; color: var(--text-muted); font-variant-numeric: tabular-nums; }
+.ig-replay {
+  background: none; border: 0; padding: 4px 6px;
+  color: var(--text-faint); font-size: 12px; cursor: pointer;
+  display: inline-flex; align-items: center; gap: 5px;
+  border-radius: 6px;
+}
+.ig-replay:hover { color: var(--brand); }
+.ig-replay svg { width: 12px; height: 12px; }
+
+.ig-nav > button.ig-move {
+  display: inline-flex; align-items: center; gap: 7px;
+  padding: 10px 18px;
+  background: var(--surface-2);
+  border: 1px solid var(--border-default);
+  border-radius: 9px;
+  color: var(--text);
+  font-size: 13px; font-weight: 600;
+  cursor: pointer;
+  transition: border-color .18s ease, opacity .18s ease;
+}
+.ig-move:hover:not(:disabled) { border-color: var(--brand); }
+.ig-move:disabled { opacity: .4; cursor: default; }
+
+.ig-hint { text-align: center; font-size: 11.5px; color: var(--text-faint); margin: 14px 0 0; }
+
+.ig-cta { display: inline-flex; align-items: center; gap: 6px; margin-top: 16px; font-size: 13px; font-weight: 600; color: var(--brand); text-decoration: none; }
+.ig-cta:hover { text-decoration: underline; }
+
+/* Só pra leitor de tela */
+.ig-sr {
+  position: absolute; width: 1px; height: 1px;
+  padding: 0; margin: -1px; overflow: hidden;
+  clip: rect(0 0 0 0); white-space: nowrap; border: 0;
+}
+
+/* ─── Responsivo ────────────────────────────────────────────── */
+@media (max-width: 900px) {
+  .ig { padding: 64px 0; }
+  .ig-stage { grid-template-columns: minmax(0, 1fr); gap: 22px; padding: 20px; min-height: 0; }
+  .ig-h { font-size: 20px; }
+  .ig-screen { min-height: 320px; }
+}
+@media (max-width: 480px) {
+  .ig-stage { padding: 15px; }
+  .ig-os { width: 100%; }
+  .ig-os button { flex: 1; justify-content: center; padding: 9px 10px; }
+  .ig-nav > button.ig-move { padding: 10px 13px; font-size: 12px; }
+  .ig-nav-mid { gap: 8px; }
+  .ig-replay span { display: none; }
+  .ig-stat-row { grid-template-columns: 1fr; }
+}
+
+/* Quem pediu menos movimento recebe o estado final, não a animação. */
+@media (prefers-reduced-motion: reduce) {
+  .ig * { transition-duration: 1ms !important; animation-duration: 1ms !important; animation-iteration-count: 1 !important; }
+}

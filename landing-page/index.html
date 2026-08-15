@@ -11,6 +11,7 @@
   <link rel="icon" type="image/png" href="assets/logo.png">
   <link rel="stylesheet" href="css/tokens.css">
   <link rel="stylesheet" href="css/lp.css">
+  <link rel="stylesheet" href="css/install-guide.css">
 
   <!-- Plausible Analytics (gratuito 30d, $9/mês depois — privacy-first, sem cookies) -->
   <!-- Pra ativar: criar conta em plausible.io, adicionar dominio cinepro-rho.vercel.app -->
@@ -22,6 +23,7 @@
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
   <script src="js/config.js"></script>
   <script src="js/lp.js" defer></script>
+  <script src="js/install-guide.js" defer></script>
 </head>
 <body>
 
@@ -729,6 +731,69 @@
       </div>
 
     </div>
+  </div>
+</section>
+
+<!-- ══════════ GUIA DE INSTALAÇÃO ══════════ -->
+<!-- Fica logo depois do download porque o passo 3 (aviso do Gatekeeper /
+     SmartScreen) acontece minutos depois do clique. Quem já viu a tela aqui
+     reconhece quando ela aparece, em vez de achar que baixou um vírus.
+     Sem JS o conteúdo não some: o FAQ logo abaixo cobre os dois avisos. -->
+<section class="ig" id="install-guide">
+  <div class="container">
+    <div class="section-header">
+      <div class="section-eyebrow">CinePRO · instalação</div>
+      <h2 class="section-title">Do download ao primeiro efeito na timeline</h2>
+      <p class="ig-intro">
+        O passo 3 é um aviso de segurança do sistema operacional. Ele aparece
+        <strong>pra todo mundo</strong>, na primeira execução. Veja como ele é agora —
+        assim, quando aparecer, você reconhece.
+      </p>
+
+      <div class="ig-os" role="group" aria-label="Escolha o sistema operacional">
+        <button type="button" data-ig-os="macos" aria-pressed="true">
+          <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M16.4 12.8c0-2.4 2-3.6 2.1-3.6-1.1-1.7-2.9-1.9-3.5-1.9-1.5-.2-2.9.9-3.7.9-.8 0-1.9-.9-3.1-.8-1.6 0-3.1.9-3.9 2.4-1.7 2.9-.4 7.1 1.2 9.5.8 1.1 1.7 2.4 3 2.4 1.2 0 1.6-.8 3.1-.8 1.4 0 1.8.8 3.1.7 1.3 0 2.1-1.2 2.9-2.3.9-1.3 1.3-2.6 1.3-2.7-.1 0-2.5-1-2.5-3.8zM14 5.2c.7-.8 1.1-1.9 1-3-1 0-2.2.7-2.9 1.5-.6.7-1.2 1.8-1 2.9 1.1.1 2.2-.6 2.9-1.4z"/></svg>
+          macOS
+        </button>
+        <button type="button" data-ig-os="windows" aria-pressed="false">
+          <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M3 5.5l7.5-1v7H3v-6zm0 13l7.5 1v-6.9H3v5.9zm8.5 1.1L21 21V12.6h-9.5v7zM11.5 3v7.5H21V3l-9.5 1.3z"/></svg>
+          Windows
+        </button>
+      </div>
+      <p class="ig-os-note">
+        Baixou no Mac pra instalar no PC? Troque aqui — o guia mostra só um caminho por vez.
+      </p>
+    </div>
+
+    <div class="ig-trail" data-ig="trail" role="tablist" aria-label="Passos da instalação"></div>
+
+    <p class="ig-sr" data-ig="anuncio" role="status" aria-live="polite"></p>
+
+    <div class="ig-stage">
+      <div data-ig="texto"></div>
+      <div class="ig-repro" data-ig="repro"></div>
+    </div>
+
+    <div class="ig-nav">
+      <button type="button" class="ig-move" data-ig="prev">← Anterior</button>
+      <div class="ig-nav-mid">
+        <span class="ig-counter" data-ig="contador">Passo 1 de 7</span>
+        <button type="button" class="ig-replay" data-ig="replay">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v5h5"/></svg>
+          <span>Repetir animação</span>
+        </button>
+      </div>
+      <button type="button" class="ig-move" data-ig="prox">Próximo →</button>
+    </div>
+
+    <p class="ig-hint">Navegue com as setas ← e → do teclado, ou pelos passos no topo.</p>
+
+    <noscript>
+      <p class="ig-intro" style="margin-top:24px">
+        O guia animado precisa de JavaScript. As duas dúvidas mais comuns
+        (o aviso do macOS e o do Windows) estão respondidas logo abaixo, no FAQ.
+      </p>
+    </noscript>
   </div>
 </section>
 
