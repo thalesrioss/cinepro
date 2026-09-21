@@ -50,6 +50,7 @@ local FAVS   = BASE .. "/favoritos.txt"
 local RECS   = BASE .. "/recentes.txt"
 local USOS   = BASE .. "/usos.txt"       -- id<TAB>contagem, alimenta "Mais usados"
 local EMUSO  = BASE .. "/in-use.json"    -- registro compartilhado com app e plugin
+local WAVE   = BASE .. "/wave"           -- <id>.png, gerado por tools/build-waveforms.js
 
 -- ── Paleta (brandbook do CinePRO) ───────────────────────────
 -- Os mesmos tokens de css/tokens.css, completos: as semanticas
@@ -142,7 +143,6 @@ local ESTILO = [[
   QPushButton { background-color: ]] .. COR.s2 .. [[; color: ]] .. COR.texto .. [[;
                 border: 1px solid ]] .. COR.borda .. [[; border-radius: 9px;
                 padding: 9px 16px; font-weight: 600; }
-  QPushButton#Logo { background: transparent; border: 0px; padding: 0px; }
   QPushButton:hover { border: 1px solid ]] .. COR.bordaBrand .. [[; background-color: ]] .. COR.s3 .. [[; }
   QPushButton:pressed { background-color: ]] .. COR.glow2 .. [[; }
   QPushButton:disabled { color: ]] .. COR.apagado .. [[; border-color: ]] .. COR.bordaSutil .. [[; }
@@ -187,7 +187,9 @@ end
 local function baixar(url, destino)
   local pasta = destino:match("^(.*)/[^/]*$")
   if pasta then os.execute('mkdir -p "' .. pasta .. '"') end
-  shell('curl -sL --max-time 120 -o "' .. destino .. '" "' .. url .. '"')
+  -- -f: sem ele, um 404 do CDN vira um arquivo com HTML dentro, e o
+  -- Resolve "importa" um .wav que nao toca.
+  shell('curl -sfL --max-time 120 -o "' .. destino .. '" "' .. url .. '"')
   return existe(destino)
 end
 
@@ -685,19 +687,20 @@ local ehMac = (package.config:sub(1, 1) == "/")
 local win = disp:AddWindow({
   ID = "CineProPainel",
   WindowTitle = "CinePRO",
-  Geometry = { 150, 120, 920, 680 },
-  MinimumSize = { 760, 520 },
+  -- Folga de proposito: nos prints, a moldura do Fusion comia ~40px
+  -- na direita e embaixo mesmo com o layout medindo menos que a
+  -- janela. Ate eu entender o porque, a janela nasce maior.
+  Geometry = { 150, 120, 980, 740 },
 }, ui:VGroup{
   Spacing = 10,
-  Margin = 16,
+  Margin = 14,
 
-  -- Cabecalho: logo + marca + contagem
+  -- Cabecalho: marca + contagem. Sem logo: o unico asset e escuro
+  -- com texto branco, e em 22px vira um borrao (visto no print).
   ui:HGroup{
     Weight = 0,
-    Spacing = 8,
-    ui:Button{ ID = "Logo", Text = "", Flat = true, Weight = 0 },
     ui:Label{ ID = "Marca", Text = "CinePRO", Weight = 0 },
-    ui:Label{ ID = "Contagem", Text = "", Alignment = { AlignRight = true, AlignVCenter = true } },
+    ui:Label{ ID = "Contagem", Text = "", Alignment = { AlignRight = true, AlignVCenter = true }, WordWrap = true },
   },
 
   ui:LineEdit{ ID = "Busca", Weight = 0, PlaceholderText = "Buscar em 10.000+ efeitos…" },
@@ -720,12 +723,12 @@ local win = disp:AddWindow({
         ui:Button{ ID = "Mais",     Text = "Carregar mais", Weight = 0 },
         ui:Button{ ID = "Atualizar", Text = "↻", Weight = 0 },
       },
-      ui:Label{ ID = "Dica", Weight = 0,
+      ui:Label{ ID = "Dica", Weight = 0, WordWrap = true,
                 Text = "Duplo-clique coloca no playhead  ·  ▶ ouve antes de colocar  ·  ★ favorita" },
     },
   },
 
-  ui:Label{ ID = "Status", Text = "Carregando…", Weight = 0 },
+  ui:Label{ ID = "Status", Text = "Carregando…", Weight = 0, WordWrap = true },
 })
 
 local itm = win:GetItems()
@@ -762,39 +765,33 @@ pcall(function()
   itm.Lateral.HorizontalScrollMode = "ScrollPerPixel"
 end)
 
--- Lista na ordem do Premiere: tile de play · nome · subcategoria ·
--- duracao · estado. Sem cabecalho de coluna (o Premiere nao tem) e
--- com zebra sutil — a linha de 44px precisa de textura ou fica oca.
+-- Lista: estado · tile de play · NOME · subcategoria · duracao.
+-- O Qt estica sempre a ULTIMA coluna, e o UIManager nao deixa
+-- escolher outra — no print, o nome truncava ("01 Bright St...")
+-- enquanto a coluna do ○ engolia meia tela. Entao a duracao vai
+-- por ultimo (alinhada a direita, o esticar so a encosta na borda)
+-- e o nome ganha largura fixa generosa.
+-- A waveform e um PNG por efeito (mesmo desenho do Premiere, gerado
+-- por tools/build-waveforms.js) mostrado como icone da coluna 3 —
+-- Icon[col] e a unica propriedade de imagem por linha que o UIManager
+-- tem, e esta provada no 21.1. IconSize e por arvore: 160x32 e o
+-- 320x64 do PNG em meia escala, nitido em Retina.
 pcall(function()
-  itm.Lista.ColumnCount = 5
+  itm.Lista.ColumnCount = 6
   itm.Lista.HeaderHidden = true
   itm.Lista.RootIsDecorated = false
-  itm.Lista.Indentation = 10
+  itm.Lista.Indentation = 8
   itm.Lista.UniformRowHeights = true
   itm.Lista.AlternatingRowColors = true
-  itm.Lista.ColumnWidth[0] = 40
-  itm.Lista.ColumnWidth[2] = 120
-  itm.Lista.ColumnWidth[3] = 60
-  itm.Lista.ColumnWidth[4] = 28
+  itm.Lista.IconSize = { 160, 32 }
+  itm.Lista.ColumnWidth[0] = 26    -- estado
+  itm.Lista.ColumnWidth[1] = 44    -- play
+  itm.Lista.ColumnWidth[2] = 236   -- nome
+  itm.Lista.ColumnWidth[3] = 176   -- waveform
+  itm.Lista.ColumnWidth[4] = 110   -- subcategoria
+  itm.Lista.HorizontalScrollMode = "ScrollPerPixel"
 end)
 
--- Logo no cabecalho: um botao plano com icone e o unico jeito de
--- por imagem num widget do UIManager. Se o PNG faltar, fica so o texto.
-pcall(function()
-  local pasta = debug and debug.getinfo and debug.getinfo(1, "S").source:match("^@(.*)/[^/]*$") or nil
-  local candidatos = {
-    BASE .. "/logo-256.png",
-    pasta and (pasta .. "/cinepro-logo.png") or nil,
-  }
-  for i = 1, #candidatos do
-    if candidatos[i] and existe(candidatos[i]) then
-      itm.Logo.Icon = ui:Icon{ File = candidatos[i] }
-      itm.Logo.IconSize = { 22, 22 }
-      itm.Logo.FixedSize = { 24, 24 }
-      break
-    end
-  end
-end)
 
 pcall(function()
   itm.Ouvir.ToolTip     = "Toca o efeito antes de colocar. Clique de novo pra parar."
@@ -842,9 +839,9 @@ local function pararAudio()
   if ehMac then os.execute("pkill -x afplay >/dev/null 2>&1") end
   if itemTocando then
     pcall(function()
-      itemTocando.Text[0] = "▶"
-      itemTocando.BackgroundColor[0] = RGB.s2
-      itemTocando.TextColor[0] = RGB.brand
+      itemTocando.Text[1] = "▶"
+      itemTocando.BackgroundColor[1] = RGB.s2
+      itemTocando.TextColor[1] = RGB.brand
     end)
   end
   tocando, itemTocando = nil, nil
@@ -873,9 +870,9 @@ local function ouvir(e, item)
     itm.Ouvir.Checked = true
     itm.Ouvir.Text = "■  Parar"
     if item then
-      item.Text[0] = "■"
-      item.BackgroundColor[0] = RGB.brandGlow
-      item.TextColor[0] = RGB.bright
+      item.Text[1] = "■"
+      item.BackgroundColor[1] = RGB.brandGlow
+      item.TextColor[1] = RGB.bright
     end
   end)
   status(string.format('Tocando "%s" (%.1fs)', e.nome, e.dur), "carregando")
@@ -977,10 +974,10 @@ local MENSAGEM_VAZIA = {
 
 local function linhaVazia(texto)
   local it = itm.Lista:NewItem()
-  it.Text[1] = texto
+  it.Text[2] = texto
   pcall(function()
-    it.TextColor[1] = RGB.fraco
-    if FONTE_NOME then it.Font[1] = FONTE_NOME end
+    it.TextColor[2] = RGB.fraco
+    if FONTE_NOME then it.Font[2] = FONTE_NOME end
     it.SizeHint[0] = { 0, 56 }
     it.Flags = { Selectable = false, Enabled = true }
   end)
@@ -1025,29 +1022,32 @@ local function mostrar(achados, quantos)
     local emCache = existe(nomeCache(e.id, e.nome, e.ext))
     -- Tile de play a esquerda, como no Premiere: celula com fundo
     -- elevado e o glifo. Quando toca, o fundo acende em ciano.
-    it.Text[0] = "▶"
-    it.Text[1] = "  " .. e.nome
-    it.Text[2] = (e.sub or ""):upper()
-    it.Text[3] = string.format("%.1fs", e.dur) .. "  "
-    it.Text[4] = fav and "★" or (emCache and "●" or "○")
+    it.Text[0] = fav and "★" or (emCache and "●" or "○")
+    it.Text[1] = "▶"
+    it.Text[2] = "  " .. e.nome
+    it.Text[3] = ""
+    it.Text[4] = (e.sub or ""):upper()
+    it.Text[5] = string.format("%.1fs", e.dur) .. "  "
     pcall(function()
-      it.BackgroundColor[0] = RGB.s2
-      it.TextColor[0] = RGB.brand
-      it.TextColor[1] = RGB.texto
-      it.TextColor[2] = RGB.apagado
-      it.TextColor[3] = RGB.fraco
-      it.TextColor[4] = fav and RGB.aviso or (emCache and RGB.ok or RGB.apagado)
+      it.TextColor[0] = fav and RGB.aviso or (emCache and RGB.ok or RGB.apagado)
+      it.BackgroundColor[1] = RGB.s2
+      it.TextColor[1] = RGB.brand
+      it.TextColor[2] = RGB.texto
+      it.TextColor[4] = RGB.apagado
+      it.TextColor[5] = RGB.fraco
       it.TextAlignment[0] = 132   -- centro
-      it.TextAlignment[3] = 130   -- direita
-      it.TextAlignment[4] = 132
-      if FONTE_PLAY then it.Font[0] = FONTE_PLAY end
-      if FONTE_NOME then it.Font[1] = FONTE_NOME end
-      if FONTE_SUB  then it.Font[2] = FONTE_SUB  end
+      it.TextAlignment[1] = 132
+      it.TextAlignment[5] = 130   -- direita
+      if FONTE_PLAY then it.Font[1] = FONTE_PLAY end
+      if FONTE_NOME then it.Font[2] = FONTE_NOME end
+      if FONTE_SUB  then it.Font[4] = FONTE_SUB  end
       it.SizeHint[0] = { 0, 44 }
-      it.ToolTip[0] = "Ouvir"
-      it.ToolTip[4] = fav and "Favorito" .. (emCache and " · em cache" or " · ainda não baixado")
+      it.ToolTip[0] = fav and "Favorito" .. (emCache and " · em cache" or " · ainda não baixado")
                           or (emCache and "Em cache — coloca na hora" or "Ainda não baixado — baixa ao ouvir ou colocar")
-      it.ToolTip[1] = e.nome .. (e.cat ~= "" and ("\n" .. e.cat .. (e.sub ~= "" and (" › " .. e.sub) or "")) or "")
+      it.ToolTip[1] = "Ouvir"
+      it.ToolTip[2] = e.nome .. (e.cat ~= "" and ("\n" .. e.cat .. (e.sub ~= "" and (" › " .. e.sub) or "")) or "")
+      local wav = WAVE .. "/" .. e.id .. ".png"
+      if existe(wav) then it.Icon[3] = ui:Icon{ File = wav } end
     end)
     if pai then pai:AddChild(it) else itm.Lista:AddTopLevelItem(it) end
     visiveis[#visiveis + 1] = e
@@ -1073,14 +1073,14 @@ local function mostrar(achados, quantos)
     if c ~= catAtual then
       catAtual = c
       pai = itm.Lista:NewItem()
-      pai.Text[1] = "  " .. c
-      pai.Text[2] = formatarMilhar(totalPorCat[c]) .. " EFEITOS"
-      pai.Text[3] = ""
+      pai.Text[2] = "  " .. c
+      pai.Text[4] = formatarMilhar(totalPorCat[c]) .. " EFEITOS"
+      pai.Text[5] = ""
       pcall(function()
-        pai.TextColor[1] = RGB.brand
-        pai.TextColor[2] = RGB.apagado
-        if FONTE_NEGRITO then pai.Font[1] = FONTE_NEGRITO end
-        if FONTE_SUB then pai.Font[2] = FONTE_SUB end
+        pai.TextColor[2] = RGB.brand
+        pai.TextColor[4] = RGB.apagado
+        if FONTE_NEGRITO then pai.Font[2] = FONTE_NEGRITO end
+        if FONTE_SUB then pai.Font[4] = FONTE_SUB end
         pai.SizeHint[0] = { 0, 34 }
       end)
       itm.Lista:AddTopLevelItem(pai)
@@ -1127,8 +1127,8 @@ local function selecionado()
   if n == 0 then return nil end
   local alvo = sel[1]
   if not alvo or type(alvo) == "number" then return nil end
-  local nome = (tostring(alvo.Text[1] or "")):gsub("^%s+", "")
-  local dur  = (tostring(alvo.Text[3] or "")):gsub("%s+$", "")
+  local nome = (tostring(alvo.Text[2] or "")):gsub("^%s+", "")
+  local dur  = (tostring(alvo.Text[5] or "")):gsub("%s+$", "")
   if dur == "" then return nil end
   -- Nome E duracao: dois efeitos com o mesmo nome e duracao igual
   -- ate o centesimo nao acontece na pratica.
@@ -1147,7 +1147,8 @@ local function sincronizarBotoes()
     itm.Favorito.Checked = (e ~= nil and ehFav[e.id] == true)
     itm.Favorito.Enabled = (e ~= nil)
     itm.Ouvir.Enabled = (e ~= nil)
-    itm.Colocar.Enabled = (e ~= nil)
+    -- Colocar fica sempre vivo: e a acao principal, e o botao apagado
+    -- lia como painel morto no print. Sem selecao, o clique orienta.
   end)
 end
 
@@ -1243,7 +1244,7 @@ end
 win.On.Lista.ItemClicked = function(ev)
   sincronizarBotoes()
   local col = ev and ev.column
-  if col == 0 then
+  if col == 1 then
     local e, item = selecionado()
     if e then
       if tocando and tocando.id == e.id then pararAudio(); status("Parado.") else ouvir(e, item) end
