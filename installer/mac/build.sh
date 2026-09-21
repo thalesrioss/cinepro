@@ -82,22 +82,17 @@ fi
 # 4. Copia o plugin CEP pra Library/.../extensions/CinePRO/
 echo "→ Copiando plugin CEP..."
 PLUGIN_DEST="$PAYLOAD/Library/Application Support/Adobe/CEP/extensions/CinePRO"
-rsync -a \
-  --exclude='/installer' \
-  --exclude='/desktop-app' \
-  --exclude='/firebase' \
-  --exclude='/.claude' \
-  --exclude='/.github' \
-  --exclude='/audit' \
-  --exclude='/manifest' \
-  --exclude='/landing-page' \
-  --exclude='/node_modules' \
-  --exclude='*.log' \
-  --exclude='.DS_Store' \
-  --exclude='SETUP.md' \
-  --exclude='INICIO_RAPIDO.md' \
-  --exclude='serve.py' \
-  "$ROOT/" "$PLUGIN_DEST/"
+# ALLOWLIST, igual ao instalador do Windows (CinePRO.iss). A versao
+# anterior copiava a raiz inteira e excluia alguns nomes: levava junto
+# bundle/dist (300 MB duplicados — o .pkg da v1.0.15 saiu com 696 MB
+# contra 334 do .exe), .git (com o extraheader de auth do checkout do
+# CI), tools/, docs/, knowledge/. Nada disso e do plugin.
+mkdir -p "$PLUGIN_DEST"
+for item in index.html CSXS css js jsx icons data; do
+  if [ -e "$ROOT/$item" ]; then
+    rsync -a --exclude='.DS_Store' --exclude='*.log' "$ROOT/$item" "$PLUGIN_DEST/"
+  fi
+done
 
 # Bundle do manifest pré-gerado (boot offline-safe)
 if [ -f "$ROOT/manifest/dist/manifest.json" ]; then
