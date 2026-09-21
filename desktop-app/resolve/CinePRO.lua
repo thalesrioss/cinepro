@@ -101,23 +101,26 @@ local RGB = {
 }
 
 local ESTILO = [[
-  QWidget { background-color: ]] .. COR.s0 .. [[; color: ]] .. COR.texto .. [[; font-size: 12px; }
+  QWidget { background-color: ]] .. COR.s0 .. [[; color: ]] .. COR.texto .. [[;
+            font-family: "Inter", "SF Pro Text", -apple-system, "Helvetica Neue", sans-serif;
+            font-size: 12px; }
 
   /* Cabecalho */
-  QLabel#Marca  { color: ]] .. COR.forte .. [[; font-size: 15px; font-weight: 700; }
+  QLabel#Marca  { color: ]] .. COR.forte .. [[; font-size: 16px; font-weight: 700; }
   QLabel#Contagem { color: ]] .. COR.apagado .. [[; font-size: 11px; }
 
   /* Busca */
   QLineEdit { background-color: ]] .. COR.s3 .. [[; border: 1px solid ]] .. COR.borda .. [[;
-              border-radius: 8px; padding: 8px 12px; color: ]] .. COR.texto .. [[;
+              border-radius: 9px; padding: 9px 14px; color: ]] .. COR.texto .. [[; font-size: 13px;
               selection-background-color: ]] .. COR.brand .. [[; }
   QLineEdit:hover { border: 1px solid ]] .. COR.bordaBrand .. [[; }
   QLineEdit:focus { border: 1px solid ]] .. COR.brand .. [[; background-color: ]] .. COR.s1 .. [[; }
 
   /* Listas */
   QTreeWidget { background-color: ]] .. COR.s1 .. [[; border: 1px solid ]] .. COR.borda .. [[;
-                border-radius: 10px; outline: 0; padding: 4px; }
-  QTreeWidget::item { padding: 4px 6px; border-radius: 6px; }
+                border-radius: 10px; outline: 0; padding: 6px;
+                alternate-background-color: rgba(255,255,255,0.025); }
+  QTreeWidget::item { padding: 0px 6px; border-radius: 6px; }
   QTreeWidget::item:hover { background-color: ]] .. COR.glow1 .. [[; }
   QTreeWidget::item:selected { background-color: ]] .. COR.glow2 .. [[; color: ]] .. COR.forte .. [[; }
   QTreeWidget::item:selected:hover { background-color: ]] .. COR.glow3 .. [[; }
@@ -133,8 +136,9 @@ local ESTILO = [[
 
   /* Botoes: secundario e o padrao; primario e ghost por ID */
   QPushButton { background-color: ]] .. COR.s2 .. [[; color: ]] .. COR.texto .. [[;
-                border: 1px solid ]] .. COR.borda .. [[; border-radius: 8px;
-                padding: 8px 14px; font-weight: 600; }
+                border: 1px solid ]] .. COR.borda .. [[; border-radius: 9px;
+                padding: 9px 16px; font-weight: 600; }
+  QPushButton#Logo { background: transparent; border: 0px; padding: 0px; }
   QPushButton:hover { border: 1px solid ]] .. COR.bordaBrand .. [[; background-color: ]] .. COR.s3 .. [[; }
   QPushButton:pressed { background-color: ]] .. COR.glow2 .. [[; }
   QPushButton:disabled { color: ]] .. COR.apagado .. [[; border-color: ]] .. COR.bordaSutil .. [[; }
@@ -677,14 +681,16 @@ local ehMac = (package.config:sub(1, 1) == "/")
 local win = disp:AddWindow({
   ID = "CineProPainel",
   WindowTitle = "CinePRO",
-  Geometry = { 150, 120, 860, 640 },
+  Geometry = { 150, 120, 900, 660 },
 }, ui:VGroup{
-  Spacing = 8,
-  Margin = 12,
+  Spacing = 10,
+  Margin = 16,
 
-  -- Cabecalho
+  -- Cabecalho: logo + marca + contagem
   ui:HGroup{
     Weight = 0,
+    Spacing = 8,
+    ui:Button{ ID = "Logo", Text = "", Flat = true, Weight = 0 },
     ui:Label{ ID = "Marca", Text = "CinePRO", Weight = 0 },
     ui:Label{ ID = "Contagem", Text = "", Alignment = { AlignRight = true, AlignVCenter = true } },
   },
@@ -724,11 +730,14 @@ pcall(function() win:SetStyleSheet(ESTILO) end)
 pcall(function() itm.CineProPainel.StyleSheet = ESTILO end)
 
 -- Fontes reutilizadas. Criadas uma vez: ui:Font e um objeto Qt.
-local FONTE_NEGRITO, FONTE_MINI, FONTE_TITULO = nil, nil, nil
+local FONTE_NEGRITO, FONTE_MINI, FONTE_TITULO, FONTE_NOME, FONTE_SUB, FONTE_PLAY = nil, nil, nil, nil, nil, nil
 pcall(function()
-  FONTE_NEGRITO = ui:Font{ Bold = true, PixelSize = 12 }
-  FONTE_MINI    = ui:Font{ Bold = true, PixelSize = 10 }
-  FONTE_TITULO  = ui:Font{ Bold = true, PixelSize = 15 }
+  FONTE_NEGRITO = ui:Font{ Family = "Inter", Bold = true, PixelSize = 12 }
+  FONTE_MINI    = ui:Font{ Family = "Inter", Bold = true, PixelSize = 10 }
+  FONTE_TITULO  = ui:Font{ Family = "Inter", Bold = true, PixelSize = 16 }
+  FONTE_NOME    = ui:Font{ Family = "Inter", PixelSize = 13 }
+  FONTE_SUB     = ui:Font{ Family = "Inter", Bold = true, PixelSize = 10 }
+  FONTE_PLAY    = ui:Font{ Family = "Inter", Bold = true, PixelSize = 13 }
   itm.Marca.Font = FONTE_TITULO
 end)
 
@@ -743,16 +752,38 @@ pcall(function()
   itm.Lateral.ColumnWidth[1] = 44
 end)
 
--- Lista: estado · nome · subcategoria · duracao
+-- Lista na ordem do Premiere: tile de play · nome · subcategoria ·
+-- duracao · estado. Sem cabecalho de coluna (o Premiere nao tem) e
+-- com zebra sutil — a linha de 44px precisa de textura ou fica oca.
 pcall(function()
-  itm.Lista.ColumnCount = 4
-  itm.Lista:SetHeaderLabels({ "", "Efeito", "Subcategoria", "Duração" })
+  itm.Lista.ColumnCount = 5
+  itm.Lista.HeaderHidden = true
   itm.Lista.RootIsDecorated = false
-  itm.Lista.Indentation = 12
+  itm.Lista.Indentation = 10
   itm.Lista.UniformRowHeights = true
-  itm.Lista.ColumnWidth[0] = 24
-  itm.Lista.ColumnWidth[2] = 130
-  itm.Lista.ColumnWidth[3] = 64
+  itm.Lista.AlternatingRowColors = true
+  itm.Lista.ColumnWidth[0] = 40
+  itm.Lista.ColumnWidth[2] = 120
+  itm.Lista.ColumnWidth[3] = 60
+  itm.Lista.ColumnWidth[4] = 28
+end)
+
+-- Logo no cabecalho: um botao plano com icone e o unico jeito de
+-- por imagem num widget do UIManager. Se o PNG faltar, fica so o texto.
+pcall(function()
+  local pasta = debug and debug.getinfo and debug.getinfo(1, "S").source:match("^@(.*)/[^/]*$") or nil
+  local candidatos = {
+    BASE .. "/logo-256.png",
+    pasta and (pasta .. "/cinepro-logo.png") or nil,
+  }
+  for i = 1, #candidatos do
+    if candidatos[i] and existe(candidatos[i]) then
+      itm.Logo.Icon = ui:Icon{ File = candidatos[i] }
+      itm.Logo.IconSize = { 22, 22 }
+      itm.Logo.FixedSize = { 24, 24 }
+      break
+    end
+  end
 end)
 
 pcall(function()
@@ -801,8 +832,9 @@ local function pararAudio()
   if ehMac then os.execute("pkill -x afplay >/dev/null 2>&1") end
   if itemTocando then
     pcall(function()
-      itemTocando.Text[0] = (tocando and ehFav[tocando.id]) and "★" or (tocando and existe(nomeCache(tocando.id, tocando.nome, tocando.ext)) and "●" or "○")
-      itemTocando.TextColor[0] = (tocando and ehFav[tocando.id]) and RGB.aviso or (tocando and existe(nomeCache(tocando.id, tocando.nome, tocando.ext)) and RGB.ok or RGB.apagado)
+      itemTocando.Text[0] = "▶"
+      itemTocando.BackgroundColor[0] = RGB.s2
+      itemTocando.TextColor[0] = RGB.brand
     end)
   end
   tocando, itemTocando = nil, nil
@@ -830,7 +862,11 @@ local function ouvir(e, item)
   pcall(function()
     itm.Ouvir.Checked = true
     itm.Ouvir.Text = "■  Parar"
-    if item then item.Text[0] = "▶"; item.TextColor[0] = RGB.brand end
+    if item then
+      item.Text[0] = "■"
+      item.BackgroundColor[0] = RGB.brandGlow
+      item.TextColor[0] = RGB.bright
+    end
   end)
   status(string.format('Tocando "%s" (%.1fs)', e.nome, e.dur), "carregando")
   -- Devolve o botao quando o efeito acaba. Se o Timeout nao
@@ -865,13 +901,13 @@ local function montarLateral()
     pcall(function()
       it.TextAlignment[1] = 130    -- direita + centro vertical
       it.TextColor[1] = RGB.apagado
-      it.SizeHint[0] = { 0, 26 }
+      it.SizeHint[0] = { 0, 30 }
       if estilo == "acao" then
         it.TextColor[0] = RGB.brand
       elseif estilo == "separador" then
         it.TextColor[0] = RGB.apagado
         if FONTE_MINI then it.Font[0] = FONTE_MINI end
-        it.SizeHint[0] = { 0, 30 }
+        it.SizeHint[0] = { 0, 34 }
         it.Flags = { Selectable = false, Enabled = true }
       elseif estilo == "sub" then
         it.TextColor[0] = RGB.fraco
@@ -934,7 +970,8 @@ local function linhaVazia(texto)
   it.Text[1] = texto
   pcall(function()
     it.TextColor[1] = RGB.fraco
-    it.SizeHint[0] = { 0, 48 }
+    if FONTE_NOME then it.Font[1] = FONTE_NOME end
+    it.SizeHint[0] = { 0, 56 }
     it.Flags = { Selectable = false, Enabled = true }
   end)
   itm.Lista:AddTopLevelItem(it)
@@ -976,21 +1013,29 @@ local function mostrar(achados, quantos)
     local it = itm.Lista:NewItem()
     local fav = ehFav[e.id]
     local emCache = existe(nomeCache(e.id, e.nome, e.ext))
-    -- Uma coluna de estado, um glifo: favorito ganha do cache. A
-    -- dica diz o resto.
-    it.Text[0] = fav and "★" or (emCache and "●" or "○")
+    -- Tile de play a esquerda, como no Premiere: celula com fundo
+    -- elevado e o glifo. Quando toca, o fundo acende em ciano.
+    it.Text[0] = "▶"
     it.Text[1] = e.nome
-    it.Text[2] = e.sub or ""
-    it.Text[3] = string.format("%.2fs", e.dur)
+    it.Text[2] = (e.sub or ""):upper()
+    it.Text[3] = string.format("%.1fs", e.dur)
+    it.Text[4] = fav and "★" or (emCache and "●" or "○")
     pcall(function()
-      it.TextColor[0] = fav and RGB.aviso or (emCache and RGB.ok or RGB.apagado)
+      it.BackgroundColor[0] = RGB.s2
+      it.TextColor[0] = RGB.brand
       it.TextColor[1] = RGB.texto
-      it.TextColor[2] = RGB.fraco
+      it.TextColor[2] = RGB.apagado
       it.TextColor[3] = RGB.fraco
+      it.TextColor[4] = fav and RGB.aviso or (emCache and RGB.ok or RGB.apagado)
       it.TextAlignment[0] = 132   -- centro
       it.TextAlignment[3] = 130   -- direita
-      it.SizeHint[0] = { 0, 28 }
-      it.ToolTip[0] = fav and "Favorito" .. (emCache and " · em cache" or " · ainda não baixado")
+      it.TextAlignment[4] = 132
+      if FONTE_PLAY then it.Font[0] = FONTE_PLAY end
+      if FONTE_NOME then it.Font[1] = FONTE_NOME end
+      if FONTE_SUB  then it.Font[2] = FONTE_SUB  end
+      it.SizeHint[0] = { 0, 44 }
+      it.ToolTip[0] = "Ouvir"
+      it.ToolTip[4] = fav and "Favorito" .. (emCache and " · em cache" or " · ainda não baixado")
                           or (emCache and "Em cache — coloca na hora" or "Ainda não baixado — baixa ao ouvir ou colocar")
       it.ToolTip[1] = e.nome .. (e.cat ~= "" and ("\n" .. e.cat .. (e.sub ~= "" and (" › " .. e.sub) or "")) or "")
     end)
@@ -1019,13 +1064,14 @@ local function mostrar(achados, quantos)
       catAtual = c
       pai = itm.Lista:NewItem()
       pai.Text[1] = c
-      pai.Text[2] = formatarMilhar(totalPorCat[c]) .. " efeitos"
+      pai.Text[2] = formatarMilhar(totalPorCat[c]) .. " EFEITOS"
       pai.Text[3] = ""
       pcall(function()
         pai.TextColor[1] = RGB.brand
         pai.TextColor[2] = RGB.apagado
         if FONTE_NEGRITO then pai.Font[1] = FONTE_NEGRITO end
-        pai.SizeHint[0] = { 0, 30 }
+        if FONTE_SUB then pai.Font[2] = FONTE_SUB end
+        pai.SizeHint[0] = { 0, 34 }
       end)
       itm.Lista:AddTopLevelItem(pai)
       pcall(function() pai.Expanded = true end)
@@ -1078,7 +1124,7 @@ local function selecionado()
   -- ate o centesimo nao acontece na pratica.
   for i = 1, #visiveis do
     local e = visiveis[i]
-    if e.nome == nome and string.format("%.2fs", e.dur) == dur then return e, alvo end
+    if e.nome == nome and string.format("%.1fs", e.dur) == dur then return e, alvo end
   end
   return nil
 end
@@ -1182,7 +1228,18 @@ win.On.Lateral.ItemClicked = function(ev)
   sincronizarBotoes()
 end
 
-win.On.Lista.ItemClicked = function(ev) sincronizarBotoes() end
+-- Clique no tile de play (coluna 0) toca direto, como no Premiere.
+-- No resto da linha, so seleciona.
+win.On.Lista.ItemClicked = function(ev)
+  sincronizarBotoes()
+  local col = ev and ev.column
+  if col == 0 then
+    local e, item = selecionado()
+    if e then
+      if tocando and tocando.id == e.id then pararAudio(); status("Parado.") else ouvir(e, item) end
+    end
+  end
+end
 
 win.On.Colocar.Clicked = function(ev)
   local e = selecionado()
