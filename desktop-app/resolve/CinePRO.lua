@@ -723,7 +723,9 @@ local win = disp:AddWindow({
     ui:Label{ ID = "Contagem", Text = "", Alignment = { AlignRight = true, AlignVCenter = true }, WordWrap = true },
   },
 
-  ui:LineEdit{ ID = "Busca", Weight = 0, PlaceholderText = "Buscar em 10.000+ efeitos…" },
+  -- Events: sem esta tabela o UIManager nao entrega KeyPress/MousePress.
+  ui:LineEdit{ ID = "Busca", Weight = 0, PlaceholderText = "Buscar em 10.000+ efeitos…  (↓ vai pra lista)",
+               Events = { KeyPress = true } },
 
   ui:HGroup{
     Weight = 1,
@@ -733,7 +735,7 @@ local win = disp:AddWindow({
     ui:VGroup{
       Weight = 0.70,
       Spacing = 6,
-      ui:Tree{ ID = "Lista", Weight = 1 },
+      ui:Tree{ ID = "Lista", Weight = 1, Events = { KeyPress = true, MousePress = true } },
       ui:HGroup{
         Weight = 0,
         Spacing = 6,
@@ -744,7 +746,7 @@ local win = disp:AddWindow({
         ui:Button{ ID = "Atualizar", Text = "↻", Weight = 0 },
       },
       ui:Label{ ID = "Dica", Weight = 0, WordWrap = true,
-                Text = "Duplo-clique coloca no playhead  ·  ▶ ouve antes de colocar  ·  ★ favorita" },
+                Text = "Enter coloca  ·  Espaço ouve  ·  ↑↓ navega  ·  F favorita  ·  ←→ avança no som  ·  clique na waveform toca dali" },
     },
   },
 
@@ -846,6 +848,62 @@ local function formatarMilhar(n)
   return (out:gsub("^%.", ""))
 end
 
+-- ── Scrub: tocar a partir de um ponto ───────────────────────
+-- afplay nao tem seek. Entao a gente grava um arquivo temporario que
+-- COMECA no ponto pedido: WAV e cabecalho + bytes (sem decodificar
+-- nada); MP3 e cortado no byte e o CoreAudio ressincroniza no proximo
+-- frame. No Windows o MediaPlayer tem Position e nada disso e preciso.
+local PREVIEW_TMP = BASE .. "/.preview"
+
+local function le32(n)
+  return string.char(n % 256, math.floor(n / 256) % 256,
+                     math.floor(n / 65536) % 256, math.floor(n / 16777216) % 256)
+end
+
+local function cortarAudio(origem, ext, fracao)
+  if fracao <= 0.02 then return origem end
+  local f = io.open(origem, "rb")
+  if not f then return origem end
+  local tudo = f:read("*a")
+  f:close()
+  local destino = PREVIEW_TMP .. "." .. ext
+  local saida
+
+  if ext:lower() == "wav" and tudo:sub(1, 4) == "RIFF" then
+    local function u16(p) local a, b = tudo:byte(p, p + 1); return a + b * 256 end
+    local function u32(p) local a, b, c, d = tudo:byte(p, p + 3); return a + b * 256 + c * 65536 + d * 16777216 end
+    local pos, canais, bits, dataPos, dataLen = 13, 1, 16, nil, nil
+    while pos + 8 <= #tudo do
+      local id, tam = tudo:sub(pos, pos + 3), u32(pos + 4)
+      if id == "fmt " then canais, bits = u16(pos + 10), u16(pos + 22)
+      elseif id == "data" then dataPos = pos + 8; dataLen = math.min(tam, #tudo - dataPos + 1); break end
+      pos = pos + 8 + tam + (tam % 2)
+    end
+    if not dataPos then return origem end
+    local frame = math.max(1, math.floor(bits / 8) * canais)
+    local off = math.floor(dataLen * fracao / frame) * frame
+    local corpo = tudo:sub(dataPos + off, dataPos + dataLen - 1)
+    local cab = tudo:sub(1, dataPos - 5) .. le32(#corpo)
+    cab = "RIFF" .. le32(#cab + #corpo - 8) .. cab:sub(9)
+    saida = cab .. corpo
+  else
+    -- MP3: pula o ID3v2 se houver, corta no byte proporcional
+    local inicio = 1
+    if tudo:sub(1, 3) == "ID3" then
+      local a, b, c, d = tudo:byte(7, 10)
+      inicio = 11 + ((a * 128 + b) * 128 + c) * 128 + d
+    end
+    local off = inicio + math.floor((#tudo - inicio) * fracao)
+    saida = tudo:sub(off)
+  end
+
+  local w = io.open(destino, "wb")
+  if not w then return origem end
+  w:write(saida)
+  w:close()
+  return destino
+end
+
 -- ── Preview de audio ────────────────────────────────────────
 -- afplay e nativo do macOS: zero dependencia. Roda em background
 -- ("&") pra nao travar o painel; parar e matar o processo. Sem
@@ -854,6 +912,8 @@ end
 local tocando = nil          -- efeito tocando agora
 local itemTocando = nil      -- linha da lista que esta tocando
 local timerFim = nil
+local ultimaFracao = 0       -- de onde o ultimo preview comecou (pra ←→)
+local ultimoX = nil          -- x do ultimo MousePress na lista (pro scrub)
 
 local function pararAudio()
   if ehMac then
@@ -869,12 +929,14 @@ local function pararAudio()
     end)
   end
   tocando, itemTocando = nil, nil
+  pcall(function() os.remove(PREVIEW_TMP .. ".wav"); os.remove(PREVIEW_TMP .. ".mp3") end)
   pcall(function() itm.Ouvir.Checked = false end)
   pcall(function() itm.Ouvir.Text = "▶  Ouvir" end)
   if timerFim then pcall(function() timerFim:Stop() end) end
 end
 
-local function ouvir(e, item)
+local function ouvir(e, item, fracao)
+  fracao = fracao or 0
   pararAudio()
   local caminho = nomeCache(e.id, e.nome, e.ext)
   if not existe(caminho) then
@@ -885,15 +947,18 @@ local function ouvir(e, item)
     end
   end
   if ehMac then
-    os.execute('afplay "' .. caminho .. '" >/dev/null 2>&1 &')
+    local toca = cortarAudio(caminho, e.ext, fracao)
+    os.execute('afplay "' .. toca .. '" >/dev/null 2>&1 &')
   else
     -- MediaPlayer precisa de loop de mensagens: o Start-Sleep segura o
     -- processo vivo ate o efeito acabar. "cinepro-preview" e so um
     -- marcador na linha de comando pra pararAudio() achar o processo.
     local seg = math.max(1, math.ceil(e.dur + 0.5))
     local uri = "file:///" .. caminho:gsub("\\", "/")
+    local ini = math.floor(e.dur * fracao)
     local ps = "$cinepro='cinepro-preview'; Add-Type -AssemblyName PresentationCore; " ..
                "$p = New-Object System.Windows.Media.MediaPlayer; $p.Open([uri]'" .. uri .. "'); " ..
+               "Start-Sleep -m 300; $p.Position = [TimeSpan]::FromSeconds(" .. ini .. "); " ..
                "$p.Play(); Start-Sleep -Seconds " .. seg
     os.execute('start /b "" powershell -NoProfile -WindowStyle Hidden -Command "' .. ps:gsub('"', '\\"') .. '" >nul 2>&1')
   end
@@ -907,12 +972,17 @@ local function ouvir(e, item)
       item.TextColor[1] = RGB.bright
     end
   end)
-  status(string.format('Tocando "%s" (%.1fs)', e.nome, e.dur), "carregando")
+  if fracao > 0.02 then
+    status(string.format('Tocando "%s" a partir de %d%%', e.nome, math.floor(fracao * 100 + 0.5)), "carregando")
+  else
+    status(string.format('Tocando "%s" (%.1fs)', e.nome, e.dur), "carregando")
+  end
+  ultimaFracao = fracao
   -- Devolve o botao quando o efeito acaba. Se o Timeout nao
   -- disparar nesta versao do Fusion, o proximo clique reseta.
   pcall(function()
     if not timerFim then timerFim = ui:Timer{ ID = "FimAudio", SingleShot = true } end
-    timerFim.Interval = math.max(300, math.floor(e.dur * 1000) + 150)
+    timerFim.Interval = math.max(300, math.floor(e.dur * (1 - fracao) * 1000) + 150)
     timerFim:Start()
   end)
 end
@@ -1196,6 +1266,8 @@ if total > 0 then
   -- Mostra o acervo de cara: painel vazio parece quebrado.
   atualizarLista()
   sincronizarBotoes()
+  -- O fluxo comeca digitando: busca → ↓ → Espaco → Enter.
+  pcall(function() itm.Busca:SetFocus() end)
   if erro then status(erro, "aviso") end
 else
   status("Erro: " .. (erro or "catálogo vazio"), "erro")
@@ -1271,16 +1343,89 @@ win.On.Lateral.ItemClicked = function(ev)
   sincronizarBotoes()
 end
 
--- Clique no tile de play (coluna 0) toca direto, como no Premiere.
--- No resto da linha, so seleciona.
+-- Geometria da coluna da waveform, em px a partir da borda esquerda
+-- da lista: padding 6 + indentacao 8 + colunas 26+44+236. O getter de
+-- ColumnWidth mente, entao os numeros ficam aqui, iguais aos do setup.
+local WAVE_X0, WAVE_LARG = 6 + 8 + 26 + 44 + 236, 176
+
+-- O MousePress chega ANTES do ItemClicked: guarda o x pra saber em que
+-- ponto da waveform a pessoa clicou. Sem esse evento (versao antiga do
+-- Fusion), ultimoX fica nil e o clique toca do inicio — nao quebra.
+win.On.Lista.MousePress = function(ev)
+  ultimoX = nil
+  if not ev then return end
+  local p = ev.Pos or ev.pos
+  if type(p) == "table" then ultimoX = p[1] or p.x or p.X end
+  ultimoX = ultimoX or ev.x or ev.X
+end
+
+local function fracaoDoClique()
+  if not ultimoX then return 0 end
+  local f = (ultimoX - WAVE_X0) / WAVE_LARG
+  if f < 0 or f > 1 then return 0 end
+  return f
+end
+
+-- Clique no tile de play toca do inicio; clique na waveform toca a
+-- partir do ponto clicado (scrub). No resto da linha, so seleciona.
 win.On.Lista.ItemClicked = function(ev)
   sincronizarBotoes()
   local col = ev and ev.column
+  if col ~= 1 and col ~= 3 then return end
+  local e, item = selecionado()
+  if not e then return end
   if col == 1 then
+    if tocando and tocando.id == e.id then pararAudio(); status("Parado.") else ouvir(e, item) end
+  else
+    ouvir(e, item, fracaoDoClique())
+  end
+end
+
+-- ↑↓ no teclado muda a linha sem clique: os botoes precisam acompanhar.
+win.On.Lista.CurrentItemChanged  = function(ev) sincronizarBotoes() end
+win.On.Lista.ItemSelectionChanged = function(ev) sincronizarBotoes() end
+
+-- Teclado na lista. Enter ja e ItemActivated (nativo do Qt); aqui
+-- entram os que o Qt nao da: Espaco ouve/para, F favorita, Esc para,
+-- ←→ avancam ou voltam 10% no som. Codigos do Qt::Key.
+local TECLA = { espaco = 32, f = 70, esc = 16777216, esq = 16777234, dir = 16777236, baixo = 16777237 }
+
+win.On.Lista.KeyPress = function(ev)
+  local k = ev and (ev.Key or ev.key)
+  if not k then return end
+  if k == TECLA.espaco then
     local e, item = selecionado()
-    if e then
-      if tocando and tocando.id == e.id then pararAudio(); status("Parado.") else ouvir(e, item) end
-    end
+    if not e then return end
+    if tocando and tocando.id == e.id then pararAudio(); status("Parado.") else ouvir(e, item) end
+  elseif k == TECLA.f or k == TECLA.f + 32 then
+    win.On.Favorito.Clicked(ev)
+  elseif k == TECLA.esc then
+    pararAudio(); status("Parado.")
+  elseif k == TECLA.esq or k == TECLA.dir then
+    local e, item = selecionado()
+    if not e then return end
+    local f = ultimaFracao + (k == TECLA.dir and 0.1 or -0.1)
+    if f < 0 then f = 0 end
+    if f > 0.9 then f = 0.9 end
+    ouvir(e, item, f)
+  end
+end
+
+-- Na busca, ↓ pula pra lista ja com a primeira linha selecionada:
+-- digita, desce, Espaco, Enter — sem tocar no mouse.
+win.On.Busca.KeyPress = function(ev)
+  local k = ev and (ev.Key or ev.key)
+  if k == TECLA.baixo then
+    pcall(function()
+      local topo = itm.Lista:TopLevelItem(0)
+      local alvo = topo
+      pcall(function() if topo and topo:ChildCount() > 0 then alvo = topo:Child(0) end end)
+      if alvo then alvo.Selected = true; itm.Lista:ScrollToItem(alvo) end
+      itm.Lista:SetFocus()
+    end)
+    sincronizarBotoes()
+  elseif k == TECLA.esc then
+    itm.Busca.Text = ""
   end
 end
 
