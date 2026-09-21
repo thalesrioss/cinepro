@@ -236,8 +236,8 @@
     var mac = est.os === 'macos';
     caixaTexto.appendChild(el('h3', 'ig-h', 'Baixar o instalador'));
     paragrafo(caixaTexto, mac
-      ? 'A página detecta o sistema e entrega o arquivo <strong>.pkg</strong>, para macOS 10.14 ou superior. São <strong>~540 MB</strong>.'
-      : 'A página detecta o sistema e entrega o arquivo <strong>.exe</strong>, para Windows 10 ou superior. São <strong>~540 MB</strong>.');
+      ? 'A página detecta o sistema e entrega o arquivo <strong>.pkg</strong>, para macOS 10.14 ou superior. São <strong>~400 MB</strong>.'
+      : 'A página detecta o sistema e entrega o arquivo <strong>.exe</strong>, para Windows 10 ou superior. São <strong>~330 MB</strong>.');
     paragrafo(caixaTexto, 'O tamanho é assim porque os 500 efeitos já vêm dentro do instalador. Você baixa uma vez e nunca mais espera download no meio da edição.');
     bloco(caixaTexto, 'ig-warn', 'Em link lento', 'A barra pode ficar parada por vários minutos em alguns trechos. Não é travamento — não cancele e não recarregue a página.');
 
@@ -246,7 +246,7 @@
 
     var linha = el('div', 'ig-file');
     linha.appendChild(el('span', 'ig-file-n', mac ? 'CinePRO.pkg' : 'CinePRO-Setup.exe'));
-    linha.appendChild(el('span', 'ig-file-s', '540 MB'));
+    linha.appendChild(el('span', 'ig-file-s', mac ? '400 MB' : '330 MB'));
     corpo.appendChild(linha);
 
     var barra = el('div', 'ig-bar');

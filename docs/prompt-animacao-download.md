@@ -90,9 +90,9 @@ que vai logar no app depois. Gente que não entende esse passo abandona aqui.
 
 **2. Baixar o instalador**
 A página detecta o sistema. macOS: `.pkg`, macOS 10.14+. Windows: `.exe`,
-Windows 10+. Os dois com **~540 MB**.
+Windows 10+. Mac **~400 MB**, Windows **~330 MB**.
 Explique o tamanho na hora: são 500 efeitos já embutidos, pra não esperar
-download no meio da edição. Sem essa frase, 540 MB parece bloatware.
+download no meio da edição. Sem essa frase, 400 MB parece bloatware.
 Avise que num link lento demora e que a barra parada não é travamento.
 
 **3. O aviso de segurança — o coração da peça**
