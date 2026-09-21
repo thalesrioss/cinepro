@@ -60,41 +60,120 @@ local USOS   = BASE .. "/usos.txt"       -- id<TAB>contagem, alimenta "Mais usad
 local EMUSO  = BASE .. "/in-use.json"    -- registro compartilhado com app e plugin
 
 -- ── Paleta (brandbook do CinePRO) ───────────────────────────
--- Os mesmos tokens de css/tokens.css. Se o Qt do Fusion nao
--- aceitar stylesheet, o painel continua funcionando com a
--- aparencia padrao — por isso tudo entra via pcall.
+-- Os mesmos tokens de css/tokens.css, completos: as semanticas
+-- (success/warning/danger) e as glows sao o que faz um estado
+-- ser legivel sem ler o texto. Se o Qt do Fusion nao aceitar
+-- stylesheet, o painel segue com a aparencia padrao — por isso
+-- tudo entra via pcall.
 local COR = {
-  brand   = "#00B8FF",
-  bright  = "#4DD2FF",
-  s0      = "#07090F",
-  s1      = "#0E1218",
-  s2      = "#161B23",
-  s3      = "#11161D",
-  texto   = "#E5E9F0",
-  fraco   = "#8A95A8",
-  borda   = "rgba(255,255,255,0.10)",
+  brand    = "#00B8FF",
+  brandDeep= "#0066CC",
+  bright   = "#4DD2FF",
+  glow1    = "rgba(0,184,255,0.08)",
+  glow2    = "rgba(0,184,255,0.18)",
+  glow3    = "rgba(0,184,255,0.35)",
+  s0       = "#07090F",
+  s1       = "#0E1218",
+  s2       = "#161B23",
+  s3       = "#11161D",
+  forte    = "#FFFFFF",
+  texto    = "#E5E9F0",
+  fraco    = "#8A95A8",
+  apagado  = "#4A5566",
+  bordaSutil = "rgba(255,255,255,0.06)",
+  borda    = "rgba(255,255,255,0.10)",
+  bordaBrand = "rgba(0,184,255,0.35)",
+  ok       = "#22C55E",
+  okGlow   = "rgba(34,197,94,0.18)",
+  erro     = "#EF4444",
+  erroGlow = "rgba(239,68,68,0.18)",
+  aviso    = "#FFC74D",
+  avisoGlow= "rgba(255,199,77,0.18)",
+}
+
+-- TextColor/BackgroundColor por celula recebem {R,G,B,A} em 0..1,
+-- nao string CSS. Mesmos tokens, outra forma.
+local function rgb(hex, a)
+  local r, g, b = hex:match("#(%x%x)(%x%x)(%x%x)")
+  return { R = tonumber(r, 16) / 255, G = tonumber(g, 16) / 255,
+           B = tonumber(b, 16) / 255, A = a or 1 }
+end
+local RGB = {
+  brand = rgb(COR.brand), bright = rgb(COR.bright),
+  forte = rgb(COR.forte), texto = rgb(COR.texto),
+  fraco = rgb(COR.fraco), apagado = rgb(COR.apagado),
+  ok = rgb(COR.ok), erro = rgb(COR.erro), aviso = rgb(COR.aviso),
+  brandGlow = rgb(COR.brand, 0.12), okGlow = rgb(COR.ok, 0.14),
+  erroGlow = rgb(COR.erro, 0.14), avisoGlow = rgb(COR.aviso, 0.14),
+  s2 = rgb(COR.s2),
 }
 
 local ESTILO = [[
-  QWidget      { background-color: ]] .. COR.s0 .. [[; color: ]] .. COR.texto .. [[;
-                 font-size: 12px; }
-  QLineEdit    { background-color: ]] .. COR.s3 .. [[; border: 1px solid ]] .. COR.borda .. [[;
-                 border-radius: 8px; padding: 7px 10px; color: ]] .. COR.texto .. [[; }
-  QLineEdit:focus { border: 1px solid ]] .. COR.brand .. [[; }
-  QTreeWidget  { background-color: ]] .. COR.s1 .. [[; border: 1px solid ]] .. COR.borda .. [[;
-                 border-radius: 8px; }
-  QTreeWidget::item { padding: 5px 4px; }
-  QTreeWidget::item:selected { background-color: ]] .. COR.brand .. [[; color: #000; }
-  QHeaderView::section { background-color: ]] .. COR.s2 .. [[; color: ]] .. COR.fraco .. [[;
-                 border: 0px; padding: 5px; font-size: 10px; }
-  QPushButton  { background-color: ]] .. COR.s2 .. [[; color: ]] .. COR.texto .. [[;
-                 border: 1px solid ]] .. COR.borda .. [[; border-radius: 8px;
-                 padding: 7px 14px; font-weight: 600; }
-  QPushButton:hover  { border: 1px solid ]] .. COR.brand .. [[; }
-  QPushButton:default, QPushButton#Colocar {
-                 background-color: ]] .. COR.brand .. [[; color: #000; border: 0px; }
-  QLabel       { color: ]] .. COR.fraco .. [[; }
-  QLabel#Status { color: ]] .. COR.fraco .. [[; font-size: 11px; }
+  QWidget { background-color: ]] .. COR.s0 .. [[; color: ]] .. COR.texto .. [[; font-size: 12px; }
+
+  /* Cabecalho */
+  QLabel#Marca  { color: ]] .. COR.forte .. [[; font-size: 15px; font-weight: 700; }
+  QLabel#Contagem { color: ]] .. COR.apagado .. [[; font-size: 11px; }
+
+  /* Busca */
+  QLineEdit { background-color: ]] .. COR.s3 .. [[; border: 1px solid ]] .. COR.borda .. [[;
+              border-radius: 8px; padding: 8px 12px; color: ]] .. COR.texto .. [[;
+              selection-background-color: ]] .. COR.brand .. [[; }
+  QLineEdit:hover { border: 1px solid ]] .. COR.bordaBrand .. [[; }
+  QLineEdit:focus { border: 1px solid ]] .. COR.brand .. [[; background-color: ]] .. COR.s1 .. [[; }
+
+  /* Abas */
+  QTabBar { background: transparent; }
+  QTabBar::tab { background: transparent; color: ]] .. COR.fraco .. [[; padding: 8px 14px;
+                 border: 0px; border-bottom: 2px solid transparent; font-weight: 600; }
+  QTabBar::tab:hover { color: ]] .. COR.texto .. [[; }
+  QTabBar::tab:selected { color: ]] .. COR.brand .. [[; border-bottom: 2px solid ]] .. COR.brand .. [[; }
+
+  /* Listas */
+  QTreeWidget { background-color: ]] .. COR.s1 .. [[; border: 1px solid ]] .. COR.borda .. [[;
+                border-radius: 10px; outline: 0; padding: 4px; }
+  QTreeWidget::item { padding: 4px 6px; border-radius: 6px; }
+  QTreeWidget::item:hover { background-color: ]] .. COR.glow1 .. [[; }
+  QTreeWidget::item:selected { background-color: ]] .. COR.glow2 .. [[; color: ]] .. COR.forte .. [[; }
+  QTreeWidget::item:selected:hover { background-color: ]] .. COR.glow3 .. [[; }
+  QTreeWidget::branch { background: transparent; }
+  QHeaderView::section { background-color: transparent; color: ]] .. COR.apagado .. [[;
+                         border: 0px; padding: 4px 6px; font-size: 10px; font-weight: 600; }
+
+  /* Rolagem */
+  QScrollBar:vertical { background: transparent; width: 8px; margin: 2px; }
+  QScrollBar::handle:vertical { background: ]] .. COR.borda .. [[; border-radius: 4px; min-height: 24px; }
+  QScrollBar::handle:vertical:hover { background: ]] .. COR.bordaBrand .. [[; }
+  QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0px; }
+
+  /* Botoes: secundario e o padrao; primario e ghost por ID */
+  QPushButton { background-color: ]] .. COR.s2 .. [[; color: ]] .. COR.texto .. [[;
+                border: 1px solid ]] .. COR.borda .. [[; border-radius: 8px;
+                padding: 8px 14px; font-weight: 600; }
+  QPushButton:hover { border: 1px solid ]] .. COR.bordaBrand .. [[; background-color: ]] .. COR.s3 .. [[; }
+  QPushButton:pressed { background-color: ]] .. COR.glow2 .. [[; }
+  QPushButton:disabled { color: ]] .. COR.apagado .. [[; border-color: ]] .. COR.bordaSutil .. [[; }
+  QPushButton#Colocar { background-color: ]] .. COR.brand .. [[; color: #04121A; border: 0px; }
+  QPushButton#Colocar:hover { background-color: ]] .. COR.bright .. [[; }
+  QPushButton#Colocar:disabled { background-color: ]] .. COR.s2 .. [[; color: ]] .. COR.apagado .. [[; }
+  QPushButton#Ouvir:checked { background-color: ]] .. COR.glow2 .. [[; color: ]] .. COR.brand .. [[;
+                              border: 1px solid ]] .. COR.brand .. [[; }
+  QPushButton#Favorito:checked { color: ]] .. COR.aviso .. [[; border: 1px solid ]] .. COR.aviso .. [[;
+                                 background-color: ]] .. COR.avisoGlow .. [[; }
+  QPushButton#Mais, QPushButton#Atualizar, QPushButton#Repetir {
+                background: transparent; border: 1px solid transparent; color: ]] .. COR.fraco .. [[; }
+  QPushButton#Mais:hover, QPushButton#Atualizar:hover, QPushButton#Repetir:hover {
+                color: ]] .. COR.brand .. [[; border: 1px solid ]] .. COR.bordaSutil .. [[; }
+
+  /* Barra de status: a cor vem do estado, via propriedade dinamica */
+  QLabel { color: ]] .. COR.fraco .. [[; }
+  QLabel#Status { font-size: 11px; padding: 6px 10px; border-radius: 6px;
+                  background-color: ]] .. COR.s1 .. [[; }
+  QLabel#Dica   { color: ]] .. COR.apagado .. [[; font-size: 10px; }
+  QLabel#Vazio  { color: ]] .. COR.fraco .. [[; font-size: 13px; padding: 24px; }
+
+  QToolTip { background-color: ]] .. COR.s2 .. [[; color: ]] .. COR.texto .. [[;
+             border: 1px solid ]] .. COR.borda .. [[; padding: 6px 8px; border-radius: 6px; }
 ]]
 
 -- ── Utilidades ──────────────────────────────────────────────
@@ -561,8 +640,28 @@ local function restaurarMidias(aviso)
   local raiz = mp and mp:GetRootFolder() or nil
   if not raiz then return "Não consegui ler a mídia do projeto." end
 
-  local clipes = {}
-  todosOsClipes(raiz, clipes)
+  -- Mesma regra do Premiere: clipes selecionados na timeline?
+  -- Restaura so eles. Nada selecionado? Projeto inteiro. A API
+  -- Timeline:GetSelectedClips() chegou no Resolve 21.0.4 — antes
+  -- disso o painel so sabia fazer o projeto todo.
+  local clipes, escopo = {}, "projeto"
+  local tl = proj:GetCurrentTimeline()
+  if tl then
+    local okSel, sel = pcall(function() return tl:GetSelectedClips() end)
+    if okSel and type(sel) == "table" then
+      local n = 0
+      pcall(function() n = #sel end)
+      for i = 1, n do
+        local ti = sel[i]
+        if ti and type(ti) ~= "number" then
+          local okMp, mpi = pcall(function() return ti:GetMediaPoolItem() end)
+          if okMp and mpi then clipes[#clipes + 1] = mpi end
+        end
+      end
+      if #clipes > 0 then escopo = "seleção" end
+    end
+  end
+  if #clipes == 0 then todosOsClipes(raiz, clipes) end
 
   local sumidos, refeitos, semPista = {}, 0, 0
   for i = 1, #clipes do
@@ -573,8 +672,11 @@ local function restaurarMidias(aviso)
     end
   end
 
-  if #sumidos == 0 then return "Nenhuma mídia do CinePRO offline — está tudo no lugar." end
-  if aviso then aviso("Restaurando " .. #sumidos .. " mídia(s)…") end
+  if #sumidos == 0 then
+    if escopo == "seleção" then return "A seleção já está no lugar — nada offline." end
+    return "Nenhuma mídia do CinePRO offline — está tudo no lugar."
+  end
+  if aviso then aviso("Restaurando " .. #sumidos .. " mídia(s) da " .. escopo .. "…") end
 
   for i = 1, #sumidos do
     local alvo = sumidos[i]
@@ -603,7 +705,8 @@ local function restaurarMidias(aviso)
     pcall(function() mp:RelinkClips(itens, CACHE) end)
   end
 
-  local msg = refeitos .. " de " .. #sumidos .. " mídia(s) restaurada(s)."
+  local msg = refeitos .. " de " .. #sumidos .. " mídia(s) restaurada(s)"
+    .. (escopo == "seleção" and " (só a seleção)." or ".")
   if semPista > 0 then
     msg = msg .. " " .. semPista .. " não estão no catálogo atual — clique em Atualizar catálogo."
   end
@@ -826,31 +929,40 @@ local function limparMarcadores(tl)
   return n
 end
 
+-- Devolve (mensagem, resultado). O resultado alimenta a aba
+-- Diagnostico: lista de achados com gravidade, e o clique leva o
+-- playhead ate o trecho. Antes so existia a frase na barra de
+-- status — o editor tinha que cacar os marcadores na timeline.
 local function diagnosticar(aviso)
   local pm = resolve:GetProjectManager()
   local proj = pm and pm:GetCurrentProject() or nil
-  if not proj then return "Abra um projeto primeiro." end
+  if not proj then return "Abra um projeto primeiro.", nil end
   local tl = proj:GetCurrentTimeline()
-  if not tl then return "Abra uma timeline primeiro." end
+  if not tl then return "Abra uma timeline primeiro.", nil end
 
   if aviso then aviso("Lendo a montagem…") end
   local montagem, fps = lerMontagem(proj, tl)
   if #montagem.cortes == 0 and montagem.dur <= 0 then
-    return "Timeline vazia — coloque seus takes primeiro."
+    return "Timeline vazia — coloque seus takes primeiro.", nil
   end
 
   local r = analisarRitmo(montagem)
+  r.fps = fps
+  r.cortes = #montagem.cortes
+  r.timeline = tl
   limparMarcadores(tl)
 
   if #r.achados == 0 then
-    return string.format("Ritmo ok: %d corte(s) em %gs, nada acima de %gs (%s).",
+    r.resumo = string.format("Ritmo ok: %d corte(s) em %gs, nada acima de %gs (%s).",
       #montagem.cortes, r.dur, r.limite, r.formato)
+    return r.resumo, r
   end
 
   local escritos, recusados = 0, 0
   for i = 1, #r.achados do
     local a = r.achados[i]
     local frame = math.max(0, math.floor(a.at * fps + 0.5))
+    a.frame = frame
     local durFrames = math.max(1, math.floor(math.min(a.dur, 5) * fps + 0.5))
     local ok, feito = pcall(function()
       return tl:AddMarker(frame, SEV_COR[a.grav] or "Blue",
@@ -861,43 +973,109 @@ local function diagnosticar(aviso)
     if ok and feito then escritos = escritos + 1 else recusados = recusados + 1 end
   end
 
-  local msg = string.format("%d ponto(s) de atenção marcado(s) — %d grave(s). Pior: %gs. Formato %s (limite %gs).",
+  local msg = string.format("%d ponto(s) de atenção — %d grave(s). Pior: %gs. Formato %s (limite %gs).",
     escritos, r.altos, r.pior, r.formato, r.limite)
   if recusados > 0 then
     msg = msg .. " " .. recusados .. " frame(s) já tinham marcador seu."
   end
   if r.truncado then msg = msg .. " Lista limitada aos mais graves." end
-  return msg
+  r.resumo = msg
+  return msg, r
+end
+
+-- Leva o playhead ate um achado. E o que transforma a lista em
+-- ferramenta: ver o problema e ja estar em cima dele.
+local function irParaAchado(r, a)
+  if not (r and r.timeline and a and a.frame) then return false end
+  local fps = r.fps or 24
+  local frame0 = 0
+  pcall(function() frame0 = r.timeline:GetStartFrame() or 0 end)
+  local abs = frame0 + a.frame
+  local h = math.floor(abs / (fps * 3600)); abs = abs - h * fps * 3600
+  local m = math.floor(abs / (fps * 60));   abs = abs - m * fps * 60
+  local s = math.floor(abs / fps);          local f = math.floor(abs - s * fps + 0.5)
+  local tc = string.format("%02d:%02d:%02d:%02d", h, m, s, f)
+  local ok = pcall(function() r.timeline:SetCurrentTimecode(tc) end)
+  return ok, tc
 end
 
 -- ── Interface ───────────────────────────────────────────────
+-- Estrutura: cabecalho (marca + contagem), busca, e embaixo a
+-- lateral ao lado de duas abas — Efeitos e Diagnostico. A barra de
+-- status fecha o painel e muda de cor conforme o estado.
+
+local ehMac = (package.config:sub(1, 1) == "/")
+
 local win = disp:AddWindow({
   ID = "CineProPainel",
   WindowTitle = "CinePRO",
-  Geometry = { 150, 120, 780, 600 },
+  Geometry = { 150, 120, 860, 640 },
 }, ui:VGroup{
   Spacing = 8,
-  Margin = 10,
+  Margin = 12,
 
+  -- Cabecalho
   ui:HGroup{
     Weight = 0,
-    ui:LineEdit{ ID = "Busca", PlaceholderText = "Buscar em 10.000+ efeitos…" },
+    ui:Label{ ID = "Marca", Text = "CinePRO", Weight = 0 },
+    ui:Label{ ID = "Contagem", Text = "", Alignment = { AlignRight = true, AlignVCenter = true } },
   },
+
+  ui:LineEdit{ ID = "Busca", Weight = 0, PlaceholderText = "Buscar em 10.000+ efeitos…" },
 
   ui:HGroup{
     Weight = 1,
-    Spacing = 8,
-    ui:Tree{ ID = "Lateral", Weight = 0.32 },
-    ui:Tree{ ID = "Lista",   Weight = 0.68 },
-  },
+    Spacing = 10,
+    ui:Tree{ ID = "Lateral", Weight = 0.30 },
 
-  ui:HGroup{
-    Weight = 0,
-    Spacing = 6,
-    ui:Button{ ID = "Colocar",  Text = "Colocar no playhead" },
-    ui:Button{ ID = "Favorito", Text = "Favoritar" },
-    ui:Button{ ID = "Mais",      Text = "Carregar mais" },
-    ui:Button{ ID = "Atualizar", Text = "Atualizar catálogo" },
+    ui:VGroup{
+      Weight = 0.70,
+      Spacing = 6,
+      ui:TabBar{ ID = "Abas", Weight = 0 },
+      -- Nao e ui:Stack de proposito: o CurrentIndex dele devolve lixo
+      -- (-1/-2) e nao da pra confiar que trocou. Hidden nas paginas
+      -- le de volta o que foi escrito — testado no 21.1.
+      ui:VGroup{
+        ID = "Paginas",
+        Weight = 1,
+        Spacing = 0,
+
+        -- Pagina 0: efeitos
+        ui:VGroup{
+          ID = "PagEfeitos",
+          Spacing = 6,
+          ui:Tree{ ID = "Lista", Weight = 1 },
+          ui:HGroup{
+            Weight = 0,
+            Spacing = 6,
+            ui:Button{ ID = "Ouvir",    Text = "▶  Ouvir", Checkable = true, Weight = 0 },
+            ui:Button{ ID = "Favorito", Text = "★", Checkable = true, Weight = 0 },
+            ui:Button{ ID = "Colocar",  Text = "Colocar no playhead", Weight = 1 },
+            ui:Button{ ID = "Mais",     Text = "Carregar mais", Weight = 0 },
+            ui:Button{ ID = "Atualizar", Text = "↻", Weight = 0 },
+          },
+          ui:Label{ ID = "Dica", Weight = 0,
+                    Text = "Duplo-clique coloca no playhead  ·  ▶ ouve antes de colocar  ·  ★ favorita" },
+        },
+
+        -- Pagina 1: diagnostico
+        ui:VGroup{
+          ID = "PagDiag",
+          Spacing = 6,
+          ui:Label{ ID = "DiagResumo", Weight = 0, WordWrap = true,
+                    Text = "Analisa o ritmo da montagem e marca onde a retenção cai. Não altera nada — só escreve marcadores." },
+          ui:Tree{ ID = "DiagLista", Weight = 1 },
+          ui:HGroup{
+            Weight = 0,
+            Spacing = 6,
+            ui:Button{ ID = "Analisar", Text = "Analisar a timeline", Weight = 1 },
+            ui:Button{ ID = "Repetir",  Text = "Limpar marcadores", Weight = 0 },
+          },
+          ui:Label{ ID = "DicaDiag", Weight = 0,
+                    Text = "Clique num achado pra levar o playhead até ele." },
+        },
+      },
+    },
   },
 
   ui:Label{ ID = "Status", Text = "Carregando…", Weight = 0 },
@@ -909,18 +1087,154 @@ local itm = win:GetItems()
 pcall(function() win:SetStyleSheet(ESTILO) end)
 pcall(function() itm.CineProPainel.StyleSheet = ESTILO end)
 
+-- Fontes reutilizadas. Criadas uma vez: ui:Font e um objeto Qt.
+local FONTE_NEGRITO, FONTE_MINI, FONTE_TITULO = nil, nil, nil
 pcall(function()
-  itm.Lateral.ColumnCount = 1
-  itm.Lateral:SetHeaderLabels({ "Biblioteca" })
-  itm.Lista.ColumnCount = 2
-  itm.Lista:SetHeaderLabels({ "Efeito", "Duração" })
+  FONTE_NEGRITO = ui:Font{ Bold = true, PixelSize = 12 }
+  FONTE_MINI    = ui:Font{ Bold = true, PixelSize = 10 }
+  FONTE_TITULO  = ui:Font{ Bold = true, PixelSize = 15 }
+  itm.Marca.Font = FONTE_TITULO
+end)
+
+local function mostrarPagina(i)
+  pcall(function()
+    itm.PagEfeitos.Hidden = (i ~= 0)
+    itm.PagDiag.Hidden    = (i ~= 1)
+    if itm.Abas.CurrentIndex ~= i then itm.Abas.CurrentIndex = i end
+  end)
+end
+
+pcall(function()
+  itm.Abas:AddTab("Efeitos")
+  itm.Abas:AddTab("Diagnóstico")
+end)
+mostrarPagina(0)
+
+-- Lateral: sem cabecalho, sem linhas de arvore, contagem numa
+-- coluna propria alinhada a direita (igual ao Premiere).
+pcall(function()
+  itm.Lateral.ColumnCount = 2
+  itm.Lateral.HeaderHidden = true
+  itm.Lateral.RootIsDecorated = false
+  itm.Lateral.Indentation = 0
+  itm.Lateral.UniformRowHeights = true
+  itm.Lateral.ColumnWidth[1] = 44
+end)
+
+-- Lista: estado · nome · subcategoria · duracao
+pcall(function()
+  itm.Lista.ColumnCount = 4
+  itm.Lista:SetHeaderLabels({ "", "Efeito", "Subcategoria", "Duração" })
+  itm.Lista.RootIsDecorated = false
+  itm.Lista.Indentation = 12
+  itm.Lista.UniformRowHeights = true
+  itm.Lista.ColumnWidth[0] = 24
+  itm.Lista.ColumnWidth[2] = 130
+  itm.Lista.ColumnWidth[3] = 64
+end)
+
+-- Diagnostico: gravidade · tempo · o que · duracao
+pcall(function()
+  itm.DiagLista.ColumnCount = 4
+  itm.DiagLista:SetHeaderLabels({ "", "Tempo", "Achado", "Duração" })
+  itm.DiagLista.RootIsDecorated = false
+  itm.DiagLista.Indentation = 0
+  itm.DiagLista.ColumnWidth[0] = 24
+  itm.DiagLista.ColumnWidth[1] = 56
+  itm.DiagLista.ColumnWidth[3] = 64
+end)
+
+pcall(function()
+  itm.Ouvir.ToolTip     = "Toca o efeito antes de colocar. Clique de novo pra parar."
+  itm.Favorito.ToolTip  = "Guarda nos favoritos (aparece na lateral)."
+  itm.Colocar.ToolTip   = "Coloca no playhead, na primeira trilha de áudio livre. Duplo-clique faz o mesmo."
+  itm.Mais.ToolTip      = "Mostra mais " .. LOTE .. " efeitos desta lista."
+  itm.Atualizar.ToolTip = "Baixa o catálogo mais recente."
+  itm.Analisar.ToolTip  = "Lê os cortes da timeline e marca onde a atenção cai."
+  itm.Repetir.ToolTip   = "Apaga só os marcadores do CinePRO. Os seus ficam."
+  itm.Busca.ToolTip     = "Busca por nome, sem acento. Filtra dentro da categoria escolhida."
 end)
 
 local visiveis, ativa = {}, "todos"
-local chaveDaLinha, LINHAS = {}, {}
+local chaveDaLinha, LINHAS, ITENS_LAT = {}, {}, {}
+local ultimoDiag = nil
 
-local function status(t) itm.Status.Text = t end
+-- ── Status semantico ────────────────────────────────────────
+-- A cor diz o estado antes do texto: verde deu certo, ciano esta
+-- trabalhando, vermelho falhou, ambar precisa de atencao.
+local GLIFO_STATUS = { ok = "●", carregando = "◌", erro = "●", aviso = "▲" }
+local COR_STATUS   = { ok = RGB.ok, carregando = RGB.brand, erro = RGB.erro, aviso = RGB.aviso }
 
+local function status(t, tipo)
+  local g = tipo and GLIFO_STATUS[tipo] or "·"
+  itm.Status.Text = " " .. g .. "  " .. tostring(t)
+  pcall(function()
+    itm.Status:SetPaletteColor("Active", "WindowText", COR_STATUS[tipo] or RGB.fraco)
+    itm.Status:SetPaletteColor("Inactive", "WindowText", COR_STATUS[tipo] or RGB.fraco)
+  end)
+end
+
+local function formatarMilhar(n)
+  local s = tostring(n)
+  local out = s:reverse():gsub("(%d%d%d)", "%1."):reverse()
+  return (out:gsub("^%.", ""))
+end
+
+-- ── Preview de audio ────────────────────────────────────────
+-- afplay e nativo do macOS: zero dependencia. Roda em background
+-- ("&") pra nao travar o painel; parar e matar o processo. Sem
+-- callback de "acabou": um Timer com a duracao do efeito devolve o
+-- botao ao estado normal.
+local tocando = nil          -- efeito tocando agora
+local itemTocando = nil      -- linha da lista que esta tocando
+local timerFim = nil
+
+local function pararAudio()
+  if ehMac then os.execute("pkill -x afplay >/dev/null 2>&1") end
+  if itemTocando then
+    pcall(function()
+      itemTocando.Text[0] = (tocando and ehFav[tocando.id]) and "★" or (tocando and existe(nomeCache(tocando.id, tocando.nome, tocando.ext)) and "●" or "○")
+      itemTocando.TextColor[0] = (tocando and ehFav[tocando.id]) and RGB.aviso or (tocando and existe(nomeCache(tocando.id, tocando.nome, tocando.ext)) and RGB.ok or RGB.apagado)
+    end)
+  end
+  tocando, itemTocando = nil, nil
+  pcall(function() itm.Ouvir.Checked = false end)
+  pcall(function() itm.Ouvir.Text = "▶  Ouvir" end)
+  if timerFim then pcall(function() timerFim:Stop() end) end
+end
+
+local function ouvir(e, item)
+  pararAudio()
+  if not ehMac then
+    status("Preview de áudio só no macOS por enquanto.", "aviso")
+    return
+  end
+  local caminho = nomeCache(e.id, e.nome, e.ext)
+  if not existe(caminho) then
+    status('Baixando "' .. e.nome .. '" pra ouvir…', "carregando")
+    if not baixar(CDN_FILES .. e.id .. "." .. e.ext, caminho) then
+      status("Falha ao baixar o efeito.", "erro")
+      return
+    end
+  end
+  os.execute('afplay "' .. caminho .. '" >/dev/null 2>&1 &')
+  tocando, itemTocando = e, item
+  pcall(function()
+    itm.Ouvir.Checked = true
+    itm.Ouvir.Text = "■  Parar"
+    if item then item.Text[0] = "▶"; item.TextColor[0] = RGB.brand end
+  end)
+  status(string.format('Tocando "%s" (%.1fs)', e.nome, e.dur), "carregando")
+  -- Devolve o botao quando o efeito acaba. Se o Timeout nao
+  -- disparar nesta versao do Fusion, o proximo clique reseta.
+  pcall(function()
+    if not timerFim then timerFim = ui:Timer{ ID = "FimAudio", SingleShot = true } end
+    timerFim.Interval = math.max(300, math.floor(e.dur * 1000) + 150)
+    timerFim:Start()
+  end)
+end
+
+-- ── Lateral ─────────────────────────────────────────────────
 -- Mesmos icones do Premiere (js/main.js, buildSidebarTree). Sao
 -- geometricos de proposito: emoji renderiza diferente em cada
 -- sistema e ja quebrou o alinhamento do painel uma vez.
@@ -934,21 +1248,39 @@ local ICONE = {
 -- troca de editor no meio do trabalho nao pode ter que reaprender.
 local function montarLateral()
   pcall(function() itm.Lateral:Clear() end)
-  chaveDaLinha, LINHAS = {}, {}
+  chaveDaLinha, LINHAS, ITENS_LAT = {}, {}, {}
 
-  local function add(rotulo, chave, contagem)
+  local function add(rotulo, chave, contagem, estilo)
     local it = itm.Lateral:NewItem()
-    it.Text[0] = contagem and (rotulo .. "   " .. contagem) or rotulo
+    it.Text[0] = rotulo
+    it.Text[1] = contagem and formatarMilhar(contagem) or ""
+    pcall(function()
+      it.TextAlignment[1] = 130    -- direita + centro vertical
+      it.TextColor[1] = RGB.apagado
+      it.SizeHint[0] = { 0, 26 }
+      if estilo == "acao" then
+        it.TextColor[0] = RGB.brand
+      elseif estilo == "separador" then
+        it.TextColor[0] = RGB.apagado
+        if FONTE_MINI then it.Font[0] = FONTE_MINI end
+        it.SizeHint[0] = { 0, 30 }
+        it.Flags = { Selectable = false, Enabled = true }
+      elseif estilo == "sub" then
+        it.TextColor[0] = RGB.fraco
+      end
+    end)
     itm.Lateral:AddTopLevelItem(it)
     -- `false` (e nao nil) nos separadores: com nil a lista fica
     -- esparsa e o indice deixa de bater com a linha clicada.
     LINHAS[#LINHAS + 1] = chave or false
+    ITENS_LAT[#ITENS_LAT + 1] = it
     -- Mapa por rotulo e so o plano B (ver o clique da lateral). O
     -- primeiro vence porque rotulo repetido nao distingue mesmo.
     if chave and not chaveDaLinha[it.Text[0]] then chaveDaLinha[it.Text[0]] = chave end
+    if chave and chave == ativa then pcall(function() it.Selected = true end) end
   end
 
-  local function separador(texto) add("── " .. texto .. " ──", nil) end
+  local function separador(texto) add(texto:upper(), nil, nil, "separador") end
 
   add(ICONE.todos .. "  Todos", "todos", #EFEITOS)
   add(ICONE.favoritos .. "  Favoritos", "favoritos", #favoritos)
@@ -960,8 +1292,8 @@ local function montarLateral()
   if nUsados > 0 then
     add(ICONE.usados .. "  Mais usados", "mais-usados", math.min(nUsados, MAX_USADOS))
   end
-  add(ICONE.restaurar .. "  Restaurar mídias", "acao:restaurar")
-  add(ICONE.diagnostico .. "  Diagnóstico", "acao:diagnostico")
+  add(ICONE.restaurar .. "  Restaurar mídias", "acao:restaurar", nil, "acao")
+  add(ICONE.diagnostico .. "  Diagnóstico", "acao:diagnostico", nil, "acao")
 
   if #PACKS > 0 then
     separador("Packs prontos")
@@ -983,11 +1315,29 @@ local function montarLateral()
       if expandido[c] then
         for j = 1, #subs do
           add("     " .. ICONE.sub .. " " .. subs[j].nome,
-              "sub:" .. c .. "\1" .. subs[j].nome, subs[j].n)
+              "sub:" .. c .. "\1" .. subs[j].nome, subs[j].n, "sub")
         end
       end
     end
   end
+end
+
+-- ── Lista de efeitos ────────────────────────────────────────
+local MENSAGEM_VAZIA = {
+  favoritos    = "Nenhum favorito ainda. Selecione um efeito e clique ★.",
+  recentes     = "Nada recente. O que você colocar na timeline aparece aqui.",
+  ["mais-usados"] = "Ainda sem histórico. Os efeitos que você mais coloca ficam aqui.",
+}
+
+local function linhaVazia(texto)
+  local it = itm.Lista:NewItem()
+  it.Text[1] = texto
+  pcall(function()
+    it.TextColor[1] = RGB.fraco
+    it.SizeHint[0] = { 0, 48 }
+    it.Flags = { Selectable = false, Enabled = true }
+  end)
+  itm.Lista:AddTopLevelItem(it)
 end
 
 -- Desenha ATE `quantos` efeitos, agrupados por categoria — mesma
@@ -998,13 +1348,52 @@ local function mostrar(achados, quantos)
   pcall(function() itm.Lista:Clear() end)
   visiveis = {}
 
+  if #achados == 0 then
+    local termo = itm.Busca.Text or ""
+    if termo ~= "" then
+      linhaVazia('Nada com "' .. termo .. '". Tente uma palavra só, sem acento.')
+    else
+      linhaVazia(MENSAGEM_VAZIA[ativa] or "Nenhum efeito aqui.")
+    end
+    return 0
+  end
+
   local limite = math.min(quantos or LOTE, #achados)
   local agrupar = (ativa == "todos") and (itm.Busca.Text == "")
 
+  -- O indice vem ordenado por NOME, entao categorias se alternam a
+  -- cada linha e o agrupamento viraria dezenas de cabecalhos num
+  -- lote de 300. Agrupar exige ordenar por categoria primeiro.
+  if agrupar and not achados.__porCategoria then
+    table.sort(achados, function(a, b)
+      if a.cat ~= b.cat then return a.cat < b.cat end
+      return a.nome < b.nome
+    end)
+    achados.__porCategoria = true
+  end
+
   local function novoFilho(pai, e)
     local it = itm.Lista:NewItem()
-    it.Text[0] = (ehFav[e.id] and "★ " or "") .. e.nome
-    it.Text[1] = string.format("%.2fs", e.dur)
+    local fav = ehFav[e.id]
+    local emCache = existe(nomeCache(e.id, e.nome, e.ext))
+    -- Uma coluna de estado, um glifo: favorito ganha do cache. A
+    -- dica diz o resto.
+    it.Text[0] = fav and "★" or (emCache and "●" or "○")
+    it.Text[1] = e.nome
+    it.Text[2] = e.sub or ""
+    it.Text[3] = string.format("%.2fs", e.dur)
+    pcall(function()
+      it.TextColor[0] = fav and RGB.aviso or (emCache and RGB.ok or RGB.apagado)
+      it.TextColor[1] = RGB.texto
+      it.TextColor[2] = RGB.fraco
+      it.TextColor[3] = RGB.fraco
+      it.TextAlignment[0] = 132   -- centro
+      it.TextAlignment[3] = 130   -- direita
+      it.SizeHint[0] = { 0, 28 }
+      it.ToolTip[0] = fav and "Favorito" .. (emCache and " · em cache" or " · ainda não baixado")
+                          or (emCache and "Em cache — coloca na hora" or "Ainda não baixado — baixa ao ouvir ou colocar")
+      it.ToolTip[1] = e.nome .. (e.cat ~= "" and ("\n" .. e.cat .. (e.sub ~= "" and (" › " .. e.sub) or "")) or "")
+    end)
     if pai then pai:AddChild(it) else itm.Lista:AddTopLevelItem(it) end
     visiveis[#visiveis + 1] = e
   end
@@ -1029,8 +1418,15 @@ local function mostrar(achados, quantos)
     if c ~= catAtual then
       catAtual = c
       pai = itm.Lista:NewItem()
-      pai.Text[0] = c
-      pai.Text[1] = tostring(totalPorCat[c])
+      pai.Text[1] = c
+      pai.Text[2] = formatarMilhar(totalPorCat[c]) .. " efeitos"
+      pai.Text[3] = ""
+      pcall(function()
+        pai.TextColor[1] = RGB.brand
+        pai.TextColor[2] = RGB.apagado
+        if FONTE_NEGRITO then pai.Font[1] = FONTE_NEGRITO end
+        pai.SizeHint[0] = { 0, 30 }
+      end)
       itm.Lista:AddTopLevelItem(pai)
       pcall(function() pai.Expanded = true end)
     end
@@ -1043,16 +1439,17 @@ local conjunto, mostrados = {}, 0
 
 local function atualizarStatus()
   if #conjunto == 0 then
-    status("Nenhum efeito encontrado.")
+    status("Nenhum efeito encontrado.", "aviso")
   elseif mostrados < #conjunto then
-    status(mostrados .. " de " .. #conjunto .. " efeitos — clique em Carregar mais.")
+    status(formatarMilhar(mostrados) .. " de " .. formatarMilhar(#conjunto) .. " efeitos — Carregar mais traz os próximos " .. LOTE .. ".")
   else
-    status(#conjunto .. " efeito(s).")
+    status(formatarMilhar(#conjunto) .. " efeito(s).")
   end
   pcall(function() itm.Mais.Enabled = (mostrados < #conjunto) end)
 end
 
 local function atualizarLista()
+  pararAudio()
   conjunto = filtrar(ativa, itm.Busca.Text)
   mostrados = mostrar(conjunto, LOTE)
   atualizarStatus()
@@ -1063,6 +1460,9 @@ local function carregarMais()
   atualizarStatus()
 end
 
+-- Devolve (efeito, item da lista). Cabecalho de grupo nao tem
+-- duracao na 4a coluna — clicar nele nao pode virar "colocar
+-- categoria no playhead".
 local function selecionado()
   local sel = itm.Lista:SelectedItems()
   if not sel then return nil end
@@ -1071,19 +1471,95 @@ local function selecionado()
   if n == 0 then return nil end
   local alvo = sel[1]
   if not alvo or type(alvo) == "number" then return nil end
-  -- Cabecalho de grupo tem a contagem na 2a coluna, nao duracao —
-  -- clicar nele nao pode virar "colocar categoria no playhead".
-  local nome = tostring(alvo.Text[0]):gsub("^★ ", "")
-  local col2 = tostring(alvo.Text[1] or "")
-  if not col2:find("s$") then return nil end
+  local nome = tostring(alvo.Text[1] or "")
+  local dur  = tostring(alvo.Text[3] or "")
+  if dur == "" then return nil end
+  -- Nome E duracao: dois efeitos com o mesmo nome e duracao igual
+  -- ate o centesimo nao acontece na pratica.
   for i = 1, #visiveis do
-    if visiveis[i].nome == nome then return visiveis[i] end
+    local e = visiveis[i]
+    if e.nome == nome and string.format("%.2fs", e.dur) == dur then return e, alvo end
   end
   return nil
 end
 
+-- Sincroniza os botoes com a linha selecionada: a estrela acende se
+-- for favorito, o Ouvir some se nada esta selecionado.
+local function sincronizarBotoes()
+  local e = selecionado()
+  pcall(function()
+    itm.Favorito.Checked = (e ~= nil and ehFav[e.id] == true)
+    itm.Favorito.Enabled = (e ~= nil)
+    itm.Ouvir.Enabled = (e ~= nil)
+    itm.Colocar.Enabled = (e ~= nil)
+  end)
+end
+
+-- ── Aba Diagnostico ─────────────────────────────────────────
+local GLIFO_GRAV = { high = "●", medium = "●", low = "●" }
+local COR_GRAV   = { high = RGB.erro, medium = RGB.aviso, low = RGB.brand }
+local NOME_GRAV  = { high = "grave", medium = "média", low = "leve" }
+
+local function fmtTempo(seg)
+  seg = math.max(0, seg or 0)
+  local m = math.floor(seg / 60)
+  local s = math.floor(seg % 60)
+  return string.format("%d:%02d", m, s)
+end
+
+local function mostrarDiagnostico(r)
+  pcall(function() itm.DiagLista:Clear() end)
+  ultimoDiag = r
+  if not r then return end
+
+  pcall(function()
+    itm.DiagResumo.Text = r.resumo or ""
+    itm.DiagResumo:SetPaletteColor("Active", "WindowText", (r.altos or 0) > 0 and RGB.aviso or RGB.ok)
+  end)
+
+  if #r.achados == 0 then
+    local it = itm.DiagLista:NewItem()
+    it.Text[2] = "Nenhum trecho acima do limite. O ritmo está segurando a atenção."
+    pcall(function() it.TextColor[2] = RGB.ok; it.SizeHint[0] = { 0, 44 } end)
+    itm.DiagLista:AddTopLevelItem(it)
+    return
+  end
+
+  for i = 1, #r.achados do
+    local a = r.achados[i]
+    local it = itm.DiagLista:NewItem()
+    it.Text[0] = GLIFO_GRAV[a.grav] or "●"
+    it.Text[1] = fmtTempo(a.at)
+    it.Text[2] = a.titulo
+    it.Text[3] = num(a.dur) .. "s"
+    pcall(function()
+      it.TextColor[0] = COR_GRAV[a.grav] or RGB.fraco
+      it.TextColor[1] = RGB.fraco
+      it.TextColor[2] = RGB.texto
+      it.TextColor[3] = RGB.fraco
+      it.TextAlignment[0] = 132
+      it.TextAlignment[3] = 130
+      it.SizeHint[0] = { 0, 30 }
+      it.ToolTip[2] = a.nota .. "\n\nGravidade " .. (NOME_GRAV[a.grav] or a.grav) .. ". Clique pra ir até lá."
+    end)
+    itm.DiagLista:AddTopLevelItem(it)
+  end
+end
+
+local function rodarDiagnostico()
+  mostrarPagina(1)
+  status("Analisando a montagem…", "carregando")
+  local msg, r = diagnosticar(function(t) status(t, "carregando") end)
+  mostrarDiagnostico(r)
+  if r then
+    status(msg, (r.altos or 0) > 0 and "aviso" or "ok")
+  else
+    status(msg, "erro")
+  end
+end
+
 -- ── Carga inicial ───────────────────────────────────────────
-status("Carregando catálogo…")
+status("Carregando catálogo…", "carregando")
 carregarConfig()
 carregarPrefs()
 carregarUsos()
@@ -1100,16 +1576,42 @@ end
 
 local total, erro = carregarIndice(false)
 if total > 0 then
+  pcall(function() itm.Contagem.Text = formatarMilhar(#EFEITOS) .. " efeitos" end)
   montarLateral()
   -- Mostra o acervo de cara: painel vazio parece quebrado.
   atualizarLista()
-  if erro then status(erro) end
+  sincronizarBotoes()
+  if erro then status(erro, "aviso") end
 else
-  status("Erro: " .. (erro or "catálogo vazio"))
+  status("Erro: " .. (erro or "catálogo vazio"), "erro")
 end
 
 -- ── Eventos ─────────────────────────────────────────────────
-win.On.Busca.TextChanged = function(ev) atualizarLista() end
+-- Busca com debounce: refiltrar 10 mil itens a cada tecla trava a
+-- digitacao. O Timer espera a pessoa parar de digitar. Se o Timeout
+-- nao disparar nesta versao do Fusion, cai no filtro imediato —
+-- a busca nunca pode ficar muda.
+local timerBusca, timerOk = nil, false
+pcall(function() timerBusca = ui:Timer{ ID = "Debounce", Interval = 180, SingleShot = true } end)
+local timerSonda = nil
+pcall(function() timerSonda = ui:Timer{ ID = "SondaTimer", Interval = 50, SingleShot = true }; timerSonda:Start() end)
+
+win.On.SondaTimer.Timeout = function(ev) timerOk = true end
+win.On.Debounce.Timeout   = function(ev) atualizarLista(); sincronizarBotoes() end
+win.On.FimAudio.Timeout   = function(ev) pararAudio() end
+
+win.On.Busca.TextChanged = function(ev)
+  if timerOk and timerBusca then
+    pcall(function() timerBusca:Stop(); timerBusca:Start() end)
+  else
+    atualizarLista(); sincronizarBotoes()
+  end
+end
+
+win.On.Abas.CurrentChanged = function(ev)
+  local i = (ev and ev.Index) or itm.Abas.CurrentIndex or 0
+  mostrarPagina(i)
+end
 
 win.On.Lateral.ItemClicked = function(ev)
   local alvo = ev and ev.item
@@ -1135,15 +1637,19 @@ win.On.Lateral.ItemClicked = function(ev)
   if not chave then return end   -- separador (false) ou linha desconhecida
 
   if chave == "acao:restaurar" then
-    status("Procurando mídias offline…")
-    status(restaurarMidias(status))
+    status("Procurando mídias offline…", "carregando")
+    local msg = restaurarMidias(function(t) status(t, "carregando") end)
+    status(msg, msg:find("^%d+ de") and "ok" or (msg:find("offline") and "ok" or "aviso"))
+    montarLateral()
     return
   end
   if chave == "acao:diagnostico" then
-    status("Analisando a montagem…")
-    status(diagnosticar(status))
+    rodarDiagnostico()
+    montarLateral()
     return
   end
+
+  mostrarPagina(0)
 
   -- Categoria com subcategoria abre/fecha, igual ao Premiere — e ja
   -- mostra os efeitos dela, sem exigir um segundo clique.
@@ -1153,50 +1659,114 @@ win.On.Lateral.ItemClicked = function(ev)
     ativa = chave
     montarLateral()
     atualizarLista()
+    sincronizarBotoes()
     return
   end
 
   ativa = chave
+  montarLateral()
   atualizarLista()
+  sincronizarBotoes()
 end
+
+win.On.Lista.ItemClicked = function(ev) sincronizarBotoes() end
 
 win.On.Colocar.Clicked = function(ev)
   local e = selecionado()
-  if not e then status("Selecione um efeito na lista.") return end
-  status('Colocando "' .. e.nome .. '"…')
+  if not e then status("Selecione um efeito na lista.", "aviso") return end
+  pararAudio()
+  status('Colocando "' .. e.nome .. '"…', "carregando")
   local ok, msg = colocar(e)
-  status(msg)
-  if ok then montarLateral() end
+  status(msg, ok and "ok" or "erro")
+  if ok then montarLateral(); atualizarLista(); sincronizarBotoes() end
 end
 
 win.On.Lista.ItemDoubleClicked = function(ev) win.On.Colocar.Clicked(ev) end
+win.On.Lista.ItemActivated     = function(ev) win.On.Colocar.Clicked(ev) end
+
+win.On.Ouvir.Clicked = function(ev)
+  if tocando then pararAudio(); status("Parado.") return end
+  local e, item = selecionado()
+  if not e then
+    pcall(function() itm.Ouvir.Checked = false end)
+    status("Selecione um efeito pra ouvir.", "aviso")
+    return
+  end
+  ouvir(e, item)
+end
 
 win.On.Favorito.Clicked = function(ev)
   local e = selecionado()
-  if not e then status("Selecione um efeito pra favoritar.") return end
+  if not e then
+    pcall(function() itm.Favorito.Checked = false end)
+    status("Selecione um efeito pra favoritar.", "aviso")
+    return
+  end
   alternarFavorito(e.id)
   montarLateral()
   atualizarLista()
+  sincronizarBotoes()
   status(ehFav[e.id] and ('"' .. e.nome .. '" nos favoritos.')
-                     or  ('"' .. e.nome .. '" saiu dos favoritos.'))
+                     or  ('"' .. e.nome .. '" saiu dos favoritos.'), "ok")
 end
 
 win.On.Mais.Clicked = function(ev) carregarMais() end
 
 win.On.Atualizar.Clicked = function(ev)
-  status("Baixando catálogo…")
+  status("Baixando catálogo…", "carregando")
   local n, err = carregarIndice(true)
   if n > 0 then
+    pcall(function() itm.Contagem.Text = formatarMilhar(#EFEITOS) .. " efeitos" end)
     montarLateral()
     atualizarLista()
-    if err then status(err) end
+    sincronizarBotoes()
+    if err then status(err, "aviso") else status("Catálogo atualizado: " .. formatarMilhar(n) .. " efeitos.", "ok") end
   else
-    status("Erro: " .. (err or "catálogo vazio"))
+    status("Erro: " .. (err or "catálogo vazio"), "erro")
   end
 end
 
-win.On.CineProPainel.Close = function(ev) disp:ExitLoop() end
+win.On.Analisar.Clicked = function(ev) rodarDiagnostico() end
+
+win.On.Repetir.Clicked = function(ev)
+  local pm = resolve:GetProjectManager()
+  local proj = pm and pm:GetCurrentProject() or nil
+  local tl = proj and proj:GetCurrentTimeline() or nil
+  if not tl then status("Abra uma timeline primeiro.", "aviso") return end
+  local n = limparMarcadores(tl)
+  mostrarDiagnostico(nil)
+  pcall(function() itm.DiagResumo.Text = "Marcadores do CinePRO apagados. Os seus ficaram." end)
+  status(n .. " marcador(es) do CinePRO apagado(s).", "ok")
+end
+
+win.On.DiagLista.ItemClicked = function(ev)
+  if not ultimoDiag then return end
+  local alvo = ev and ev.item
+  if not alvo or type(alvo) == "number" then
+    local sel = itm.DiagLista:SelectedItems()
+    local n = 0
+    if sel then pcall(function() n = #sel end) end
+    if n == 0 then return end
+    alvo = sel[1]
+  end
+  if not alvo or type(alvo) == "number" then return end
+  local ok, idx = pcall(function() return itm.DiagLista:IndexOfTopLevelItem(alvo) end)
+  local a = (ok and type(idx) == "number") and ultimoDiag.achados[idx + 1] or nil
+  if not a then return end
+  local foi, tc = irParaAchado(ultimoDiag, a)
+  if foi then
+    status("Playhead em " .. tostring(tc) .. " — " .. a.titulo, "ok")
+  else
+    status("Não consegui mover o playhead.", "erro")
+  end
+end
+
+win.On.CineProPainel.Close = function(ev)
+  pararAudio()
+  disp:ExitLoop()
+end
 
 win:Show()
 disp:RunLoop()
+pararAudio()
 win:Hide()
