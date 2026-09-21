@@ -1,6 +1,6 @@
 {
   "name": "cinepro-desktop",
-  "version": "1.0.13",
+  "version": "1.0.14",
   "description": "CinePRO Manager — desktop app para gerenciar assinatura e plugin",
   "main": "main.js",
   "author": "CinePRO",
