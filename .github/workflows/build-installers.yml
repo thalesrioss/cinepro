@@ -45,7 +45,10 @@ jobs:
   build-mac:
     runs-on: macos-latest
     needs: build-bundle
-    if: ${{ always() }}   # roda mesmo se bundle falhar (sem bundle = .pkg/.exe menor)
+    # Sem "if: always()": se o bundle falhar, NAO sai instalador. Foi
+    # essa tolerancia que deixou 15 releases sairem sem os 500 efeitos
+    # que a LP promete — o job de bundle "passava" vazio e o .pkg saia
+    # com 93 MB. Sem bundle, sem release; e conserta e roda de novo.
     steps:
       - uses: actions/checkout@v4
 
@@ -53,9 +56,8 @@ jobs:
         with:
           node-version: 22
 
-      - name: Download bundle artifact (opcional — pula se bundle job falhou)
+      - name: Download bundle artifact
         uses: actions/download-artifact@v4
-        continue-on-error: true
         with:
           name: cinepro-bundle
           path: bundle/dist
@@ -83,7 +85,7 @@ jobs:
   build-windows:
     runs-on: windows-latest
     needs: build-bundle
-    if: ${{ always() }}   # roda mesmo se bundle falhar (sem bundle = .pkg/.exe menor)
+    # Mesma regra do mac: sem bundle, sem instalador.
     steps:
       - uses: actions/checkout@v4
 
@@ -91,9 +93,8 @@ jobs:
         with:
           node-version: 22
 
-      - name: Download bundle artifact (opcional — pula se bundle job falhou)
+      - name: Download bundle artifact
         uses: actions/download-artifact@v4
-        continue-on-error: true
         with:
           name: cinepro-bundle
           path: bundle/dist

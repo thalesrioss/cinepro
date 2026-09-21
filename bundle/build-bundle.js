@@ -12,8 +12,19 @@
  *   3. TODOS os presets/LUTs/mogrt (small + high-value)
  *   4. Thumbs do Drive pra TODOS os 11.6k cards (file mode)
  *
+ * DE ONDE BAIXA: do R2 (CDN público), não do Drive. Todos os 15
+ * releases de v1.0.0 a v1.0.14 saíram com ~93 MB — o bundle vinha
+ * VAZIO e o job ficava verde, porque o download pelo Drive falhava
+ * arquivo a arquivo, cada erro era engolido, e o script saía com 0.
+ * O R2 já tem tudo (mirror-assets.yml), não precisa de OAuth, e é a
+ * mesma origem que o plugin usa em runtime. OAuth agora é só pras
+ * thumbs — e opcional.
+ *
+ * E O SCRIPT FALHA se o bundle vier pequeno. Nunca mais "sucesso"
+ * com zero arquivos.
+ *
  * Uso local: `node build-bundle.js`
- * Uso CI: env CINEPRO_OAUTH_CLIENT + CINEPRO_OAUTH_TOKEN
+ * Uso CI: env CINEPRO_OAUTH_CLIENT + CINEPRO_OAUTH_TOKEN (só thumbs)
  *
  * Output:
  *   bundle/dist/files/<id>.<ext>       — assets baixados
@@ -28,13 +39,23 @@ const path = require('path');
 const { google } = require('googleapis');
 
 const ROOT = path.join(__dirname, '..');
+const CDN_FILES = 'https://pub-6ace91bcabf540f0a54bb6850d188ef4.r2.dev/';
+// O r2.dev devolve 429 em rajada: concorrência 40 falhou em 8.105 de
+// 10.037 pedidos (manifest/extract-durations.js). 8 + backoff funciona.
+const CDN_CONCURRENCY = 8;
+const CDN_MAX_RETRY = 5;
+// Abaixo disto o bundle não presta: melhor o build quebrar do que
+// sair um instalador que promete 500 efeitos e entrega zero.
+const MIN_OK_RATIO = 0.9;
+const MIN_TOTAL_MB = 100;
 const MANIFEST_PATH = path.join(ROOT, 'manifest', 'dist', 'manifest.json');
 const OUT_DIR = path.join(__dirname, 'dist');
 const FILES_DIR = path.join(OUT_DIR, 'files');
 const THUMBS_DIR = path.join(OUT_DIR, 'thumbs');
 const BUNDLE_MANIFEST = path.join(OUT_DIR, 'manifest-bundle.json');
 
-const SIZE_CAP_MB = 450;   // bundle máximo 450MB (instalador final ~540MB)
+// BUNDLE_CAP_MB no env permite um build pequeno pra teste local.
+const SIZE_CAP_MB = Number(process.env.BUNDLE_CAP_MB) || 450;   // bundle máximo 450MB (instalador final ~540MB)
 const CONCURRENCY = 6;
 
 // ── Heurística: keywords universais (sempre baixar tudo que casa) ──
@@ -103,10 +124,9 @@ async function getAuth() {
   const tokenFile = path.join(ROOT, 'audit', '.oauth-token.json');
   const clientFile = path.join(ROOT, 'audit', 'oauth-client.json');
   if (!fs.existsSync(tokenFile) || !fs.existsSync(clientFile)) {
-    console.error('\n❌ SEM CREDENCIAIS OAUTH.');
-    console.error('   No CI: precisa dos secrets CINEPRO_OAUTH_CLIENT e CINEPRO_OAUTH_TOKEN');
-    console.error('   Local: precisa de audit/oauth-client.json e audit/.oauth-token.json');
-    process.exit(1);
+    // Sem OAuth só as thumbs ficam de fora. Os arquivos vêm do R2.
+    console.warn('  ⚠ sem credenciais OAuth — thumbs do Drive serão puladas');
+    return null;
   }
   const client = JSON.parse(fs.readFileSync(clientFile, 'utf8'));
   const cfg = client.installed || client.web;
@@ -203,23 +223,32 @@ function scoreFile(f, reason) {
   return s;
 }
 
-// ── Download paralelo controlado ────────────────────────────────
-async function downloadFile(drive, fileId, destPath) {
+// ── Download paralelo controlado (R2, com backoff) ──────────────
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+async function downloadFile(fileId, ext, destPath) {
   if (fs.existsSync(destPath) && fs.statSync(destPath).size > 0) {
     return { skipped: true, bytes: fs.statSync(destPath).size };
   }
-  const tmpPath = destPath + '.tmp';
-  const stream = fs.createWriteStream(tmpPath);
-  const res = await drive.files.get(
-    { fileId, alt: 'media' },
-    { responseType: 'stream' }
-  );
-  await new Promise((resolve, reject) => {
-    res.data.on('end', resolve).on('error', reject).pipe(stream);
-  });
-  await new Promise(r => stream.on('finish', r));
-  fs.renameSync(tmpPath, destPath);
-  return { downloaded: true, bytes: fs.statSync(destPath).size };
+  const url = CDN_FILES + fileId + '.' + ext;
+  let wait = 500;
+  for (let attempt = 0; ; attempt++) {
+    try {
+      const r = await fetch(url, { signal: AbortSignal.timeout(120000) });
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      const buf = Buffer.from(await r.arrayBuffer());
+      if (!buf.length) throw new Error('resposta vazia');
+      const tmpPath = destPath + '.tmp';
+      fs.writeFileSync(tmpPath, buf);
+      fs.renameSync(tmpPath, destPath);
+      return { downloaded: true, bytes: buf.length };
+    } catch (e) {
+      const retryable = /HTTP 429|HTTP 5\d\d|timeout|ECONN|socket|fetch failed|aborted/i.test(e.message);
+      if (!retryable || attempt >= CDN_MAX_RETRY) throw e;
+      await sleep(wait + Math.random() * wait);
+      wait = Math.min(wait * 2, 8000);
+    }
+  }
 }
 
 async function downloadThumb(drive, fileId, destPath) {
@@ -236,7 +265,7 @@ async function downloadThumb(drive, fileId, destPath) {
   }
 }
 
-async function processBatch(items, fn) {
+async function processBatch(items, fn, conc) {
   let i = 0;
   let done = 0;
   const total = items.length;
@@ -252,7 +281,7 @@ async function processBatch(items, fn) {
       }
     }
   }
-  await Promise.all(Array.from({ length: CONCURRENCY }, () => worker()));
+  await Promise.all(Array.from({ length: conc || CONCURRENCY }, () => worker()));
   return errors;
 }
 
@@ -293,24 +322,31 @@ async function processBatch(items, fn) {
   }
 
   const auth = await getAuth();
-  const drive = google.drive({ version: 'v3', auth });
+  const drive = auth ? google.drive({ version: 'v3', auth }) : null;
 
-  // ── Download dos arquivos ──
-  console.log('\n=== Baixando arquivos ===');
-  await processBatch(selected, async (f) => {
-    const ext = f.ext;
-    const dest = path.join(FILES_DIR, `${f.id}.${ext}`);
-    await downloadFile(drive, f.id, dest);
-  });
+  // ── Download dos arquivos (R2, sem auth) ──
+  console.log('\n=== Baixando arquivos do R2 ===');
+  const errosDownload = await processBatch(selected, async (f) => {
+    const dest = path.join(FILES_DIR, `${f.id}.${f.ext}`);
+    await downloadFile(f.id, f.ext, dest);
+  }, CDN_CONCURRENCY);
+  if (errosDownload.length) {
+    console.warn(`\n  ⚠ ${errosDownload.length} download(s) falharam. Primeiros:`);
+    for (const e of errosDownload.slice(0, 8)) console.warn(`    ${e.item.id}.${e.item.ext} — ${e.err}`);
+  }
 
   // ── Cachear thumbs de TODOS os arquivos (incluindo não-bundled) ──
-  console.log('\n\n=== Cacheando thumbs do Drive ===');
   const thumbCandidates = manifest.files.filter(f => f.thumb && (f.kind === 'video' || f.kind === 'image' || f.kind === 'mogrt'));
-  console.log(`${thumbCandidates.length} candidatos a thumb`);
-  await processBatch(thumbCandidates, async (f) => {
-    const dest = path.join(THUMBS_DIR, `${f.id}.jpg`);
-    await downloadThumb(drive, f.id, dest);
-  });
+  if (drive) {
+    console.log('\n\n=== Cacheando thumbs do Drive ===');
+    console.log(`${thumbCandidates.length} candidatos a thumb`);
+    await processBatch(thumbCandidates, async (f) => {
+      const dest = path.join(THUMBS_DIR, `${f.id}.jpg`);
+      await downloadThumb(drive, f.id, dest);
+    });
+  } else {
+    console.log(`\n\n(sem OAuth: ${thumbCandidates.length} thumbs puladas)`);
+  }
 
   // ── Gera bundle manifest ──
   const bundleManifest = {
@@ -351,6 +387,17 @@ async function processBatch(items, fn) {
   console.log(`  Total bundle:       ${totalMB.toFixed(0)} MB`);
   console.log(`  Tempo:              ${((Date.now()-t0)/1000).toFixed(0)}s`);
   console.log(`  Saída:              ${OUT_DIR}`);
+
+  // O guarda-costas: um bundle vazio NAO e sucesso. Foi assim que 15
+  // releases sairam prometendo 500 efeitos e entregando zero.
+  const nOk = Object.keys(bundleManifest.files).length;
+  const ratio = selected.length ? nOk / selected.length : 0;
+  const minMB = Math.min(MIN_TOTAL_MB, SIZE_CAP_MB * 0.5);
+  if (ratio < MIN_OK_RATIO || filesSize / 1024 / 1024 < minMB) {
+    console.error(`\n❌ BUNDLE INSUFICIENTE: ${nOk}/${selected.length} arquivos (${(ratio*100).toFixed(0)}%), ${(filesSize/1024/1024).toFixed(0)} MB.`);
+    console.error(`   Minimo: ${(MIN_OK_RATIO*100).toFixed(0)}% e ${minMB} MB. O build PARA aqui de proposito.`);
+    process.exit(1);
+  }
 })().catch(err => {
   console.error('\n[FATAL]', err);
   process.exit(1);
