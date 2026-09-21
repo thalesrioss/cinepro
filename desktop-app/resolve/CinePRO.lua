@@ -120,10 +120,14 @@ local ESTILO = [[
   QTreeWidget { background-color: ]] .. COR.s1 .. [[; border: 1px solid ]] .. COR.borda .. [[;
                 border-radius: 10px; outline: 0; padding: 6px;
                 alternate-background-color: rgba(255,255,255,0.025); }
-  QTreeWidget::item { padding: 0px 6px; border-radius: 6px; }
+  /* Sem border-radius nem padding na celula: o Qt aplica os dois POR
+     CELULA, e a linha selecionada aparecia como dois blocos soltos
+     (visto no print). A faixa continua vale mais que o canto redondo. */
+  QTreeWidget::item { padding: 0px; border: 0px; }
   QTreeWidget::item:hover { background-color: ]] .. COR.glow1 .. [[; }
   QTreeWidget::item:selected { background-color: ]] .. COR.glow2 .. [[; color: ]] .. COR.forte .. [[; }
   QTreeWidget::item:selected:hover { background-color: ]] .. COR.glow3 .. [[; }
+  QTreeWidget::item:selected:!active { background-color: ]] .. COR.glow2 .. [[; color: ]] .. COR.forte .. [[; }
   QTreeWidget::branch { background: transparent; }
   QHeaderView::section { background-color: transparent; color: ]] .. COR.apagado .. [[;
                          border: 0px; padding: 4px 6px; font-size: 10px; font-weight: 600; }
@@ -681,7 +685,8 @@ local ehMac = (package.config:sub(1, 1) == "/")
 local win = disp:AddWindow({
   ID = "CineProPainel",
   WindowTitle = "CinePRO",
-  Geometry = { 150, 120, 900, 660 },
+  Geometry = { 150, 120, 920, 680 },
+  MinimumSize = { 760, 520 },
 }, ui:VGroup{
   Spacing = 10,
   Margin = 16,
@@ -749,7 +754,12 @@ pcall(function()
   itm.Lateral.RootIsDecorated = false
   itm.Lateral.Indentation = 0
   itm.Lateral.UniformRowHeights = true
-  itm.Lateral.ColumnWidth[1] = 44
+  -- A coluna do rotulo precisa de largura explicita: o padrao do Qt
+  -- e 100px e truncava "Restaurar midias" (visto no print). A da
+  -- contagem estica ate a borda, entao so a primeira importa.
+  itm.Lateral.ColumnWidth[0] = 196
+  itm.Lateral.ColumnWidth[1] = 48
+  itm.Lateral.HorizontalScrollMode = "ScrollPerPixel"
 end)
 
 -- Lista na ordem do Premiere: tile de play · nome · subcategoria ·
@@ -896,8 +906,8 @@ local function montarLateral()
 
   local function add(rotulo, chave, contagem, estilo)
     local it = itm.Lateral:NewItem()
-    it.Text[0] = rotulo
-    it.Text[1] = contagem and formatarMilhar(contagem) or ""
+    it.Text[0] = " " .. rotulo
+    it.Text[1] = contagem and (formatarMilhar(contagem) .. "  ") or ""
     pcall(function()
       it.TextAlignment[1] = 130    -- direita + centro vertical
       it.TextColor[1] = RGB.apagado
@@ -1016,9 +1026,9 @@ local function mostrar(achados, quantos)
     -- Tile de play a esquerda, como no Premiere: celula com fundo
     -- elevado e o glifo. Quando toca, o fundo acende em ciano.
     it.Text[0] = "▶"
-    it.Text[1] = e.nome
+    it.Text[1] = "  " .. e.nome
     it.Text[2] = (e.sub or ""):upper()
-    it.Text[3] = string.format("%.1fs", e.dur)
+    it.Text[3] = string.format("%.1fs", e.dur) .. "  "
     it.Text[4] = fav and "★" or (emCache and "●" or "○")
     pcall(function()
       it.BackgroundColor[0] = RGB.s2
@@ -1063,7 +1073,7 @@ local function mostrar(achados, quantos)
     if c ~= catAtual then
       catAtual = c
       pai = itm.Lista:NewItem()
-      pai.Text[1] = c
+      pai.Text[1] = "  " .. c
       pai.Text[2] = formatarMilhar(totalPorCat[c]) .. " EFEITOS"
       pai.Text[3] = ""
       pcall(function()
@@ -1117,8 +1127,8 @@ local function selecionado()
   if n == 0 then return nil end
   local alvo = sel[1]
   if not alvo or type(alvo) == "number" then return nil end
-  local nome = tostring(alvo.Text[1] or "")
-  local dur  = tostring(alvo.Text[3] or "")
+  local nome = (tostring(alvo.Text[1] or "")):gsub("^%s+", "")
+  local dur  = (tostring(alvo.Text[3] or "")):gsub("%s+$", "")
   if dur == "" then return nil end
   -- Nome E duracao: dois efeitos com o mesmo nome e duracao igual
   -- ate o centesimo nao acontece na pratica.
