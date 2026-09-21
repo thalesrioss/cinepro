@@ -634,10 +634,10 @@
   // ─── 7. Resolve ────────────────────────────────────────────
   function passo7() {
     caixaTexto.appendChild(el('h3', 'ig-h', 'DaVinci Resolve, se for o caso'));
-    paragrafo(caixaTexto, 'São dois caminhos. O primeiro <strong>não exige instalar nada</strong>: busque o efeito no app, clique pra baixar e arraste a linha direto pra timeline do Resolve.');
-    paragrafo(caixaTexto, 'Pra mandar vários de uma vez: marque os efeitos com <strong>→ Resolve</strong>, posicione o playhead e rode <strong>Workspace → Scripts → CinePRO Import</strong>. Eles entram no playhead, na primeira trilha de áudio livre.');
-    bloco(caixaTexto, 'ig-warn', 'É preciso reiniciar o Resolve', 'O script é instalado pelo próprio app, mas só aparece no menu Scripts depois que o Resolve reabre.');
-    bloco(caixaTexto, 'ig-info', 'Versão', 'Funciona no Resolve gratuito. Não precisa do Studio.');
+    paragrafo(caixaTexto, 'O app instala o painel sozinho. No Resolve, abra <strong>Workspace → Scripts → CinePRO</strong>: a biblioteca inteira dentro do editor — busca, ▶ ouve antes de colocar, favoritos, e <strong>Colocar no playhead</strong> na primeira trilha de áudio livre.');
+    paragrafo(caixaTexto, 'Dois atalhos pelo app, se preferir: <strong>arrastar</strong> a linha direto pra timeline, ou marcar vários com <strong>→ Resolve</strong> e rodar <strong>Workspace → Scripts → CinePRO Import</strong>.');
+    bloco(caixaTexto, 'ig-warn', 'É preciso reiniciar o Resolve', 'O painel é instalado pelo próprio app, mas só aparece no menu Scripts depois que o Resolve reabre.');
+    bloco(caixaTexto, 'ig-info', 'Versão', 'Funciona no Resolve gratuito. Não precisa do Studio — nem de Python.');
 
     var t = tela('Reprodução — Resolve');
     var corpo = chrome(t, 'CinePRO · busca');

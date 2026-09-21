@@ -319,7 +319,8 @@ function resolveInstalled() {
   try { return fs.existsSync(marker); } catch (e) { return false; }
 }
 
-// Instala/atualiza o script CinePRO Import.py na pasta de Scripts do Resolve.
+// Instala/atualiza o PAINEL do Resolve (CinePRO.lua) e o script de
+// importacao em lote (CinePRO Import.py) na pasta de Scripts do Resolve.
 // Chamado no boot do app (silencioso, idempotente).
 function installResolveScript() {
   // NAO condiciona a detectar o Resolve. O gate antigo (`if
@@ -331,9 +332,9 @@ function installResolveScript() {
   try {
     const dir = resolveScriptsDir();
     fs.mkdirSync(dir, { recursive: true });
-    // Import.py e o fluxo de producao. Painel (teste).py e a prova de
-    // conceito do UIManager — responde se da pra ter interface DENTRO
-    // do Resolve, que decide o proximo passo da plataforma.
+    // CinePRO.lua e o painel de verdade (biblioteca inteira dentro do
+    // Resolve, em Workspace > Scripts > CinePRO). Import.py e o caminho
+    // em lote a partir do app; segue instalado por compatibilidade.
     const scripts = ['CinePRO.lua', 'CinePRO Import.py'];
     let principal = false;
     for (const nome of scripts) {
@@ -411,7 +412,7 @@ function countQueue() {
 
 ipcMain.handle('resolve:status', () => ({
   installed: resolveInstalled(),
-  scriptInstalled: fs.existsSync(path.join(resolveScriptsDir(), 'CinePRO Import.py')),
+  scriptInstalled: fs.existsSync(path.join(resolveScriptsDir(), 'CinePRO.lua')),
   scriptsDir: resolveScriptsDir(),
   queueDir: RESOLVE_QUEUE,
   queued: countQueue(),
@@ -461,7 +462,7 @@ ipcMain.on('library:dragstart', (event, filePath) => {
 
 app.whenReady().then(() => {
   createWindow();
-  // DaVinci: mantém o script CinePRO Import atualizado na pasta do Resolve
+  // DaVinci: mantém o painel CinePRO.lua (e o Import.py) atualizados na pasta do Resolve
   setTimeout(installResolveScript, 3000);
 });
 

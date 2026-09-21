@@ -42,7 +42,13 @@ local ui = fu.UIManager
 local disp = bmd.UIDispatcher(ui)
 if not ui or not disp then print("[CinePRO] UIManager indisponivel.") return end
 
-local HOME = os.getenv("HOME") or ""
+-- Windows nao tem HOME; tem USERPROFILE. E o app do CinePRO usa o
+-- MESMO caminho ".../Library/Application Support/CinePRO" nos dois
+-- sistemas (desktop-app/main.js, CACHE_DIR) — entao o painel tambem,
+-- senao o cache deixa de ser compartilhado no Windows.
+local ehMac = (package.config:sub(1, 1) == "/")
+local HOME = os.getenv("HOME") or os.getenv("USERPROFILE") or ""
+if not ehMac then HOME = HOME:gsub("\\", "/") end
 local BASE = HOME .. "/Library/Application Support/CinePRO"
 local CACHE = BASE .. "/cache"
 local INDICE = BASE .. "/lua-index.tsv"
@@ -184,9 +190,27 @@ local function existe(caminho)
   return false
 end
 
+-- Shell portatil. No cmd do Windows, "mkdir -p" cria uma pasta
+-- CHAMADA "-p" e nao a que voce pediu; "mv" nao existe.
+local function mkdirp(pasta)
+  if ehMac then
+    os.execute('mkdir -p "' .. pasta .. '"')
+  else
+    os.execute('mkdir "' .. pasta:gsub("/", "\\") .. '" >nul 2>&1')
+  end
+end
+
+local function mover(de, para)
+  if ehMac then
+    os.execute('mv -f "' .. de .. '" "' .. para .. '"')
+  else
+    os.execute('move /Y "' .. de:gsub("/", "\\") .. '" "' .. para:gsub("/", "\\") .. '" >nul 2>&1')
+  end
+end
+
 local function baixar(url, destino)
   local pasta = destino:match("^(.*)/[^/]*$")
-  if pasta then os.execute('mkdir -p "' .. pasta .. '"') end
+  if pasta then mkdirp(pasta) end
   -- -f: sem ele, um 404 do CDN vira um arquivo com HTML dentro, e o
   -- Resolve "importa" um .wav que nao toca.
   shell('curl -sfL --max-time 120 -o "' .. destino .. '" "' .. url .. '"')
@@ -217,7 +241,7 @@ local function lerLinhas(caminho)
 end
 
 local function gravarLinhas(caminho, lista)
-  os.execute('mkdir -p "' .. BASE .. '"')
+  mkdirp(BASE)
   local f = io.open(caminho, "w")
   if not f then return end
   for i = 1, #lista do f:write(lista[i], "\n") end
@@ -235,9 +259,7 @@ local ehFav, usos = {}, {}
 
 local function trocarArquivo(de, para)
   local ok = pcall(function() return os.rename(de, para) end)
-  if not ok or existe(de) then
-    os.execute('mv -f "' .. de .. '" "' .. para .. '"')
-  end
+  if not ok or existe(de) then mover(de, para) end
 end
 
 -- `tentativa` e interno: o painel chama sem, e a recuperacao de
@@ -363,7 +385,7 @@ local function carregarUsos()
 end
 
 local function gravarUsos()
-  os.execute('mkdir -p "' .. BASE .. '"')
+  mkdirp(BASE)
   local f = io.open(USOS, "w")
   if not f then return end
   for id, n in pairs(usos) do f:write(id, "\t", n, "\n") end
@@ -682,8 +704,6 @@ end
 -- da lista de efeitos, e a barra de status fechando o painel — ela
 -- muda de cor conforme o estado.
 
-local ehMac = (package.config:sub(1, 1) == "/")
-
 local win = disp:AddWindow({
   ID = "CineProPainel",
   WindowTitle = "CinePRO",
@@ -836,7 +856,11 @@ local itemTocando = nil      -- linha da lista que esta tocando
 local timerFim = nil
 
 local function pararAudio()
-  if ehMac then os.execute("pkill -x afplay >/dev/null 2>&1") end
+  if ehMac then
+    os.execute("pkill -x afplay >/dev/null 2>&1")
+  else
+    os.execute('wmic process where "CommandLine like \'%cinepro-preview%\'" call terminate >nul 2>&1')
+  end
   if itemTocando then
     pcall(function()
       itemTocando.Text[1] = "▶"
@@ -852,10 +876,6 @@ end
 
 local function ouvir(e, item)
   pararAudio()
-  if not ehMac then
-    status("Preview de áudio só no macOS por enquanto.", "aviso")
-    return
-  end
   local caminho = nomeCache(e.id, e.nome, e.ext)
   if not existe(caminho) then
     status('Baixando "' .. e.nome .. '" pra ouvir…', "carregando")
@@ -864,7 +884,19 @@ local function ouvir(e, item)
       return
     end
   end
-  os.execute('afplay "' .. caminho .. '" >/dev/null 2>&1 &')
+  if ehMac then
+    os.execute('afplay "' .. caminho .. '" >/dev/null 2>&1 &')
+  else
+    -- MediaPlayer precisa de loop de mensagens: o Start-Sleep segura o
+    -- processo vivo ate o efeito acabar. "cinepro-preview" e so um
+    -- marcador na linha de comando pra pararAudio() achar o processo.
+    local seg = math.max(1, math.ceil(e.dur + 0.5))
+    local uri = "file:///" .. caminho:gsub("\\", "/")
+    local ps = "$cinepro='cinepro-preview'; Add-Type -AssemblyName PresentationCore; " ..
+               "$p = New-Object System.Windows.Media.MediaPlayer; $p.Open([uri]'" .. uri .. "'); " ..
+               "$p.Play(); Start-Sleep -Seconds " .. seg
+    os.execute('start /b "" powershell -NoProfile -WindowStyle Hidden -Command "' .. ps:gsub('"', '\\"') .. '" >nul 2>&1')
+  end
   tocando, itemTocando = e, item
   pcall(function()
     itm.Ouvir.Checked = true

@@ -3,11 +3,11 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta name="description" content="CinePRO — biblioteca de 11.000+ efeitos para Adobe Premiere Pro. 500 já no instalador para apply instantâneo, busca inteligente e drag-and-drop.">
-  <meta property="og:title" content="CinePRO — Plugin para Adobe Premiere Pro">
-  <meta property="og:description" content="11.000+ efeitos no Premiere Pro. Os 500 mais usados já vêm no instalador — apply instantâneo, zero rede pra travar seu workflow.">
+  <meta name="description" content="CinePRO — biblioteca de 11.000+ efeitos dentro do Adobe Premiere Pro e do DaVinci Resolve. 500 já no instalador para apply instantâneo, busca, preview e colocar no playhead.">
+  <meta property="og:title" content="CinePRO — Plugin para Premiere Pro e DaVinci Resolve">
+  <meta property="og:description" content="11.000+ efeitos dentro do Premiere Pro e do DaVinci Resolve. Os 500 mais usados já vêm no instalador — apply instantâneo, zero rede pra travar seu workflow.">
   <meta property="og:image" content="assets/banner.jpg">
-  <title>CinePRO — Plugin para Adobe Premiere Pro</title>
+  <title>CinePRO — Plugin para Premiere Pro e DaVinci Resolve</title>
   <link rel="icon" type="image/png" href="assets/logo.png">
   <link rel="stylesheet" href="css/tokens.css">
   <link rel="stylesheet" href="css/lp.css">
@@ -52,15 +52,14 @@
 
     <h1 class="hero-title">
       Uma biblioteca de efeitos.<br>
-      <span class="brand-gradient">Dentro do Premiere.</span>
+      <span class="brand-gradient">Dentro do Premiere e do Resolve.</span>
     </h1>
 
     <p class="hero-subtitle">
-      CinePRO é um painel integrado ao Adobe Premiere Pro com
-      <strong>11.000+ efeitos profissionais</strong>. Os 500 mais usados
+      CinePRO é um painel dentro do <strong>Adobe Premiere Pro</strong> e do
+      <strong>DaVinci Resolve</strong> com <strong>11.000+ efeitos profissionais</strong>.
+      Busca, ouve e coloca no playhead sem sair do editor. Os 500 mais usados
       já vêm dentro do instalador — <strong>apply instantâneo, sem esperar download.</strong>
-      No <strong>DaVinci Resolve</strong>, a mesma biblioteca chega pelo app:
-      você arrasta o arquivo direto pra timeline.
     </p>
 
     <div class="hero-cta">
@@ -80,6 +79,7 @@
       <span>macOS &amp; Windows</span>
       <span>Apple Silicon nativo</span>
       <span>Premiere Pro 2019+</span>
+      <span>Resolve 18+ · gratuito ou Studio</span>
       <span>Suporte em PT-BR</span>
     </div>
 
@@ -219,7 +219,7 @@
       <div class="feature-card">
         <div class="feature-icon">⊟</div>
         <h3>Painel integrado</h3>
-        <p>Extensão CEP instalada como janela permanente do workspace do Premiere Pro. Disponível em Janela → Extensões.</p>
+        <p>No Premiere, extensão CEP em <strong>Janela → Extensões</strong>. No Resolve, painel nativo em <strong>Workspace → Scripts → CinePRO</strong>. A mesma biblioteca, o mesmo fluxo, o mesmo cache.</p>
       </div>
       <div class="feature-card">
         <div class="feature-icon">↘</div>
@@ -296,27 +296,38 @@
 </section>
 
 <!-- ══════════ DAVINCI ══════════ -->
-<!-- Seção honesta: o Resolve não tem painel (a Blackmagic não permite
-     como o CEP da Adobe). Dizer isso na LP evita a decepção depois da
-     compra, que é o que gera reembolso e review ruim. -->
+<!-- O painel do Resolve é nativo (Lua no Fusion, zero pré-requisito —
+     não precisa nem de Python). Instalado pelo app. O que a LP promete
+     aqui é exatamente o que desktop-app/resolve/CinePRO.lua entrega. -->
 <section class="dv" id="davinci">
   <div class="container">
     <div class="dv-head">
       <span class="dv-eyebrow">DaVinci Resolve</span>
-      <h2 class="dv-title">A mesma biblioteca, sem sair do Resolve</h2>
+      <h2 class="dv-title">A mesma biblioteca, dentro do Resolve</h2>
       <p class="dv-sub">
-        O Resolve não aceita painel interno como o Premiere. Então o CinePRO
-        entrega os efeitos pelo app — e você tem dois caminhos, dependendo de
-        como prefere trabalhar.
+        Um painel nativo em <strong>Workspace → Scripts → CinePRO</strong>: busca,
+        preview, favoritos e "colocar no playhead" sem sair do editor. E dois
+        atalhos a mais pra quem trabalha em lote.
       </p>
     </div>
 
     <div class="dv-ways">
       <article class="dv-way">
-        <span class="dv-tag">Mais rápido</span>
+        <span class="dv-tag">O painel</span>
+        <h3>Dentro do Resolve</h3>
+        <p>
+          Abre em <strong>Workspace → Scripts → CinePRO</strong>. Busca nos 10.000+ efeitos,
+          <strong>▶ ouve antes de colocar</strong>, favorita, e
+          <strong>"Colocar no playhead"</strong> coloca na primeira trilha de áudio livre —
+          sem cobrir sua voz. Mesma lateral, mesmos atalhos, mesmo cache do Premiere.
+        </p>
+      </article>
+
+      <article class="dv-way">
+        <span class="dv-tag">Pelo app</span>
         <h3>Arrastar direto</h3>
         <p>
-          Busca no app, clica pra baixar e <strong>arrasta a linha pra timeline</strong>
+          Prefere o app? Busca, clica pra baixar e <strong>arrasta a linha pra timeline</strong>
           do Resolve. É o arquivo real saindo do app — nenhum passo extra.
         </p>
       </article>
@@ -327,15 +338,16 @@
         <p>
           Manda vários com <strong>"→ Resolve"</strong>, posiciona o playhead e roda
           <strong>Workspace → Scripts → CinePRO Import</strong>. Eles entram
-          <strong>no playhead</strong>, em trilha de áudio livre — sem cobrir sua voz.
+          <strong>no playhead</strong>, em trilha de áudio livre.
         </p>
       </article>
     </div>
 
     <div class="dv-note">
-      <strong>Funciona no Resolve gratuito.</strong> Não precisa do Studio. O script
-      é instalado pelo app automaticamente; se algo falhar, o app avisa e tem um
-      botão de reparo.
+      <strong>Funciona no Resolve gratuito.</strong> Não precisa do Studio — nem de Python.
+      O painel é instalado pelo app automaticamente; se o item não aparecer no menu
+      Scripts, reinicie o Resolve. Se algo falhar, o app avisa e tem um botão de reparo.
+      <strong>Restaurar mídias</strong> religa os efeitos do projeto quando você troca de máquina.
     </div>
   </div>
 </section>
@@ -459,7 +471,7 @@
           </tr>
           <tr>
             <td>DaVinci Resolve</td>
-            <td class="vs-self">✓ Arrastar direto ou script no playhead</td>
+            <td class="vs-self">✓ Painel nativo dentro do editor</td>
             <td>✗</td>
             <td>✗</td>
           </tr>

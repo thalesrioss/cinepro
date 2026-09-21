@@ -718,7 +718,7 @@ function renderLibResults(q) {
       window.cinepro.resolveSend(libAssetOf(f)).then(function (res) {
         if (res && res.ok) {
           btnRes.textContent = 'na fila (' + (res.queued || 1) + ')';
-          btnRes.title = 'No Resolve: Workspace → Scripts → CinePRO Import';
+          btnRes.title = 'No Resolve: Workspace → Scripts → CinePRO (painel) ou CinePRO Import (lote)';
           // Se o script não instalou, avisar AGORA — não deixar o usuário
           // descobrir no Resolve que não existe item no menu.
           if (res.scriptOk === false) {
@@ -772,14 +772,14 @@ function renderResolveStatus() {
     box.classList.toggle('is-warn', problema);
 
     if (!st.scriptInstalled) {
-      estado.textContent = 'Script do Resolve não instalado';
-      ajuda.innerHTML = 'Sem ele o botão "→ Resolve" enfileira o arquivo mas ' +
-        'o Resolve não tem como importar. Clique em Reparar — vamos gravar o ' +
-        'script em <code>' + escaparHtml(st.scriptsDir || '') + '</code>.';
+      estado.textContent = 'Painel do Resolve não instalado';
+      ajuda.innerHTML = 'Sem ele o Resolve não tem o CinePRO em Workspace → Scripts. ' +
+        'Clique em Reparar — vamos gravar o painel em ' +
+        '<code>' + escaparHtml(st.scriptsDir || '') + '</code>.';
       addBtn(acoes, 'Reparar instalação', 'btn--primary', function (b) {
         b.disabled = true; b.textContent = 'Instalando…';
         window.cinepro.resolveReinstall().then(function (r) {
-          if (r && r.ok) { showToast('Script instalado. Reinicie o Resolve.', 'success'); }
+          if (r && r.ok) { showToast('Painel instalado. Reinicie o Resolve.', 'success'); }
           else { showToast('Não consegui instalar: ' + ((r && r.error) || 'erro'), 'error'); }
           renderResolveStatus();
         });
@@ -787,15 +787,16 @@ function renderResolveStatus() {
     } else if (!st.installed) {
       // Script no lugar, mas não achamos o Resolve. Não é bloqueio —
       // a pasta de scripts é a mesma; só não dá pra confirmar.
-      estado.textContent = 'Script instalado · Resolve não detectado';
+      estado.textContent = 'Painel instalado · Resolve não detectado';
       ajuda.innerHTML = 'Se o Resolve estiver instalado em outro lugar, ' +
-        'continua funcionando: abra <strong>Workspace → Scripts → CinePRO Import</strong>. ' +
+        'continua funcionando: abra <strong>Workspace → Scripts → CinePRO</strong>. ' +
         'Se o item não aparecer no menu, reinicie o Resolve.';
     } else {
       estado.textContent = 'DaVinci Resolve pronto';
-      ajuda.innerHTML = 'Envie efeitos com <strong>"→ Resolve"</strong> e depois ' +
-        'rode <strong>Workspace → Scripts → CinePRO Import</strong>. ' +
-        'Os arquivos entram <strong>no playhead</strong>, em trilha de áudio livre.';
+      ajuda.innerHTML = 'No Resolve, abra <strong>Workspace → Scripts → CinePRO</strong>: ' +
+        'a biblioteca inteira, com busca, preview e favoritos, dentro do editor. ' +
+        'Pra mandar vários de uma vez daqui, use <strong>"→ Resolve"</strong> e rode ' +
+        '<strong>CinePRO Import</strong>. Tudo entra <strong>no playhead</strong>, em trilha de áudio livre.';
     }
 
     // Fila: o número precisa ser visível, senão o usuário clica várias
