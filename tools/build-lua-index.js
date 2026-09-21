@@ -13,9 +13,10 @@
 //  O Lua lê linha a linha com string.match — rápido e sem parser.
 //
 //  A coluna `packs` é pré-calculada AQUI, com o mesmo motor que o
-//  plugin do Premiere usa (js/sfx-engine.js). Assim o painel do
-//  Resolve tem os mesmos packs sem precisar do motor em Lua — e não
-//  existem duas implementações da regra pra divergir.
+//  plugin do Premiere usa (js/sfx-engine.js). O painel do Resolve
+//  IGNORA essa coluna desde set/2026 (decisão de produto: só efeitos),
+//  mas ela fica no formato — trocar pra 6 campos obrigaria todo
+//  cache em disco a se refazer, sem ganho pra ninguém.
 //
 //  Uso:  node tools/build-lua-index.js
 // =============================================================
@@ -101,18 +102,3 @@ console.log(`  ${comSub} efeitos com subcategoria (expandem na lateral)`);
 const curtos = itens.filter((f) => f.dur <= 1.2).length;
 const longos = itens.filter((f) => f.dur >= 20).length;
 console.log(`  ${curtos} curtos (cabem em corte) · ${longos} longos (cama sonora)`);
-
-// ── Config pro painel (chave<TAB>valor) ──────────────────────
-// O Lua do Resolve não tem parser JSON, e o diagnóstico precisa dos
-// MESMOS limites que o plugin usa. Em vez de repetir os números no
-// Lua (que divergiriam na primeira mudança), exportamos daqui —
-// data/diagnostics.json continua sendo a única fonte de verdade.
-const diag = RC.validateDiagnostics(
-  JSON.parse(fs.readFileSync(path.join(ROOT, 'data', 'diagnostics.json'), 'utf8'))
-).value;
-
-const cfg = Object.entries(diag).map(([k, v]) => `${k}\t${v}`);
-for (const r of recipes) cfg.push(`pack.${r.id}\t${r.label}`);
-
-fs.writeFileSync(path.join(ROOT, 'data', 'lua-config.tsv'), cfg.join('\n') + '\n', 'utf8');
-console.log(`✓ config do painel → data/lua-config.tsv (${cfg.length} chaves)`);

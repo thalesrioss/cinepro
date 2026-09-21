@@ -14,18 +14,11 @@
 --  pre-calculados pelo MESMO motor do Premiere (js/sfx-engine.js)
 --  — assim nao existem duas implementacoes da regra pra divergir.
 --
---  A UNICA regra reimplementada aqui e a do diagnostico, porque
---  ela precisa rodar com a timeline aberta e nao da pra chamar JS
---  de dentro do Resolve. Pra ela nao divergir do motor do Premiere,
---  autoTesteDiag() roda em toda abertura contra valores gerados
---  pelo proprio js/diagnostics.js — se divergir, grita no Console.
---
 --  Cache: MESMA pasta do app e do plugin, entao efeito ja baixado
 --  num editor nao baixa de novo no outro.
 -- =============================================================
 
 local CDN_INDEX  = "https://cdn.jsdelivr.net/gh/thalesrioss/cinepro@main/data/lua-index.tsv"
-local CDN_CONFIG = "https://cdn.jsdelivr.net/gh/thalesrioss/cinepro@main/data/lua-config.tsv"
 local CDN_FILES = "https://pub-6ace91bcabf540f0a54bb6850d188ef4.r2.dev/"
 -- Lote: o Qt fica lento se despejarmos 10 mil linhas de uma vez, e
 -- ninguem rola isso. O Premiere carrega em lotes pelo mesmo motivo.
@@ -53,7 +46,6 @@ local HOME = os.getenv("HOME") or ""
 local BASE = HOME .. "/Library/Application Support/CinePRO"
 local CACHE = BASE .. "/cache"
 local INDICE = BASE .. "/lua-index.tsv"
-local CONFIG = BASE .. "/lua-config.tsv"
 local FAVS   = BASE .. "/favoritos.txt"
 local RECS   = BASE .. "/recentes.txt"
 local USOS   = BASE .. "/usos.txt"       -- id<TAB>contagem, alimenta "Mais usados"
@@ -122,13 +114,6 @@ local ESTILO = [[
   QLineEdit:hover { border: 1px solid ]] .. COR.bordaBrand .. [[; }
   QLineEdit:focus { border: 1px solid ]] .. COR.brand .. [[; background-color: ]] .. COR.s1 .. [[; }
 
-  /* Abas */
-  QTabBar { background: transparent; }
-  QTabBar::tab { background: transparent; color: ]] .. COR.fraco .. [[; padding: 8px 14px;
-                 border: 0px; border-bottom: 2px solid transparent; font-weight: 600; }
-  QTabBar::tab:hover { color: ]] .. COR.texto .. [[; }
-  QTabBar::tab:selected { color: ]] .. COR.brand .. [[; border-bottom: 2px solid ]] .. COR.brand .. [[; }
-
   /* Listas */
   QTreeWidget { background-color: ]] .. COR.s1 .. [[; border: 1px solid ]] .. COR.borda .. [[;
                 border-radius: 10px; outline: 0; padding: 4px; }
@@ -160,9 +145,9 @@ local ESTILO = [[
                               border: 1px solid ]] .. COR.brand .. [[; }
   QPushButton#Favorito:checked { color: ]] .. COR.aviso .. [[; border: 1px solid ]] .. COR.aviso .. [[;
                                  background-color: ]] .. COR.avisoGlow .. [[; }
-  QPushButton#Mais, QPushButton#Atualizar, QPushButton#Repetir {
+  QPushButton#Mais, QPushButton#Atualizar {
                 background: transparent; border: 1px solid transparent; color: ]] .. COR.fraco .. [[; }
-  QPushButton#Mais:hover, QPushButton#Atualizar:hover, QPushButton#Repetir:hover {
+  QPushButton#Mais:hover, QPushButton#Atualizar:hover {
                 color: ]] .. COR.brand .. [[; border: 1px solid ]] .. COR.bordaSutil .. [[; }
 
   /* Barra de status: a cor vem do estado, via propriedade dinamica */
@@ -232,34 +217,11 @@ end
 -- ── Estado ──────────────────────────────────────────────────
 local EFEITOS, PORID = {}, {}
 local PORPREFIXO = {}          -- 8 primeiros chars do id → efeito
-local CATEGORIAS, PACKS = {}, {}
+local CATEGORIAS = {}
 local SUBS, CONTA_CAT = {}, {} -- categoria → subcategorias / contagem
 local expandido = {}           -- categoria → aberta na lateral
 local favoritos, recentes = {}, {}
 local ehFav, usos = {}, {}
-
--- Limites do diagnostico. Valores aqui sao so o PISO — os de verdade
--- vem de data/lua-config.tsv, exportado do mesmo diagnostics.json que
--- o plugin usa, pra nao existirem dois conjuntos de numeros.
-local CFG = { limitVertical = 2, limitHorizontal = 5, hardLimit = 8,
-              hookWindow = 5, maxFindings = 40 }
-
-local NOME_PACK = {}
-
-local function carregarConfig()
-  if not existe(CONFIG) then baixar(CDN_CONFIG, CONFIG) end
-  local f = io.open(CONFIG, "r")
-  if not f then return end
-  for l in f:lines() do
-    local k, v = l:match("^([^\t]+)\t(.+)$")
-    if k then
-      local pack = k:match("^pack%.(.+)$")
-      if pack then NOME_PACK[pack] = v
-      elseif tonumber(v) then CFG[k] = tonumber(v) end
-    end
-  end
-  f:close()
-end
 
 local function trocarArquivo(de, para)
   local ok = pcall(function() return os.rename(de, para) end)
@@ -292,9 +254,9 @@ local function carregarIndice(forcar, tentativa)
   if not f then return 0, "não consegui abrir o catálogo" end
 
   local efeitos, porId, porPrefixo = {}, {}, {}
-  local categorias, packs_ = {}, {}
+  local categorias = {}
   local subs, contaCat = {}, {}
-  local vistasCat, vistosPack = {}, {}
+  local vistasCat = {}
   local vistasSub = {}
 
   for linha in f:lines() do
@@ -303,7 +265,7 @@ local function carregarIndice(forcar, tentativa)
     if id and id ~= "" then
       local e = {
         id = id, nome = nome, ext = ext, dur = tonumber(dur) or 0,
-        cat = cat, sub = sub, packs = packs, busca = semAcento(nome),
+        cat = cat, sub = sub, busca = semAcento(nome),
       }
       efeitos[#efeitos + 1] = e
       porId[id] = e
@@ -328,9 +290,6 @@ local function carregarIndice(forcar, tentativa)
           vs[sub].n = vs[sub].n + 1
         end
       end
-      for p in packs:gmatch("[^,]+") do
-        if not vistosPack[p] then vistosPack[p] = true; packs_[#packs_ + 1] = p end
-      end
     end
   end
   f:close()
@@ -352,13 +311,12 @@ local function carregarIndice(forcar, tentativa)
   if temp then trocarArquivo(temp, INDICE) end
 
   table.sort(categorias)
-  table.sort(packs_)
   for _, lista in pairs(subs) do
     table.sort(lista, function(a, b) return a.nome < b.nome end)
   end
 
   EFEITOS, PORID, PORPREFIXO = efeitos, porId, porPrefixo
-  CATEGORIAS, PACKS = categorias, packs_
+  CATEGORIAS = categorias
   SUBS, CONTA_CAT = subs, contaCat
   return #EFEITOS, nil
 end
@@ -438,7 +396,7 @@ end
 
 -- ── Filtro ──────────────────────────────────────────────────
 -- categoria: "todos" | "favoritos" | "recentes" | "mais-usados"
---          | "pack:<id>" | "cat:<nome>" | "sub:<cat>\1<sub>"
+--          | "cat:<nome>" | "sub:<cat>\1<sub>"
 local function filtrar(categoria, termo)
   local achados = {}
   local t = (termo and termo ~= "") and semAcento(termo) or nil
@@ -483,7 +441,6 @@ local function filtrar(categoria, termo)
     return achados
   end
 
-  local pack = categoria:match("^pack:(.+)$")
   local cat  = categoria:match("^cat:(.+)$")
   -- Chave de subcategoria carrega a categoria junto (separadas por
   -- byte 1): "Whoosh" existe em mais de uma categoria, e clicar numa
@@ -495,10 +452,7 @@ local function filtrar(categoria, termo)
   for i = 1, #EFEITOS do
     local e = EFEITOS[i]
     local ok = true
-    if pack then
-      ok = false
-      for p in e.packs:gmatch("[^,]+") do if p == pack then ok = true; break end end
-    elseif subNome then
+    if subNome then
       ok = (e.cat == subCat and e.sub == subNome)
     elseif cat then
       ok = (e.cat == cat)
@@ -713,296 +667,10 @@ local function restaurarMidias(aviso)
   return msg
 end
 
--- ── Diagnóstico de retenção (ADR-011) ───────────────────────
--- Porte direto de js/diagnostics.js. Nao altera um frame: escreve
--- MARCADOR, e o editor apaga quando quiser.
---
--- Os limites NAO estao escritos aqui — vem de lua-config.tsv, que
--- sai do mesmo data/diagnostics.json que alimenta o Premiere.
-
-local SEV_COR = { high = "Red", medium = "Yellow", low = "Cyan" }
-
-local function arred(n) return math.floor(n * 100 + 0.5) / 100 end
-
--- O Lua 5.1 do Fusion imprime 14; o 5.3 imprime 14.0. Este texto vira
--- o NOME do marcador que o editor le na timeline — "14s" nas duas.
-local function num(n)
-  if n == math.floor(n) then return string.format("%d", n) end
-  return (string.format("%.2f", n):gsub("0+$", ""):gsub("%.$", ""))
-end
-
--- Cortes proximos demais sao o mesmo instante em trilhas diferentes:
--- 0,04s e um frame a 24fps, mesma tolerancia do motor do Premiere.
-local function batidas(cortes)
-  local b = {}
-  for i = 1, #cortes do b[i] = cortes[i] end
-  table.sort(b)
-  local out = {}
-  for i = 1, #b do
-    if #out == 0 or math.abs(b[i] - out[#out]) >= 0.04 then out[#out + 1] = b[i] end
-  end
-  return out
-end
-
--- tl = { cortes = {seg…}, dur = seg, w = px, h = px }
--- lim: so o auto-teste passa isto, pra conferir a REGRA com numeros
--- fixos. Se usasse CFG, mexer em diagnostics.json faria o teste
--- acusar divergencia que nao existe.
-local function analisarRitmo(tl, lim)
-  lim = lim or CFG
-  -- Mesma leitura do motor JS: sem largura valida, trata como
-  -- horizontal. Chutar vertical apertaria o limite pra 2s e encheria
-  -- a timeline de marcador que nao procede.
-  local vert = (tl.w or 0) > 0 and (tl.h or 0) > tl.w
-  local limite = vert and lim.limitVertical or lim.limitHorizontal
-  local b = batidas(tl.cortes or {})
-  local achados = {}
-
-  -- Gancho: o comeco decide se a pessoa fica.
-  local primeiro = (#b > 0) and b[1] or (tl.dur or 0)
-  if primeiro > lim.hookWindow then
-    achados[#achados + 1] = {
-      tipo = "slow-hook", at = 0, dur = arred(primeiro),
-      grav = (primeiro >= lim.hookWindow * 2) and "high" or "medium",
-      titulo = "Gancho lento: " .. num(arred(primeiro)) .. "s até o 1º corte",
-      nota = "O bloco de abertura (E1 do 7E) mira 3-5s. Corte antes ou " ..
-             "comece o vídeo mais perto do conflito.",
-    }
-  end
-
-  -- Vaos sem quebra de padrao. Inicio e fim da timeline entram como
-  -- fronteiras: o trecho final sem corte tambem derruba retencao.
-  local pts = { 0 }
-  for i = 1, #b do pts[#pts + 1] = b[i] end
-  if (tl.dur or 0) > 0 then pts[#pts + 1] = tl.dur end
-  for i = 1, #pts - 1 do
-    local a, z = pts[i], pts[i + 1]
-    local vao = z - a
-    if vao > limite then
-      local g = "low"
-      if vao >= lim.hardLimit then g = "high"
-      elseif vao >= limite * 2 then g = "medium" end
-      achados[#achados + 1] = {
-        tipo = "retention-gap", at = arred(a), dur = arred(vao), grav = g,
-        titulo = num(arred(vao)) .. "s sem quebra de padrão",
-        nota = "Limite para " .. (vert and "vertical" or "horizontal") .. ": " ..
-               num(limite) .. "s. Considere corte, lettering, B-roll ou SFX aqui.",
-      }
-    end
-  end
-
-  -- Pior primeiro: com teto de marcadores, o que sobra tem que ser o
-  -- que mais dói. Ordenar por tempo esconderia o problema grave do fim.
-  -- table.sort NAO e estavel — sem desempate pela ordem de entrada,
-  -- dois achados iguais trocariam de lugar entre execucoes.
-  local rank = { high = 0, medium = 1, low = 2 }
-  for i = 1, #achados do achados[i].ordem = i end
-  table.sort(achados, function(x, y)
-    if rank[x.grav] ~= rank[y.grav] then return rank[x.grav] < rank[y.grav] end
-    if x.dur ~= y.dur then return x.dur > y.dur end
-    return x.ordem < y.ordem
-  end)
-
-  local truncado = #achados > lim.maxFindings
-  while #achados > lim.maxFindings do table.remove(achados) end
-
-  local altos = 0
-  for i = 1, #achados do if achados[i].grav == "high" then altos = altos + 1 end end
-
-  return {
-    achados = achados,
-    formato = vert and "vertical" or "horizontal",
-    limite = limite,
-    dur = arred(tl.dur or 0),
-    total = #achados,
-    altos = altos,
-    truncado = truncado,
-    pior = (#achados > 0) and achados[1].dur or 0,
-  }
-end
-
--- Conferencia contra o motor do Premiere. Os numeros esperados foram
--- gerados por js/diagnostics.js (node), nao calculados a mao — e a
--- unica forma de saber que as duas implementacoes ainda concordam.
-local function autoTesteDiag()
-  -- Os mesmos DEFAULTS de js/diagnostics.js — e com eles que os
-  -- valores esperados abaixo foram gerados.
-  local LIM = { limitVertical = 2, limitHorizontal = 5, hardLimit = 8,
-                hookWindow = 5, maxFindings = 40 }
-  local casos = {
-    { tl = { cortes = {3, 6, 20, 22}, dur = 30, w = 1920, h = 1080 },
-      formato = "horizontal", total = 2, altos = 2, pior = 14,
-      esp = { {"high", 6, 14}, {"high", 22, 8} } },
-    { tl = { cortes = {7, 8, 9}, dur = 12, w = 1080, h = 1920 },
-      formato = "vertical", total = 3, altos = 0, pior = 7,
-      esp = { {"medium", 0, 7}, {"medium", 0, 7}, {"low", 9, 3} } },
-    { tl = { cortes = {2, 4, 6, 8, 10}, dur = 11, w = 1920, h = 1080 },
-      formato = "horizontal", total = 0, altos = 0, pior = 0, esp = {} },
-  }
-  local falhas = {}
-  for i = 1, #casos do
-    local c = casos[i]
-    local r = analisarRitmo(c.tl, LIM)
-    if r.formato ~= c.formato then falhas[#falhas + 1] = i .. ": formato " .. r.formato end
-    if r.total ~= c.total then falhas[#falhas + 1] = i .. ": total " .. r.total .. " (esperava " .. c.total .. ")" end
-    if r.altos ~= c.altos then falhas[#falhas + 1] = i .. ": graves " .. r.altos end
-    if r.pior ~= c.pior then falhas[#falhas + 1] = i .. ": pior " .. r.pior end
-    for j = 1, #c.esp do
-      local a, e = r.achados[j], c.esp[j]
-      if not a then
-        falhas[#falhas + 1] = i .. "." .. j .. ": achado faltando"
-      elseif a.grav ~= e[1] or a.at ~= e[2] or a.dur ~= e[3] then
-        falhas[#falhas + 1] = string.format("%d.%d: %s %g %gs (esperava %s %g %gs)",
-          i, j, a.grav, a.at, a.dur, e[1], e[2], e[3])
-      end
-    end
-  end
-  return falhas
-end
-
--- Le a montagem. Corte = inicio de clipe de video; o inicio da
--- timeline nao conta como corte (mesma regra do collectCutPoints).
-local function lerMontagem(proj, tl)
-  local fps = tonumber(proj:GetSetting("timelineFrameRate")) or 24
-  if fps <= 0 then fps = 24 end
-  -- Timeline do Resolve costuma comecar em 01:00:00:00. Sem
-  -- descontar isso, TODO corte viraria "3600s" e o diagnostico
-  -- devolveria besteira com cara de analise.
-  local frame0 = 0
-  local ok0 = pcall(function() frame0 = tl:GetStartFrame() or 0 end)
-  if not ok0 or type(frame0) ~= "number" then
-    frame0 = 0
-    pcall(function() frame0 = tcParaFrames(tl:GetStartTimecode(), fps) or 0 end)
-  end
-
-  local cortes, ultimo = {}, 0
-  local nTrilhas = tl:GetTrackCount("video") or 0
-  for t = 1, nTrilhas do
-    local itens = tl:GetItemListInTrack("video", t)
-    if itens then
-      local n = 0
-      pcall(function() n = #itens end)
-      for i = 1, n do
-        local it = itens[i]
-        if it and type(it) ~= "number" then
-          local ok1, ini = pcall(function() return it:GetStart() end)
-          local ok2, fim = pcall(function() return it:GetEnd() end)
-          if ok1 and type(ini) == "number" then
-            local seg = (ini - frame0) / fps
-            if seg > 0.05 then cortes[#cortes + 1] = seg end
-          end
-          if ok2 and type(fim) == "number" then
-            ultimo = math.max(ultimo, (fim - frame0) / fps)
-          end
-        end
-      end
-    end
-  end
-
-  -- Teto de 300 cortes, igual ao Premiere: acima disso e ruido e o
-  -- painel trava montando marcador que ninguem le.
-  cortes = batidas(cortes)
-  while #cortes > 300 do table.remove(cortes) end
-
-  local fimTl = 0
-  pcall(function() fimTl = ((tl:GetEndFrame() or 0) - frame0) / fps end)
-
-  return {
-    cortes = cortes,
-    dur = math.max(ultimo, fimTl),
-    w = tonumber(proj:GetSetting("timelineResolutionWidth")) or 0,
-    h = tonumber(proj:GetSetting("timelineResolutionHeight")) or 0,
-  }, fps
-end
-
--- Apaga SO os nossos marcadores: rodar de novo nao pode empilhar, e
--- encostar nos marcadores de trabalho do editor seria imperdoavel.
-local function limparMarcadores(tl)
-  local n = 0
-  for _, tipo in ipairs({ "cinepro:slow-hook", "cinepro:retention-gap" }) do
-    for _ = 1, 400 do
-      local ok, r = pcall(function() return tl:DeleteMarkerByCustomData(tipo) end)
-      if not (ok and r) then break end
-      n = n + 1
-    end
-  end
-  return n
-end
-
--- Devolve (mensagem, resultado). O resultado alimenta a aba
--- Diagnostico: lista de achados com gravidade, e o clique leva o
--- playhead ate o trecho. Antes so existia a frase na barra de
--- status — o editor tinha que cacar os marcadores na timeline.
-local function diagnosticar(aviso)
-  local pm = resolve:GetProjectManager()
-  local proj = pm and pm:GetCurrentProject() or nil
-  if not proj then return "Abra um projeto primeiro.", nil end
-  local tl = proj:GetCurrentTimeline()
-  if not tl then return "Abra uma timeline primeiro.", nil end
-
-  if aviso then aviso("Lendo a montagem…") end
-  local montagem, fps = lerMontagem(proj, tl)
-  if #montagem.cortes == 0 and montagem.dur <= 0 then
-    return "Timeline vazia — coloque seus takes primeiro.", nil
-  end
-
-  local r = analisarRitmo(montagem)
-  r.fps = fps
-  r.cortes = #montagem.cortes
-  r.timeline = tl
-  limparMarcadores(tl)
-
-  if #r.achados == 0 then
-    r.resumo = string.format("Ritmo ok: %d corte(s) em %gs, nada acima de %gs (%s).",
-      #montagem.cortes, r.dur, r.limite, r.formato)
-    return r.resumo, r
-  end
-
-  local escritos, recusados = 0, 0
-  for i = 1, #r.achados do
-    local a = r.achados[i]
-    local frame = math.max(0, math.floor(a.at * fps + 0.5))
-    a.frame = frame
-    local durFrames = math.max(1, math.floor(math.min(a.dur, 5) * fps + 0.5))
-    local ok, feito = pcall(function()
-      return tl:AddMarker(frame, SEV_COR[a.grav] or "Blue",
-        "CinePRO · " .. a.titulo, a.nota, durFrames, "cinepro:" .. a.tipo)
-    end)
-    -- O Resolve recusa marcador em frame que ja tem um. Nao e erro
-    -- nosso: e marcador do editor, e ele fica onde esta.
-    if ok and feito then escritos = escritos + 1 else recusados = recusados + 1 end
-  end
-
-  local msg = string.format("%d ponto(s) de atenção — %d grave(s). Pior: %gs. Formato %s (limite %gs).",
-    escritos, r.altos, r.pior, r.formato, r.limite)
-  if recusados > 0 then
-    msg = msg .. " " .. recusados .. " frame(s) já tinham marcador seu."
-  end
-  if r.truncado then msg = msg .. " Lista limitada aos mais graves." end
-  r.resumo = msg
-  return msg, r
-end
-
--- Leva o playhead ate um achado. E o que transforma a lista em
--- ferramenta: ver o problema e ja estar em cima dele.
-local function irParaAchado(r, a)
-  if not (r and r.timeline and a and a.frame) then return false end
-  local fps = r.fps or 24
-  local frame0 = 0
-  pcall(function() frame0 = r.timeline:GetStartFrame() or 0 end)
-  local abs = frame0 + a.frame
-  local h = math.floor(abs / (fps * 3600)); abs = abs - h * fps * 3600
-  local m = math.floor(abs / (fps * 60));   abs = abs - m * fps * 60
-  local s = math.floor(abs / fps);          local f = math.floor(abs - s * fps + 0.5)
-  local tc = string.format("%02d:%02d:%02d:%02d", h, m, s, f)
-  local ok = pcall(function() r.timeline:SetCurrentTimecode(tc) end)
-  return ok, tc
-end
-
 -- ── Interface ───────────────────────────────────────────────
--- Estrutura: cabecalho (marca + contagem), busca, e embaixo a
--- lateral ao lado de duas abas — Efeitos e Diagnostico. A barra de
--- status fecha o painel e muda de cor conforme o estado.
+-- Estrutura: cabecalho (marca + contagem), busca, lateral ao lado
+-- da lista de efeitos, e a barra de status fechando o painel — ela
+-- muda de cor conforme o estado.
 
 local ehMac = (package.config:sub(1, 1) == "/")
 
@@ -1031,50 +699,18 @@ local win = disp:AddWindow({
     ui:VGroup{
       Weight = 0.70,
       Spacing = 6,
-      ui:TabBar{ ID = "Abas", Weight = 0 },
-      -- Nao e ui:Stack de proposito: o CurrentIndex dele devolve lixo
-      -- (-1/-2) e nao da pra confiar que trocou. Hidden nas paginas
-      -- le de volta o que foi escrito — testado no 21.1.
-      ui:VGroup{
-        ID = "Paginas",
-        Weight = 1,
-        Spacing = 0,
-
-        -- Pagina 0: efeitos
-        ui:VGroup{
-          ID = "PagEfeitos",
-          Spacing = 6,
-          ui:Tree{ ID = "Lista", Weight = 1 },
-          ui:HGroup{
-            Weight = 0,
-            Spacing = 6,
-            ui:Button{ ID = "Ouvir",    Text = "▶  Ouvir", Checkable = true, Weight = 0 },
-            ui:Button{ ID = "Favorito", Text = "★", Checkable = true, Weight = 0 },
-            ui:Button{ ID = "Colocar",  Text = "Colocar no playhead", Weight = 1 },
-            ui:Button{ ID = "Mais",     Text = "Carregar mais", Weight = 0 },
-            ui:Button{ ID = "Atualizar", Text = "↻", Weight = 0 },
-          },
-          ui:Label{ ID = "Dica", Weight = 0,
-                    Text = "Duplo-clique coloca no playhead  ·  ▶ ouve antes de colocar  ·  ★ favorita" },
-        },
-
-        -- Pagina 1: diagnostico
-        ui:VGroup{
-          ID = "PagDiag",
-          Spacing = 6,
-          ui:Label{ ID = "DiagResumo", Weight = 0, WordWrap = true,
-                    Text = "Analisa o ritmo da montagem e marca onde a retenção cai. Não altera nada — só escreve marcadores." },
-          ui:Tree{ ID = "DiagLista", Weight = 1 },
-          ui:HGroup{
-            Weight = 0,
-            Spacing = 6,
-            ui:Button{ ID = "Analisar", Text = "Analisar a timeline", Weight = 1 },
-            ui:Button{ ID = "Repetir",  Text = "Limpar marcadores", Weight = 0 },
-          },
-          ui:Label{ ID = "DicaDiag", Weight = 0,
-                    Text = "Clique num achado pra levar o playhead até ele." },
-        },
+      ui:Tree{ ID = "Lista", Weight = 1 },
+      ui:HGroup{
+        Weight = 0,
+        Spacing = 6,
+        ui:Button{ ID = "Ouvir",    Text = "▶  Ouvir", Checkable = true, Weight = 0 },
+        ui:Button{ ID = "Favorito", Text = "★", Checkable = true, Weight = 0 },
+        ui:Button{ ID = "Colocar",  Text = "Colocar no playhead", Weight = 1 },
+        ui:Button{ ID = "Mais",     Text = "Carregar mais", Weight = 0 },
+        ui:Button{ ID = "Atualizar", Text = "↻", Weight = 0 },
       },
+      ui:Label{ ID = "Dica", Weight = 0,
+                Text = "Duplo-clique coloca no playhead  ·  ▶ ouve antes de colocar  ·  ★ favorita" },
     },
   },
 
@@ -1095,20 +731,6 @@ pcall(function()
   FONTE_TITULO  = ui:Font{ Bold = true, PixelSize = 15 }
   itm.Marca.Font = FONTE_TITULO
 end)
-
-local function mostrarPagina(i)
-  pcall(function()
-    itm.PagEfeitos.Hidden = (i ~= 0)
-    itm.PagDiag.Hidden    = (i ~= 1)
-    if itm.Abas.CurrentIndex ~= i then itm.Abas.CurrentIndex = i end
-  end)
-end
-
-pcall(function()
-  itm.Abas:AddTab("Efeitos")
-  itm.Abas:AddTab("Diagnóstico")
-end)
-mostrarPagina(0)
 
 -- Lateral: sem cabecalho, sem linhas de arvore, contagem numa
 -- coluna propria alinhada a direita (igual ao Premiere).
@@ -1133,31 +755,17 @@ pcall(function()
   itm.Lista.ColumnWidth[3] = 64
 end)
 
--- Diagnostico: gravidade · tempo · o que · duracao
-pcall(function()
-  itm.DiagLista.ColumnCount = 4
-  itm.DiagLista:SetHeaderLabels({ "", "Tempo", "Achado", "Duração" })
-  itm.DiagLista.RootIsDecorated = false
-  itm.DiagLista.Indentation = 0
-  itm.DiagLista.ColumnWidth[0] = 24
-  itm.DiagLista.ColumnWidth[1] = 56
-  itm.DiagLista.ColumnWidth[3] = 64
-end)
-
 pcall(function()
   itm.Ouvir.ToolTip     = "Toca o efeito antes de colocar. Clique de novo pra parar."
   itm.Favorito.ToolTip  = "Guarda nos favoritos (aparece na lateral)."
   itm.Colocar.ToolTip   = "Coloca no playhead, na primeira trilha de áudio livre. Duplo-clique faz o mesmo."
   itm.Mais.ToolTip      = "Mostra mais " .. LOTE .. " efeitos desta lista."
   itm.Atualizar.ToolTip = "Baixa o catálogo mais recente."
-  itm.Analisar.ToolTip  = "Lê os cortes da timeline e marca onde a atenção cai."
-  itm.Repetir.ToolTip   = "Apaga só os marcadores do CinePRO. Os seus ficam."
   itm.Busca.ToolTip     = "Busca por nome, sem acento. Filtra dentro da categoria escolhida."
 end)
 
 local visiveis, ativa = {}, "todos"
 local chaveDaLinha, LINHAS, ITENS_LAT = {}, {}, {}
-local ultimoDiag = nil
 
 -- ── Status semantico ────────────────────────────────────────
 -- A cor diz o estado antes do texto: verde deu certo, ciano esta
@@ -1240,12 +848,12 @@ end
 -- sistema e ja quebrou o alinhamento do painel uma vez.
 local ICONE = {
   todos = "▦", favoritos = "★", recentes = "◷", usados = "▲",
-  restaurar = "⟲", diagnostico = "◎", pack = "◆", sub = "·",
+  restaurar = "⟲", sub = "·",
 }
 
--- Ordem identica a do Premiere: Todos, Favoritos, Recentes, Mais
--- usados, Restaurar midias, Diagnostico, packs, categorias. Quem
--- troca de editor no meio do trabalho nao pode ter que reaprender.
+-- Ordem: Todos, Favoritos, Recentes, Mais usados, Restaurar midias,
+-- categorias. So efeitos — packs e diagnostico ficaram de fora do
+-- Resolve por decisao de produto (setembro/2026).
 local function montarLateral()
   pcall(function() itm.Lateral:Clear() end)
   chaveDaLinha, LINHAS, ITENS_LAT = {}, {}, {}
@@ -1293,14 +901,6 @@ local function montarLateral()
     add(ICONE.usados .. "  Mais usados", "mais-usados", math.min(nUsados, MAX_USADOS))
   end
   add(ICONE.restaurar .. "  Restaurar mídias", "acao:restaurar", nil, "acao")
-  add(ICONE.diagnostico .. "  Diagnóstico", "acao:diagnostico", nil, "acao")
-
-  if #PACKS > 0 then
-    separador("Packs prontos")
-    for i = 1, #PACKS do
-      add(ICONE.pack .. "  " .. (NOME_PACK[PACKS[i]] or PACKS[i]), "pack:" .. PACKS[i])
-    end
-  end
 
   if #CATEGORIAS > 0 then
     separador("Categorias")
@@ -1495,84 +1095,10 @@ local function sincronizarBotoes()
   end)
 end
 
--- ── Aba Diagnostico ─────────────────────────────────────────
-local GLIFO_GRAV = { high = "●", medium = "●", low = "●" }
-local COR_GRAV   = { high = RGB.erro, medium = RGB.aviso, low = RGB.brand }
-local NOME_GRAV  = { high = "grave", medium = "média", low = "leve" }
-
-local function fmtTempo(seg)
-  seg = math.max(0, seg or 0)
-  local m = math.floor(seg / 60)
-  local s = math.floor(seg % 60)
-  return string.format("%d:%02d", m, s)
-end
-
-local function mostrarDiagnostico(r)
-  pcall(function() itm.DiagLista:Clear() end)
-  ultimoDiag = r
-  if not r then return end
-
-  pcall(function()
-    itm.DiagResumo.Text = r.resumo or ""
-    itm.DiagResumo:SetPaletteColor("Active", "WindowText", (r.altos or 0) > 0 and RGB.aviso or RGB.ok)
-  end)
-
-  if #r.achados == 0 then
-    local it = itm.DiagLista:NewItem()
-    it.Text[2] = "Nenhum trecho acima do limite. O ritmo está segurando a atenção."
-    pcall(function() it.TextColor[2] = RGB.ok; it.SizeHint[0] = { 0, 44 } end)
-    itm.DiagLista:AddTopLevelItem(it)
-    return
-  end
-
-  for i = 1, #r.achados do
-    local a = r.achados[i]
-    local it = itm.DiagLista:NewItem()
-    it.Text[0] = GLIFO_GRAV[a.grav] or "●"
-    it.Text[1] = fmtTempo(a.at)
-    it.Text[2] = a.titulo
-    it.Text[3] = num(a.dur) .. "s"
-    pcall(function()
-      it.TextColor[0] = COR_GRAV[a.grav] or RGB.fraco
-      it.TextColor[1] = RGB.fraco
-      it.TextColor[2] = RGB.texto
-      it.TextColor[3] = RGB.fraco
-      it.TextAlignment[0] = 132
-      it.TextAlignment[3] = 130
-      it.SizeHint[0] = { 0, 30 }
-      it.ToolTip[2] = a.nota .. "\n\nGravidade " .. (NOME_GRAV[a.grav] or a.grav) .. ". Clique pra ir até lá."
-    end)
-    itm.DiagLista:AddTopLevelItem(it)
-  end
-end
-
-local function rodarDiagnostico()
-  mostrarPagina(1)
-  status("Analisando a montagem…", "carregando")
-  local msg, r = diagnosticar(function(t) status(t, "carregando") end)
-  mostrarDiagnostico(r)
-  if r then
-    status(msg, (r.altos or 0) > 0 and "aviso" or "ok")
-  else
-    status(msg, "erro")
-  end
-end
-
 -- ── Carga inicial ───────────────────────────────────────────
 status("Carregando catálogo…", "carregando")
-carregarConfig()
 carregarPrefs()
 carregarUsos()
-
--- Confere o diagnostico contra o motor do Premiere antes de abrir.
--- Silencioso quando bate; se divergir, o Console mostra ONDE.
-local falhasDiag = autoTesteDiag()
-if #falhasDiag > 0 then
-  print("[CinePRO] ATENCAO: o diagnostico divergiu do motor do Premiere:")
-  for i = 1, #falhasDiag do print("  - " .. falhasDiag[i]) end
-else
-  print("[CinePRO] diagnostico confere com o motor do Premiere.")
-end
 
 local total, erro = carregarIndice(false)
 if total > 0 then
@@ -1608,11 +1134,6 @@ win.On.Busca.TextChanged = function(ev)
   end
 end
 
-win.On.Abas.CurrentChanged = function(ev)
-  local i = (ev and ev.Index) or itm.Abas.CurrentIndex or 0
-  mostrarPagina(i)
-end
-
 win.On.Lateral.ItemClicked = function(ev)
   local alvo = ev and ev.item
   if not alvo or type(alvo) == "number" then
@@ -1643,14 +1164,6 @@ win.On.Lateral.ItemClicked = function(ev)
     montarLateral()
     return
   end
-  if chave == "acao:diagnostico" then
-    rodarDiagnostico()
-    montarLateral()
-    return
-  end
-
-  mostrarPagina(0)
-
   -- Categoria com subcategoria abre/fecha, igual ao Premiere — e ja
   -- mostra os efeitos dela, sem exigir um segundo clique.
   local cat = chave:match("^cat:(.+)$")
@@ -1723,41 +1236,6 @@ win.On.Atualizar.Clicked = function(ev)
     if err then status(err, "aviso") else status("Catálogo atualizado: " .. formatarMilhar(n) .. " efeitos.", "ok") end
   else
     status("Erro: " .. (err or "catálogo vazio"), "erro")
-  end
-end
-
-win.On.Analisar.Clicked = function(ev) rodarDiagnostico() end
-
-win.On.Repetir.Clicked = function(ev)
-  local pm = resolve:GetProjectManager()
-  local proj = pm and pm:GetCurrentProject() or nil
-  local tl = proj and proj:GetCurrentTimeline() or nil
-  if not tl then status("Abra uma timeline primeiro.", "aviso") return end
-  local n = limparMarcadores(tl)
-  mostrarDiagnostico(nil)
-  pcall(function() itm.DiagResumo.Text = "Marcadores do CinePRO apagados. Os seus ficaram." end)
-  status(n .. " marcador(es) do CinePRO apagado(s).", "ok")
-end
-
-win.On.DiagLista.ItemClicked = function(ev)
-  if not ultimoDiag then return end
-  local alvo = ev and ev.item
-  if not alvo or type(alvo) == "number" then
-    local sel = itm.DiagLista:SelectedItems()
-    local n = 0
-    if sel then pcall(function() n = #sel end) end
-    if n == 0 then return end
-    alvo = sel[1]
-  end
-  if not alvo or type(alvo) == "number" then return end
-  local ok, idx = pcall(function() return itm.DiagLista:IndexOfTopLevelItem(alvo) end)
-  local a = (ok and type(idx) == "number") and ultimoDiag.achados[idx + 1] or nil
-  if not a then return end
-  local foi, tc = irParaAchado(ultimoDiag, a)
-  if foi then
-    status("Playhead em " .. tostring(tc) .. " — " .. a.titulo, "ok")
-  else
-    status("Não consegui mover o playhead.", "erro")
   end
 end
 
