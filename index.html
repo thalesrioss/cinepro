@@ -127,15 +127,19 @@
       <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
         <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
       </svg>
-      <input type="text" class="search-input" id="search-input" placeholder="Buscar em todos os efeitos...">
-      <button class="search-clear" id="search-clear" title="Limpar" style="display:none;">✕</button>
+      <input type="text" class="search-input" id="search-input" placeholder="Buscar em todos os efeitos..." title="Buscar · ⌘F ou /">
+      <button class="search-clear" id="search-clear" title="Limpar busca" style="display:none;">✕</button>
+    </div>
+    <div class="search-helper" aria-live="polite">
+      <span>⌘F • / • Enter</span>
+      <button type="button" class="shortcut-help-btn" id="btn-shortcuts-help" aria-label="Ver atalhos do teclado" title="Ver atalhos do teclado">?</button>
     </div>
     <div class="view-toggle">
       <button class="view-toggle-btn" id="view-list-btn" title="Lista" aria-label="Ver em lista">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
       </button>
       <button class="view-toggle-btn" id="view-grid-btn" title="Grade" aria-label="Ver em grade">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="4"/><rect x="14" y="11" width="7" height="10"/><rect x="3" y="14" width="7" height="7"/></svg>
       </button>
     </div>
   </div>
@@ -173,7 +177,86 @@
 <!-- TOAST -->
 <div class="toast" id="toast"></div>
 
-<!-- (modal preview removido — preview agora é inline no card) -->
+<script>
+  (function () {
+    function clearActiveSearch() {
+      var input = document.getElementById('search-input');
+      var clear = document.getElementById('search-clear');
+      if (!input) return;
+      input.value = '';
+      if (clear) clear.style.display = 'none';
+      if (window.filterEffects) window.filterEffects('');
+      input.focus();
+    }
+
+    function applyStoredViewMode() {
+      var mode = localStorage.getItem('cinepro_view_mode');
+      if (mode !== 'list' && mode !== 'grid') return;
+      if (window.setViewMode) {
+        window.setViewMode(mode);
+      } else {
+        var grid = document.getElementById('effects-grid');
+        if (grid) {
+          grid.classList.toggle('view-list', mode === 'list');
+          grid.classList.toggle('view-grid', mode === 'grid');
+        }
+        var listBtn = document.getElementById('view-list-btn');
+        var gridBtn = document.getElementById('view-grid-btn');
+        if (listBtn) listBtn.classList.toggle('is-active', mode === 'list');
+        if (gridBtn) gridBtn.classList.toggle('is-active', mode === 'grid');
+      }
+    }
+
+    var listBtn = document.getElementById('view-list-btn');
+    var gridBtn = document.getElementById('view-grid-btn');
+    if (listBtn) {
+      listBtn.addEventListener('click', function () {
+        localStorage.setItem('cinepro_view_mode', 'list');
+        if (window.setViewMode) window.setViewMode('list');
+      });
+    }
+    if (gridBtn) {
+      gridBtn.addEventListener('click', function () {
+        localStorage.setItem('cinepro_view_mode', 'grid');
+        if (window.setViewMode) window.setViewMode('grid');
+      });
+    }
+
+    var helpBtn = document.getElementById('btn-shortcuts-help');
+    if (helpBtn) {
+      helpBtn.addEventListener('click', function () {
+        if (window.showToast) {
+          window.showToast('Atalhos: ⌘F / / busca • Enter aplica • ⌘D favorita • Esc limpa', 'success');
+        }
+      });
+    }
+
+    var searchClear = document.getElementById('search-clear');
+    if (searchClear) {
+      searchClear.addEventListener('click', clearActiveSearch);
+    }
+
+    var grid = document.getElementById('effects-grid');
+    if (grid) {
+      var emptyObserver = new MutationObserver(function () {
+        if (!grid) return;
+        var stateBox = grid.querySelector('.state-box');
+        if (!stateBox) return;
+        if (stateBox.querySelector('.empty-action')) return;
+
+        var emptyAction = document.createElement('button');
+        emptyAction.type = 'button';
+        emptyAction.className = 'empty-action';
+        emptyAction.textContent = 'Limpar busca';
+        emptyAction.addEventListener('click', clearActiveSearch);
+        stateBox.appendChild(emptyAction);
+      });
+      emptyObserver.observe(grid, { childList: true, subtree: true });
+    }
+
+    applyStoredViewMode();
+  })();
+</script>
 
 </body>
 </html>
