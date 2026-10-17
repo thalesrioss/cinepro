@@ -34,18 +34,27 @@ echo "→ Buildando desktop app (Electron)..."
 if [ ! -d "$ELECTRON_DIR/node_modules" ]; then
   ( cd "$ELECTRON_DIR" && npm install --silent )
 fi
-( cd "$ELECTRON_DIR" && npx electron-builder --mac --dir 2>&1 | tail -5 )
+# --universal: um binário só com x86_64 + arm64. Antes o script pegava
+# mac-arm64 primeiro e o .pkg saía só para Apple Silicon (Intel não abria).
+( cd "$ELECTRON_DIR" && npx electron-builder --mac --universal --dir 2>&1 | tail -5 )
 
-# A .app gerada vai pra installer/dist/mac-arm64/CinePRO.app
-ELECTRON_APP="$DIST/mac-arm64/CinePRO.app"
-if [ ! -d "$ELECTRON_APP" ]; then
-  ELECTRON_APP="$DIST/mac/CinePRO.app"
-fi
+# A .app universal vai pra installer/dist/mac-universal/CinePRO.app.
+# Sem fallback para mac-arm64/mac: se não saiu universal, não sai .pkg.
+ELECTRON_APP="$DIST/mac-universal/CinePRO.app"
 
 if [ ! -d "$ELECTRON_APP" ]; then
-  echo "❌ Não achei a CinePRO.app gerada pelo Electron"
+  echo "❌ Não achei a CinePRO.app universal em $ELECTRON_APP"
   exit 1
 fi
+
+ARCHS="$(lipo -archs "$ELECTRON_APP/Contents/MacOS/CinePRO")"
+for arch in x86_64 arm64; do
+  case " $ARCHS " in
+    *" $arch "*) ;;
+    *) echo "❌ CinePRO.app não é universal (lipo: $ARCHS)"; exit 1 ;;
+  esac
+done
+echo "  ✓ Arquiteturas: $ARCHS"
 
 echo "  ✓ App em: $ELECTRON_APP ($(du -sh "$ELECTRON_APP" | cut -f1))"
 

@@ -32,6 +32,8 @@ installer/dist/*.blockmap
 installer/dist/mac/
 installer/dist/mac-arm64/
 installer/dist/mac-x64/
+installer/dist/mac-universal/
+installer/dist/mac-universal-*-temp/
 installer/dist/win-unpacked/
 installer/dist/builder-debug.yml
 installer/dist/builder-effective-config.yaml
