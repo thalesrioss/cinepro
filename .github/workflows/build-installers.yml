@@ -12,10 +12,24 @@ on:
       - 'v*'
 
 jobs:
+  # ──────────────── Testes ────────────────
+  # Roda antes de tudo: teste vermelho não baixa o bundle nem gera
+  # instalador. Suíte nova em tools/test-*.js entra sozinha (BL-0003).
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Rodar todas as suítes
+        run: bash tools/run-all-tests.sh
+
   # ──────────────── Bundled Essentials (~400MB) ────────────────
   # Gera o pack de assets uma vez e compartilha entre Mac/Windows
   build-bundle:
     runs-on: ubuntu-latest
+    needs: test
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4

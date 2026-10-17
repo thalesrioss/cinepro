@@ -33,6 +33,15 @@ npm install
 firebase deploy --only functions
 ```
 
+## Testes
+
+```bash
+# Todas as suítes tools/test-*.js + tools/check-lua.js (sai ≠0 se uma falhar)
+./tools/run-all-tests.sh
+```
+
+O workflow `build-installers.yml` roda o mesmo script antes do build.
+
 ## Build dos installers
 
 ```bash
