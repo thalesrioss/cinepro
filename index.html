@@ -34,6 +34,7 @@
   <script src="js/remote-config.js?v=1.0.16" defer></script>
   <script src="js/sfx-engine.js?v=1.0.16" defer></script>
   <script src="js/diagnostics.js?v=1.0.16" defer></script>
+  <script src="js/empty-state.js?v=1.0.16" defer></script>
   <script src="js/main.js?v=1.0.16" defer></script>
 </head>
 <body>
@@ -176,118 +177,6 @@
 
 <!-- TOAST -->
 <div class="toast" id="toast"></div>
-
-<script>
-  (function () {
-    function showToast(message, type) {
-      var toast = document.getElementById('toast');
-      if (!toast) return;
-      toast.textContent = message;
-      toast.className = 'toast visible' + (type ? ' toast-' + type : '');
-      clearTimeout(showToast.timer);
-      showToast.timer = setTimeout(function () {
-        toast.className = 'toast';
-      }, 2200);
-    }
-
-    function clearActiveSearch() {
-      var input = document.getElementById('search-input');
-      var clear = document.getElementById('search-clear');
-      if (!input) return;
-      input.value = '';
-      if (clear) clear.style.display = 'none';
-      if (typeof window.filterEffects === 'function') {
-        window.filterEffects('');
-      }
-      input.focus();
-    }
-
-    function setViewMode(mode) {
-      var grid = document.getElementById('effects-grid');
-      var listBtn = document.getElementById('view-list-btn');
-      var gridBtn = document.getElementById('view-grid-btn');
-      if (grid) {
-        grid.classList.toggle('view-list', mode === 'list');
-      }
-      if (listBtn) listBtn.classList.toggle('is-active', mode === 'list');
-      if (gridBtn) gridBtn.classList.toggle('is-active', mode === 'grid');
-    }
-
-    function applyStoredViewMode() {
-      var mode = localStorage.getItem('cinepro_view_mode');
-      if (mode !== 'list' && mode !== 'grid') return;
-      setViewMode(mode);
-    }
-
-    var input = document.getElementById('search-input');
-    if (input) {
-      input.addEventListener('input', function () {
-        var clear = document.getElementById('search-clear');
-        if (clear) clear.style.display = input.value ? 'flex' : 'none';
-      });
-      input.addEventListener('keydown', function (event) {
-        if (event.key === 'Escape') {
-          clearActiveSearch();
-        }
-      });
-    }
-
-    var listBtn = document.getElementById('view-list-btn');
-    var gridBtn = document.getElementById('view-grid-btn');
-    if (listBtn) {
-      listBtn.addEventListener('click', function () {
-        localStorage.setItem('cinepro_view_mode', 'list');
-        setViewMode('list');
-        showToast('Modo lista ativado', 'success');
-      });
-    }
-    if (gridBtn) {
-      gridBtn.addEventListener('click', function () {
-        localStorage.setItem('cinepro_view_mode', 'grid');
-        setViewMode('grid');
-        showToast('Modo grade ativado', 'success');
-      });
-    }
-
-    var helpBtn = document.getElementById('btn-shortcuts-help');
-    if (helpBtn) {
-      helpBtn.addEventListener('click', function () {
-        showToast('Atalhos: ⌘F / / busca • Enter aplica • ⌘D favorita • Esc limpa', 'success');
-      });
-    }
-
-    var searchClear = document.getElementById('search-clear');
-    if (searchClear) {
-      searchClear.addEventListener('click', clearActiveSearch);
-    }
-
-    // Atalhos ⌘F e / ficam só em js/main.js (bindKeyboardShortcuts), que ignora digitação em inputs.
-
-    var grid = document.getElementById('effects-grid');
-    if (grid) {
-      var emptyObserver = new MutationObserver(function () {
-        if (!grid) return;
-        var stateBox = grid.querySelector('.state-box');
-        if (!stateBox) return;
-        if (stateBox.querySelector('.empty-action')) return;
-
-        var emptyAction = document.createElement('button');
-        emptyAction.type = 'button';
-        emptyAction.className = 'empty-action';
-        emptyAction.textContent = 'Limpar busca';
-        emptyAction.addEventListener('click', clearActiveSearch);
-        stateBox.appendChild(emptyAction);
-      });
-      emptyObserver.observe(grid, { childList: true, subtree: true });
-    }
-
-    if (window.setViewMode) {
-      window.setViewMode = setViewMode;
-    }
-    window.showToast = showToast;
-    applyStoredViewMode();
-  })();
-</script>
 
 </body>
 </html>

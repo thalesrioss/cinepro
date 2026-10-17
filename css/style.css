@@ -986,6 +986,19 @@ body {
   line-height: 1.5;
 }
 
+/* Botão "Limpar busca" do estado de busca sem resultado (BL-0004) */
+.empty-action {
+  padding: 6px 14px;
+  border-radius: 8px;
+  border: 1px solid rgba(0,184,255,0.25);
+  background: rgba(0,184,255,0.08);
+  color: var(--gold);
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.empty-action:hover { border-color: var(--gold); }
+
 /* ── LOADING SKELETON ────────────────────────────────────── */
 .skeleton {
   background: linear-gradient(90deg, var(--bg-card) 25%, var(--bg-elevated) 50%, var(--bg-card) 75%);
@@ -1158,6 +1171,34 @@ body {
   justify-content: center;
 }
 .search-clear:hover { background: var(--red); color: #fff; }
+
+/* Linha de dica abaixo da busca + botão "?" de atalhos (BL-0004: vieram
+   de css/usability-improvements.css, que nunca foi carregado) */
+.search-helper {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  margin-top: 8px;
+  color: var(--text-dim);
+  font-size: 10px;
+}
+
+.shortcut-help-btn {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  border: 1px solid var(--border);
+  background: rgba(255,255,255,0.02);
+  color: var(--text-dim);
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.shortcut-help-btn:hover {
+  border-color: var(--gold);
+  color: var(--gold);
+}
 
 .section-count {
   display: inline-block;

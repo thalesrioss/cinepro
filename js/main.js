@@ -274,8 +274,13 @@ function bindAppUI() {
   // v1.5: toggle de visão lista/grade (persiste por categoria)
   var btnList = document.getElementById('view-list-btn');
   var btnGrid = document.getElementById('view-grid-btn');
-  if (btnList) btnList.addEventListener('click', function () { setViewMode('list'); });
-  if (btnGrid) btnGrid.addEventListener('click', function () { setViewMode('grid'); });
+  if (btnList) btnList.addEventListener('click', function () { setViewMode('list'); showToast('Modo lista ativado', 'success'); });
+  if (btnGrid) btnGrid.addEventListener('click', function () { setViewMode('grid'); showToast('Modo grade ativado', 'success'); });
+
+  var helpBtn = document.getElementById('btn-shortcuts-help');
+  if (helpBtn) helpBtn.addEventListener('click', function () {
+    showToast('Atalhos: ⌘F / / busca • Enter aplica • ⌘D favorita • Esc limpa', 'success');
+  });
 }
 
 /**
@@ -1442,7 +1447,10 @@ function executePlan(plan, recipe, btn) {
 }
 
 
+var ACTIVE_QUERY = ''; // termo da última filtragem (estado vazio da busca)
+
 function filterEffects(query) {
+  ACTIVE_QUERY = query || '';
   // Sets pré-computados pra evitar lookup repetido
   var favSet = activeCategory === 'favorites' ? new Set(getFavoriteIds()) : null;
 
@@ -1605,16 +1613,20 @@ function renderEffects(effects) {
   }
 
   if (effects.length === 0) {
-    if (activeCategory === 'favorites') {
-      renderEmpty('Você ainda não favoritou nada.<br>Passe o mouse num card e clique na ⭐ pra começar.');
-    } else if (activeCategory === 'recents') {
-      renderEmpty('Nenhum efeito usado ainda.<br>Os que você aplicar vão aparecer aqui em ordem.');
-    } else if (activeCategory === 'most-used') {
-      renderEmpty('Nenhum efeito usado ainda.<br>O top dos seus mais usados vai surgir aqui.');
-    } else if (activeCategory === 'all') {
-      renderEmpty('Clique numa categoria acima pra começar 👆<br>Os arquivos são carregados sob demanda.');
-    } else {
-      renderEmpty('Nenhum efeito encontrado.<br>Tente outra palavra ou categoria.');
+    // BL-0004: texto e botão "Limpar busca" decididos em js/empty-state.js
+    var empty = window.CinePROEmptyState.emptyStateFor(activeCategory, ACTIVE_QUERY);
+    renderEmpty(empty.html);
+    if (empty.clearSearch) {
+      var box = grid.querySelector('.state-box');
+      var btnClear = document.createElement('button');
+      btnClear.type = 'button';
+      btnClear.className = 'empty-action';
+      btnClear.textContent = 'Limpar busca';
+      btnClear.addEventListener('click', function () {
+        var c = document.getElementById('search-clear');
+        if (c) c.click();
+      });
+      box.appendChild(btnClear);
     }
     return;
   }
