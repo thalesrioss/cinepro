@@ -2333,7 +2333,7 @@ function bindKeyboardShortcuts() {
     // / sem modificador → foca busca (UX padrão tipo GitHub)
     if (e.key === '/' && !meta) {
       var input2 = document.getElementById('search-input');
-      if (input2) { e.preventDefault(); input2.focus(); }
+      if (input2) { e.preventDefault(); input2.focus(); input2.select(); }
     }
   });
 }
