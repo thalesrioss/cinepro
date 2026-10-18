@@ -8,6 +8,7 @@
   "private": true,
   "scripts": {
     "start":       "electron .",
+    "sync-shared": "node -e \"require('fs').copyFileSync('../js/search-core.js','renderer/js/search-core.js')\"",
     "build":       "electron-builder",
     "build:mac":   "electron-builder --mac",
     "build:win":   "electron-builder --win",
