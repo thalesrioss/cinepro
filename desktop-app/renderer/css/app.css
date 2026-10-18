@@ -631,6 +631,8 @@ html, body {
 .lib-row.lib-ready { border-color: rgba(0,184,255,0.35); cursor: grab; }
 .lib-row.lib-ready:active { cursor: grabbing; }
 .lib-dl, .lib-resolve { flex: none; white-space: nowrap; }
+.lib-play { flex: none; width: 30px; padding-left: 0; padding-right: 0; }
+.lib-play.is-playing { color: #00b8ff; border-color: rgba(0,184,255,0.45); }
 
 /* ══ Estado do DaVinci Resolve ═══════════════════════════════
    O fluxo do Resolve tem passos fora do app (rodar o script no
