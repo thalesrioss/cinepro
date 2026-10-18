@@ -998,228 +998,23 @@ function toggleFavorite(effect, card) {
 
 // ══ RENDER EFFECTS ════════════════════════════════════════════
 
-// ── INVERTED INDEX PRA BUSCA ────────────────────────────────────
-// Pré-construído na carga (1× por sessão). Cada token ≥2 chars vira chave
-// num Map<token, Set<effectIdx>>. Lookup vira O(k) onde k = nº de tokens
-// na query, em vez de O(n) sobre 11k strings.
-var SEARCH_INDEX = null;       // Map<token, Set<effectIdx>>
-var SEARCH_INDEX_NAMES = null; // Array<string lowercased> p/ matching de substring tardio
+// ── BUSCA (BL-0034) ───────────────────────────────────────────
+// A busca é js/search-core.js (CinePROSearch), a mesma do app desktop:
+// palavra inteira, termo digitado antes da tradução PT→EN, conceitos do
+// manifest só completando quando o texto acha pouco. Índice montado 1×
+// por carga do catálogo.
+var SEARCH = null;
 
 function buildSearchIndex() {
+  if (!window.CinePROSearch) { SEARCH = null; return; }
   var t0 = performance.now();
-  SEARCH_INDEX = new Map();
-  SEARCH_INDEX_NAMES = new Array(allEffects.length);
-
-  for (var i = 0; i < allEffects.length; i++) {
-    var e = allEffects[i];
-    // Normaliza acentos no índice → busca textual fica accent-insensitive
-    // ("transição" acha o que tá salvo como "transicao" e vice-versa).
-    var blob = normalizeConceptText(
-      e.name + ' ' + e.category + ' ' +
-      (e.subcategory || '') + ' ' +
-      ((e.path && e.path.join) ? e.path.join(' ') : '') + ' ' +
-      ((e.tags && e.tags.join) ? e.tags.join(' ') : '')
-    );
-    SEARCH_INDEX_NAMES[i] = blob;
-
-    // Tokenize por whitespace, hífen, underscore, pontos
-    var tokens = blob.split(/[\s\-_\.\/\\\(\)\[\]\,]+/);
-    var seen = Object.create(null);
-    for (var t = 0; t < tokens.length; t++) {
-      var tok = tokens[t];
-      if (tok.length < 2 || seen[tok]) continue;
-      seen[tok] = 1;
-      var bucket = SEARCH_INDEX.get(tok);
-      if (!bucket) { bucket = new Set(); SEARCH_INDEX.set(tok, bucket); }
-      bucket.add(i);
-      // Também adiciona prefixos curtos pra autocompletar (ws→whoosh)
-      if (tok.length >= 3) {
-        var pref = tok.slice(0, 3);
-        var prefBucket = SEARCH_INDEX.get(pref);
-        if (!prefBucket) { prefBucket = new Set(); SEARCH_INDEX.set(pref, prefBucket); }
-        prefBucket.add(i);
-      }
-    }
-  }
-  console.log('[CinePRO] inverted index: ' + SEARCH_INDEX.size + ' tokens em ' +
+  SEARCH = window.CinePROSearch.buildIndex(allEffects, CINEPRO_CONCEPTS_DICT);
+  console.log('[CinePRO] índice de busca: ' + SEARCH.vocab.length + ' palavras em ' +
               ((performance.now() - t0) | 0) + 'ms (' + allEffects.length + ' items)');
 }
 
-/**
- * Busca no índice: AND entre tokens da query.
- * Tokens curtos (<2) caem em scan linear no NAMES array como fallback.
- */
-function searchIndices(query) {
-  if (!SEARCH_INDEX || !query) return null;
-  // Normaliza a query igual ao índice (accent-insensitive)
-  query = normalizeConceptText(query);
-  var qTokens = query.split(/[\s\-_\.]+/).filter(function (t) { return t.length >= 2; });
-  if (!qTokens.length) {
-    // query muito curta — scan linear simples
-    var out = [];
-    for (var i = 0; i < SEARCH_INDEX_NAMES.length; i++) {
-      if (SEARCH_INDEX_NAMES[i].indexOf(query) !== -1) out.push(i);
-    }
-    return new Set(out);
-  }
-
-  // AND incremental — começa pelo bucket menor (otimização clássica)
-  var buckets = qTokens.map(function (t) {
-    // Token exato; senão tenta prefixo de 3 chars; senão fallback scan
-    return SEARCH_INDEX.get(t) || SEARCH_INDEX.get(t.slice(0, 3)) || null;
-  });
-  if (buckets.some(function (b) { return b === null; })) {
-    // Algum token não indexado — fallback scan
-    var out2 = [];
-    for (var j = 0; j < SEARCH_INDEX_NAMES.length; j++) {
-      if (qTokens.every(function (qt) { return SEARCH_INDEX_NAMES[j].indexOf(qt) !== -1; })) {
-        out2.push(j);
-      }
-    }
-    return new Set(out2);
-  }
-  buckets.sort(function (a, b) { return a.size - b.size; });
-
-  var result = new Set();
-  var first = buckets[0];
-  first.forEach(function (idx) {
-    for (var k = 1; k < buckets.length; k++) {
-      if (!buckets[k].has(idx)) return;
-    }
-    // Verificação de substring real (índice tem prefixos, refina aqui)
-    var blob = SEARCH_INDEX_NAMES[idx];
-    for (var q = 0; q < qTokens.length; q++) {
-      if (blob.indexOf(qTokens[q]) === -1) return;
-    }
-    result.add(idx);
-  });
-  return result;
-}
-
-// v1.2 Parte C — dicionário de conceitos vindo do manifest
+// v1.2 Parte C — dicionário de conceitos vindo do manifest (busca e packs)
 var CINEPRO_CONCEPTS_DICT = null;
-
-// ── Matching compartilhado (DEVE ser idêntico ao manifest/concepts.js) ──
-// Se divergir daqui, query e embeds dos arquivos deixam de bater.
-
-// Remove acentos/diacríticos + baixa caixa. "Épico" → "epico".
-function normalizeConceptText(s) {
-  return String(s == null ? '' : s)
-    .toLowerCase()
-    .normalize('NFD')
-    .replace(/[̀-ͯ]/g, '');
-}
-
-// Tokeniza texto normalizado em array de palavras (>=2 chars).
-function tokenizeNorm(normText) {
-  var out = [];
-  var toks = normText.split(/[^a-z0-9]+/);
-  for (var i = 0; i < toks.length; i++) {
-    if (toks[i] && toks[i].length >= 2) out.push(toks[i]);
-  }
-  return out;
-}
-
-// Conta quantas keys casam com o texto normalizado. Matching POR TOKEN:
-//   - key composta (espaço/hífen): substring na string toda.
-//   - senão: casa se algum token == key, OU (key>=4) o token COMEÇAR com a key
-//     ("epico" startsWith "epic" ✓; "train" NÃO startsWith "rain" ✓).
-// DEVE ser idêntico ao manifest/concepts.js matchKeys.
-function matchConceptKeys(normText, tokens, keys) {
-  var count = 0;
-  for (var k = 0; k < keys.length; k++) {
-    var nk = normalizeConceptText(keys[k]);
-    if (!nk) continue;
-    if (nk.indexOf(' ') !== -1 || nk.indexOf('-') !== -1) {
-      if (normText.indexOf(nk) !== -1) count++;
-      continue;
-    }
-    var matched = false;
-    for (var t = 0; t < tokens.length; t++) {
-      var tok = tokens[t];
-      if (tok === nk || (nk.length >= 4 && tok.length > nk.length && tok.indexOf(nk) === 0)) {
-        matched = true;
-        break;
-      }
-    }
-    if (matched) count++;
-  }
-  return count;
-}
-
-/**
- * Embed da query: MESMO algoritmo do builder (concepts.js), sparse { idx → count }.
- * Normaliza acentos e usa word-boundary p/ keys curtos.
- */
-function embedQuery(query) {
-  if (!CINEPRO_CONCEPTS_DICT) return null;
-  var normText = normalizeConceptText(query);
-  var tokenSet = tokenizeNorm(normText);
-  var out = {};
-  for (var i = 0; i < CINEPRO_CONCEPTS_DICT.length; i++) {
-    var keys = CINEPRO_CONCEPTS_DICT[i].keys || [];
-    var count = matchConceptKeys(normText, tokenSet, keys);
-    if (count > 0) out[i] = count;
-  }
-  return out;
-}
-
-/**
- * Cosine similarity entre dois sparse vectors. Retorna 0..1.
- */
-function cosineSparse(a, b) {
-  if (!a || !b) return 0;
-  var aKeys = Object.keys(a);
-  var bKeys = Object.keys(b);
-  if (aKeys.length === 0 || bKeys.length === 0) return 0;
-  var dot = 0, magA = 0, magB = 0;
-  for (var i = 0; i < aKeys.length; i++) {
-    var k = aKeys[i];
-    var av = a[k];
-    magA += av * av;
-    if (b[k] !== undefined) dot += av * b[k];
-  }
-  for (var j = 0; j < bKeys.length; j++) magB += b[bKeys[j]] * b[bKeys[j]];
-  var denom = Math.sqrt(magA) * Math.sqrt(magB);
-  return denom > 0 ? dot / denom : 0;
-}
-
-/**
- * Busca semântica: scan O(n) com cosine similarity. Retorna top-K
- * (idx, score) ordenado por score desc. Threshold mínimo: 0.15
- * (filtra ruído sem perder hits relevantes).
- */
-function semanticSearch(query, limit) {
-  var qEmbed = embedQuery(query);
-  if (!qEmbed || Object.keys(qEmbed).length === 0) return [];
-  limit = limit || 60;
-
-  // Tokens normalizados da query p/ boost lexical (>=3 chars pra evitar ruído).
-  var qNorm = normalizeConceptText(query);
-  var qTokens = qNorm.split(/[^a-z0-9]+/).filter(function (t) { return t.length >= 3; });
-
-  var results = [];
-  for (var i = 0; i < allEffects.length; i++) {
-    var e = allEffects[i];
-    if (!e.embed) continue;
-    var score = cosineSparse(qEmbed, e.embed);
-    if (score < 0.15) continue;
-
-    // Boost lexical: se o nome/tags (índice normalizado) contém literalmente
-    // um token da query, é match mais forte que só conceito. Desempata o
-    // "chuva → traz chuva antes de fogo" quando o arquivo é nomeado em PT.
-    var blob = SEARCH_INDEX_NAMES[i] || '';
-    var lexHit = false;
-    for (var t = 0; t < qTokens.length; t++) {
-      if (blob.indexOf(qTokens[t]) !== -1) { lexHit = true; break; }
-    }
-    if (lexHit) score *= 1.6;
-
-    results.push({ idx: i, score: score });
-  }
-  results.sort(function (a, b) { return b.score - a.score; });
-  return results.slice(0, limit);
-}
 
 // ══ PACKS (v1.1) — receitas psicoacústicas → pack curado da biblioteca ══
 // Pesos em js/recipes.js (gerado de knowledge/receitas/generos.md).
@@ -1454,7 +1249,7 @@ function filterEffects(query) {
     return renderEffectsByIdOrder(getPackIds(activeCategory.slice(5)), query);
   }
 
-  // Query? Usa inverted index. Sem query, scan direto (rápido pra check de categoria)
+  // Sem query, scan direto (rápido pra check de categoria)
   if (!query) {
     var filtered = allEffects.filter(function (e) {
       var inCat = activeCategory === 'all'
@@ -1467,45 +1262,19 @@ function filterEffects(query) {
     return;
   }
 
-  // ── Híbrido textual + semântico ─────────────────────────
-  // 1. Roda busca textual normal (inverted index)
-  // 2. Se <5 resultados textuais, complementa com busca semântica
-  // 3. Categoria/sub continuam filtrando ambos
-  var textualIndices = searchIndices(query) || new Set();
-  var seen = new Set();
-  var result = [];
-
-  textualIndices.forEach(function (idx) {
-    var e = allEffects[idx];
-    if (!e) return;
-    var inCat = activeCategory === 'all'
-              || (activeCategory === 'favorites' && favSet.has(e.id))
-              || e.category === activeCategory;
-    if (activeSubcategory) inCat = inCat && e.subcategory === activeSubcategory;
-    if (inCat && !seen.has(idx)) {
-      seen.add(idx);
-      result.push(e);
-    }
+  // Busca única (js/search-core.js); categoria/sub filtram o resultado.
+  if (!SEARCH) buildSearchIndex();
+  if (!SEARCH) { renderEffects([]); return; }
+  var idxs = window.CinePROSearch.search(SEARCH, query, {
+    accept: function (e) {
+      var inCat = activeCategory === 'all'
+                || (activeCategory === 'favorites' && favSet.has(e.id))
+                || e.category === activeCategory;
+      if (activeSubcategory) inCat = inCat && e.subcategory === activeSubcategory;
+      return inCat;
+    },
   });
-
-  // Complementa com semântica quando textual rasa
-  var TEXTUAL_THRESHOLD = 5;
-  if (result.length < TEXTUAL_THRESHOLD * 3 && CINEPRO_CONCEPTS_DICT) {
-    var semResults = semanticSearch(query, 60);
-    for (var s = 0; s < semResults.length && result.length < 120; s++) {
-      if (seen.has(semResults[s].idx)) continue;
-      var e2 = allEffects[semResults[s].idx];
-      if (!e2) continue;
-      var inCat2 = activeCategory === 'all'
-                 || (activeCategory === 'favorites' && favSet.has(e2.id))
-                 || e2.category === activeCategory;
-      if (activeSubcategory) inCat2 = inCat2 && e2.subcategory === activeSubcategory;
-      if (inCat2) {
-        seen.add(semResults[s].idx);
-        result.push(e2);
-      }
-    }
-  }
+  var result = idxs.map(function (i) { return allEffects[i]; });
 
   renderEffects(result);
 }
