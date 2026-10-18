@@ -20,6 +20,14 @@
 //      termo digitado (ou à tradução) vem antes das irmãs
 //      ("risada" → "laugh" antes de "breath"/"scream", que também são
 //      keys do conceito vocal).
+//   5. Acerto pelo nome e "parecido" por conceito ficam separados
+//      (searchSplit → {hits, related}, BL-0059): o contador conta só
+//      os acertos; os parecidos aparecem numa seção própria. "tiro"
+//      não tem nenhum arquivo com o nome; antes eram "58 resultados"
+//      de espadas.
+//   6. Empate: o termo no nome do arquivo vale mais que o termo só na
+//      pasta ("suspense": "09 Suspense Hit B" antes dos arquivos da
+//      pasta SFX>SUSPENSE).
 //
 //  Sem DOM/CEP: roda no painel, no app e em teste (tools/test-search-core.js).
 //  O app empacota uma CÓPIA deste arquivo em
@@ -112,24 +120,37 @@
       ((it.tags && it.tags.join) ? it.tags.join(' ') : '');
   }
 
+  // Termo no nome do arquivo (não só na pasta/categoria): palavra igual,
+  // ou prefixo a partir de 3 letras, como em hitsFor.
+  function nameHit(term, nameToks) {
+    for (var i = 0; i < nameToks.length; i++) {
+      var w = nameToks[i];
+      if (w === term || (term.length >= 3 && w.length > term.length && w.indexOf(term) === 0)) return true;
+    }
+    return false;
+  }
+  var NAME_BONUS = 0.25;
+
   /**
    * Índice: tokens de cada item + mapa token→itens para o caminho rápido
    * (termo curto casa só token igual: lookup direto, sem varrer 11k).
    */
   function buildIndex(items, concepts) {
     var tokens = new Array(items.length);
+    var nameTokens = new Array(items.length);
     var byToken = Object.create(null);
     var vocab = [];
     for (var i = 0; i < items.length; i++) {
       var toks = tokenize(normalize(itemText(items[i])));
       tokens[i] = toks;
+      nameTokens[i] = tokenize(normalize(items[i].name));
       for (var t = 0; t < toks.length; t++) {
         var list = byToken[toks[t]];
         if (!list) { list = byToken[toks[t]] = []; vocab.push(toks[t]); }
         if (list[list.length - 1] !== i) list.push(i);
       }
     }
-    return { items: items, tokens: tokens, byToken: byToken, vocab: vocab, concepts: concepts || null };
+    return { items: items, tokens: tokens, nameTokens: nameTokens, byToken: byToken, vocab: vocab, concepts: concepts || null };
   }
 
   // Itens que casam o termo por palavra inteira: { idx: 1 (palavra igual) | 0.5 (prefixo) }.
@@ -170,15 +191,27 @@
   }
 
   /**
-   * Busca. Devolve índices de `index.items` em ordem de relevância.
+   * Busca. Devolve índices de `index.items` em ordem de relevância:
+   * acertos pelo nome primeiro, parecidos por conceito depois.
    * opts.accept(item) filtra (categoria, tipo); opts.limit corta.
    */
   function search(index, query, opts) {
+    var r = searchSplit(index, query, opts);
+    return r.hits.concat(r.related);
+  }
+
+  /**
+   * Busca separada: { hits, related }. `hits` = casou o texto (nome,
+   * pasta, tags, com tradução); `related` = só o conceito do manifest
+   * (preenchimento quando o texto acha pouco). opts.limit vale para a
+   * soma, acertos primeiro.
+   */
+  function searchSplit(index, query, opts) {
     opts = opts || {};
     var userAccept = opts.accept || null;
     var limit = opts.limit || Infinity;
     var qTerms = tokenize(normalize(query));
-    if (!qTerms.length) return [];
+    if (!qTerms.length) return { hits: [], related: [] };
 
     var kind = null;
     for (var qt = 0; qt < qTerms.length; qt++) {
@@ -200,10 +233,16 @@
       var tr = translationsOf(term);
       for (var j = 0; j < tr.length; j++) {
         var h = hitsFor(index, tr[j]);
-        for (var id in h) { var st = 1 + h[id]; if (!(score[id] >= st)) score[id] = st; }
+        for (var id in h) {
+          var st = 1 + h[id] + (nameHit(tr[j], index.nameTokens[id]) ? NAME_BONUS : 0);
+          if (!(score[id] >= st)) score[id] = st;
+        }
       }
       var hd = hitsFor(index, term);
-      for (var id2 in hd) score[id2] = 2 + hd[id2];
+      for (var id2 in hd) {
+        var sd = 2 + hd[id2] + (nameHit(term, index.nameTokens[id2]) ? NAME_BONUS : 0);
+        if (!(score[id2] >= sd)) score[id2] = sd;
+      }
       return score;
     });
 
@@ -223,6 +262,7 @@
     }
     ranked.sort(function (a, b) { return b.score - a.score || a.idx - b.idx; });
     var result = ranked.map(function (r) { return r.idx; });
+    var related = [];
 
     // Pouco texto: completa com conceitos.
     if (result.length < CONCEPT_FILL_BELOW && index.concepts) {
@@ -252,10 +292,23 @@
           extra.push({ idx: n, score: sc });
         }
         extra.sort(function (a, b) { return b.score - a.score || a.idx - b.idx; });
-        for (var x = 0; x < extra.length && x < CONCEPT_LIMIT; x++) result.push(extra[x].idx);
+        for (var x = 0; x < extra.length && x < CONCEPT_LIMIT; x++) related.push(extra[x].idx);
       }
     }
-    return result.length > limit ? result.slice(0, limit) : result;
+    if (result.length > limit) result = result.slice(0, limit);
+    if (result.length + related.length > limit) related = related.slice(0, limit - result.length);
+    return { hits: result, related: related };
+  }
+
+  // Textos da busca, iguais no painel e no app.
+  function hitsLabel(n, query, capped) {
+    var q = String(query == null ? '' : query).trim();
+    if (capped) return n + '+ resultados para "' + q + '" — refine a busca';
+    return n + (n === 1 ? ' resultado' : ' resultados') + ' para "' + q + '"';
+  }
+  function relatedTitle(nHits, query) {
+    var q = String(query == null ? '' : query).trim();
+    return nHits ? 'Parecidos' : 'Nada com "' + q + '" no nome. Parecidos:';
   }
 
   var API = {
@@ -266,6 +319,9 @@
     wordHit: wordHit,
     buildIndex: buildIndex,
     search: search,
+    searchSplit: searchSplit,
+    hitsLabel: hitsLabel,
+    relatedTitle: relatedTitle,
   };
 
   if (typeof module !== 'undefined' && module.exports) module.exports = API;
