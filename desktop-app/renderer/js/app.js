@@ -546,9 +546,11 @@ var MANIFEST_URL = 'https://cdn.jsdelivr.net/gh/thalesrioss/cinepro@main/manifes
 
 function instAssetUrls(f) {
   var urls = [];
-  var cdn = (window.CINEPRO_CONFIG && CINEPRO_CONFIG.CDN_BASE) || '';
+  // config.js declara `const CINEPRO_CONFIG`: não vira window.CINEPRO_CONFIG,
+  // então o acesso é direto (antes a CDN nunca entrava na lista; BL-0035).
+  var cdn = CINEPRO_CONFIG.CDN_BASE || '';
   if (cdn) urls.push(cdn.replace(/\/+$/, '') + '/' + f.id + '.' + f.ext);
-  var key = (window.CINEPRO_CONFIG && CINEPRO_CONFIG.GOOGLE_DRIVE_API_KEY) || '';
+  var key = CINEPRO_CONFIG.GOOGLE_DRIVE_API_KEY || '';
   if (key) urls.push('https://www.googleapis.com/drive/v3/files/' + f.id + '?alt=media&key=' + key);
   urls.push('https://drive.usercontent.google.com/download?id=' + f.id + '&export=download&confirm=t');
   return urls;
