@@ -682,75 +682,89 @@ function renderLibResults(q) {
 
   // Busca única com o painel (js/search-core.js, copiada para
   // renderer/js/search-core.js): palavra inteira, PT→EN, conceitos.
-  var idxs = window.CinePROSearch.search(libSearchIndex(), q, { limit: 100 });
-  var hits = idxs.map(function (i) { return LIB_SEARCH.items[i]; });
-  if (footer) footer.textContent = hits.length >= 100 ? '100+ resultados — refine a busca' : hits.length + ' resultado(s)';
-  if (!hits.length) { grid.innerHTML = '<div class="inst-loading">Nada pra "' + escapeHtml(q) + '". Tente outra palavra.</div>'; return; }
+  // O contador conta só o acerto pelo nome; o "parecido" por conceito
+  // vem numa seção própria (BL-0059: "tiro" eram 58 espadas).
+  var S = window.CinePROSearch;
+  var split = S.searchSplit(libSearchIndex(), q, { limit: 100 });
+  var toItem = function (i) { return LIB_SEARCH.items[i]; };
+  var hits = split.hits.map(toItem);
+  var related = split.related.map(toItem);
+  if (footer) footer.textContent = S.hitsLabel(hits.length, q, hits.length >= 100);
+  if (!hits.length && !related.length) { grid.innerHTML = '<div class="inst-loading">Nada pra "' + escapeHtml(q) + '". Tente outra palavra.</div>'; return; }
 
   var frag = document.createDocumentFragment();
-  hits.forEach(function (f) {
-    var row = document.createElement('div');
-    row.className = 'inst-card lib-row' + (LIB_CACHED[f.id] ? ' lib-ready' : '');
-    row.innerHTML =
-      '<div class="inst-card-info">' +
-        '<div class="inst-card-name" title="' + escapeAttr(f.name) + '">' + escapeHtml(f.name) + '</div>' +
-        '<div class="inst-card-meta">' + (f.ext || '').toUpperCase() + (f.category ? ' · ' + escapeHtml(f.category) : '') + '</div>' +
-      '</div>' +
-      '<button class="btn btn--soft btn--sm lib-dl">' + (LIB_CACHED[f.id] ? '⇲ arrastar' : '⇣ Baixar') + '</button>' +
-      '<button class="btn btn--soft btn--sm lib-resolve" title="Enviar pra fila do Resolve">→ Resolve</button>';
-
-    var btnDl = row.querySelector('.lib-dl');
-    var btnRes = row.querySelector('.lib-resolve');
-
-    btnDl.addEventListener('click', function () {
-      if (LIB_CACHED[f.id]) return;
-      btnDl.disabled = true; btnDl.textContent = 'Baixando…';
-      window.cinepro.libraryDownload(libAssetOf(f)).then(function (res) {
-        if (res && res.ok) {
-          LIB_CACHED[f.id] = res.path;
-          row.classList.add('lib-ready');
-          row.draggable = true;
-          btnDl.disabled = false; btnDl.textContent = '⇲ arrastar';
-        } else {
-          btnDl.disabled = false; btnDl.textContent = 'Tentar de novo';
-          btnDl.title = (res && res.error) || 'falha';
-        }
-      });
-    });
-
-    btnRes.addEventListener('click', function () {
-      btnRes.disabled = true; btnRes.textContent = 'Enviando…';
-      window.cinepro.resolveSend(libAssetOf(f)).then(function (res) {
-        if (res && res.ok) {
-          btnRes.textContent = 'na fila (' + (res.queued || 1) + ')';
-          btnRes.title = 'No Resolve: Workspace → Scripts → CinePRO (painel) ou CinePRO Import (lote)';
-          // Se o script não instalou, avisar AGORA — não deixar o usuário
-          // descobrir no Resolve que não existe item no menu.
-          if (res.scriptOk === false) {
-            showToast('Enfileirado, mas o script do Resolve não instalou. ' +
-                      'Veja o aviso acima da busca.', 'error');
-          }
-          renderResolveStatus();
-        } else {
-          btnRes.disabled = false; btnRes.textContent = '→ Resolve';
-          btnRes.title = (res && res.error) || 'falha';
-        }
-      });
-    });
-
-    // Drag nativo (após baixar): solta o arquivo real em qualquer editor
-    row.draggable = !!LIB_CACHED[f.id];
-    row.addEventListener('dragstart', function (ev) {
-      var p = LIB_CACHED[f.id];
-      if (!p) { ev.preventDefault(); return; }
-      ev.preventDefault();
-      window.cinepro.startDrag(p);
-    });
-
-    frag.appendChild(row);
-  });
+  hits.forEach(function (f) { frag.appendChild(libRow(f)); });
+  if (related.length) {
+    var title = document.createElement('div');
+    title.className = 'lib-related-title';
+    title.textContent = S.relatedTitle(hits.length, q);
+    frag.appendChild(title);
+    related.forEach(function (f) { frag.appendChild(libRow(f)); });
+  }
   grid.innerHTML = '';
   grid.appendChild(frag);
+}
+
+function libRow(f) {
+  var row = document.createElement('div');
+  row.className = 'inst-card lib-row' + (LIB_CACHED[f.id] ? ' lib-ready' : '');
+  row.innerHTML =
+    '<div class="inst-card-info">' +
+      '<div class="inst-card-name" title="' + escapeAttr(f.name) + '">' + escapeHtml(f.name) + '</div>' +
+      '<div class="inst-card-meta">' + (f.ext || '').toUpperCase() + (f.category ? ' · ' + escapeHtml(f.category) : '') + '</div>' +
+    '</div>' +
+    '<button class="btn btn--soft btn--sm lib-dl">' + (LIB_CACHED[f.id] ? '⇲ arrastar' : '⇣ Baixar') + '</button>' +
+    '<button class="btn btn--soft btn--sm lib-resolve" title="Enviar pra fila do Resolve">→ Resolve</button>';
+
+  var btnDl = row.querySelector('.lib-dl');
+  var btnRes = row.querySelector('.lib-resolve');
+
+  btnDl.addEventListener('click', function () {
+    if (LIB_CACHED[f.id]) return;
+    btnDl.disabled = true; btnDl.textContent = 'Baixando…';
+    window.cinepro.libraryDownload(libAssetOf(f)).then(function (res) {
+      if (res && res.ok) {
+        LIB_CACHED[f.id] = res.path;
+        row.classList.add('lib-ready');
+        row.draggable = true;
+        btnDl.disabled = false; btnDl.textContent = '⇲ arrastar';
+      } else {
+        btnDl.disabled = false; btnDl.textContent = 'Tentar de novo';
+        btnDl.title = (res && res.error) || 'falha';
+      }
+    });
+  });
+
+  btnRes.addEventListener('click', function () {
+    btnRes.disabled = true; btnRes.textContent = 'Enviando…';
+    window.cinepro.resolveSend(libAssetOf(f)).then(function (res) {
+      if (res && res.ok) {
+        btnRes.textContent = 'na fila (' + (res.queued || 1) + ')';
+        btnRes.title = 'No Resolve: Workspace → Scripts → CinePRO (painel) ou CinePRO Import (lote)';
+        // Se o script não instalou, avisar AGORA — não deixar o usuário
+        // descobrir no Resolve que não existe item no menu.
+        if (res.scriptOk === false) {
+          showToast('Enfileirado, mas o script do Resolve não instalou. ' +
+                    'Veja o aviso acima da busca.', 'error');
+        }
+        renderResolveStatus();
+      } else {
+        btnRes.disabled = false; btnRes.textContent = '→ Resolve';
+        btnRes.title = (res && res.error) || 'falha';
+      }
+    });
+  });
+
+  // Drag nativo (após baixar): solta o arquivo real em qualquer editor
+  row.draggable = !!LIB_CACHED[f.id];
+  row.addEventListener('dragstart', function (ev) {
+    var p = LIB_CACHED[f.id];
+    if (!p) { ev.preventDefault(); return; }
+    ev.preventDefault();
+    window.cinepro.startDrag(p);
+  });
+
+  return row;
 }
 
 // ══ ESTADO DO DAVINCI RESOLVE ═══════════════════════════════════
