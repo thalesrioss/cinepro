@@ -6,9 +6,11 @@
 
 set -e
 
-# 1. Checa se o Premiere tá rodando
-if pgrep -i "Adobe Premiere Pro" > /dev/null; then
-  /usr/bin/osascript -e 'display alert "Fecha o Premiere Pro" message "Por favor, feche o Adobe Premiere Pro antes de continuar a instalação do CinePRO." as critical buttons {"Cancelar"} default button "Cancelar"'
+. "$(dirname "$0")/cinepro-lib.sh"
+
+# 1. Premiere aberto: pede para fechar, com "Tentar de novo" em laço até
+#    fechar. "Cancelar" (ou alerta impossível de mostrar) cancela a instalação.
+if ! cinepro_esperar_premiere_fechar; then
   exit 1
 fi
 
@@ -27,6 +29,6 @@ sleep 1
 rm -rf "/Applications/CinePRO.app" 2>/dev/null || true
 
 # 4. Limpa o cache do CEP do painel (Chromium cacheia JS antigo entre versões)
-rm -rf "$USER_HOME/Library/Caches/CSXS/cep_cache/"*"com.thales.cinepro"* 2>/dev/null || true
+cinepro_limpar_cache "$USER_HOME"
 
 exit 0
