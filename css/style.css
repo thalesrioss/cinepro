@@ -1353,6 +1353,18 @@ body {
   text-shadow: 0 0 12px var(--brand-glow-2);
 }
 
+/* Busca (BL-0059): contador dos acertos e título dos parecidos */
+.search-summary {
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+  padding: var(--space-1) var(--space-1) 0;
+}
+.section-title--related {
+  text-transform: none;
+  letter-spacing: 0.2px;
+  text-shadow: none;
+}
+
 .section-bullet {
   width: 6px;
   height: 6px;
