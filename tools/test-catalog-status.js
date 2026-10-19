@@ -199,9 +199,19 @@ t('index.html carrega catalog-status.js antes de main.js e tem #status-retry', (
   const a = html.indexOf('js/catalog-status.js'), b = html.indexOf('js/main.js');
   return (a > 0 && a < b && /id="status-retry"[^>]*hidden/.test(html)) || 'ordem ou botão errados';
 });
-t('index.html não põe "Limpar busca" na grade do catálogo fora do ar', () => {
+t('"Limpar busca" não aparece na grade do catálogo fora do ar', () => {
+  // Antes do BL-0004 um observer inline no index.html punha "Limpar busca" em qualquer .state-box
+  // e precisava da exceção .catalog-retry. Desde o BL-0004 o botão nasce só em js/main.js, no
+  // caminho "busca sem resultado", e a tela de erro do catálogo (renderEmpty + .catalog-retry) não passa por ele.
   const html = fs.readFileSync(path.join(ROOT, 'index.html'), 'utf8');
-  return /querySelector\('\.catalog-retry'\)\) return;/.test(html) || 'observer sem a exceção';
+  const main = fs.readFileSync(path.join(ROOT, 'js', 'main.js'), 'utf8');
+  const observerInline = /empty-action/.test(html);
+  if (observerInline) {
+    return /querySelector\('\.catalog-retry'\)\) return;/.test(html) || 'observer inline sem a exceção';
+  }
+  const iBtn = main.indexOf("btnClear.className = 'empty-action'");
+  const iEmpty = main.lastIndexOf('if (effects.length === 0)', iBtn);
+  return (iBtn > 0 && iEmpty > 0 && iBtn - iEmpty < 800) || '"Limpar busca" fora do caminho de busca vazia';
 });
 t('CSS tem ponto amarelo (.status-dot.warn)', () => {
   const css = fs.readFileSync(path.join(ROOT, 'css', 'style.css'), 'utf8');
