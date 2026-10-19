@@ -246,6 +246,57 @@ function collectCutPoints(seq, maxN) {
   return out;
 }
 
+/**
+ * Cortes para o ⚡ (aplicar SFX em todos os cortes). Função pura: recebe
+ * as trilhas de vídeo como dados, V1 primeiro: [{clips:[{start}]}].
+ * Só conta a trilha mais baixa que tem clipes (a montagem); B-roll,
+ * título e camada de ajuste em V2+ não são corte. Funde pontos a menos
+ * de 0,04 s. Devolve {cuts, total, left}: total = todos os cortes da
+ * trilha, cuts = os primeiros maxN depois de fromS (a agulha), left =
+ * quantos sobram depois do último de cuts.
+ * Diferente de collectCutPoints, que o Diagnóstico usa com todas as trilhas.
+ */
+function cutPointsForSfx(tracks, maxN, fromS) {
+  var base = null;
+  for (var t = 0; t < tracks.length; t++) {
+    if (tracks[t] && tracks[t].clips && tracks[t].clips.length) { base = tracks[t]; break; }
+  }
+  if (!base) return { cuts: [], total: 0, left: 0 };
+  var points = [];
+  for (var i = 0; i < base.clips.length; i++) {
+    var s = Number(base.clips[i].start);
+    if (s > 0.05) points.push(s);   // início da sequência não é corte
+  }
+  points.sort(function (a, b) { return a - b; });
+  var all = [];
+  for (var p = 0; p < points.length; p++) {
+    if (all.length && Math.abs(points[p] - all[all.length - 1]) < 0.04) continue;
+    all.push(points[p]);
+  }
+  var from = Number(fromS) || 0;
+  var limit = Number(maxN) || 25;
+  var cuts = [], after = 0;
+  for (var k = 0; k < all.length; k++) {
+    if (all[k] <= from) continue;
+    after++;
+    if (cuts.length < limit) cuts.push(all[k]);
+  }
+  return { cuts: cuts, total: all.length, left: after - cuts.length };
+}
+
+/** Lê as trilhas de vídeo da sequência no formato de cutPointsForSfx. */
+function videoTracksAsData(seq) {
+  var tracks = [];
+  try {
+    for (var t = 0; t < seq.videoTracks.numTracks; t++) {
+      var vt = seq.videoTracks[t], clips = [];
+      for (var i = 0; i < vt.clips.numItems; i++) clips.push({ start: vt.clips[i].start.seconds });
+      tracks.push({ clips: clips });
+    }
+  } catch (e) {}
+  return tracks;
+}
+
 // ══ MÍDIAS OFFLINE (v1.0.4) ═════════════════════════════════════
 // Percorre o projeto e trata itens do CinePRO cujo arquivo sumiu do
 // cache. Depois que o plugin re-baixa no MESMO caminho, forçamos o
@@ -536,8 +587,10 @@ function applyAtTime(filePath, fileType, sec) {
 }
 
 /**
- * Aplica um SFX em TODOS os cortes da timeline (em faixas livres).
- * Retorna 'OK:CUTS_<colocados>_OF_<cortes>' ou ERR.
+ * Aplica um SFX nos cortes da trilha de vídeo principal (em faixas
+ * livres), até maxN por vez, a partir da agulha.
+ * Retorna 'OK:CUTS_<colocados>_OF_<total>_UNTIL_<s do último>_LEFT_<restantes>'
+ * ou ERR (NO_CUTS: timeline sem corte; NO_CUTS_AFTER: nenhum depois da agulha).
  */
 function applyAtAllCuts(filePath, fileType, maxN) {
   try {
@@ -546,8 +599,10 @@ function applyAtAllCuts(filePath, fileType, maxN) {
     var seq = app.project.activeSequence;
     if (!seq) return 'ERR:NO_SEQUENCE';
 
-    var cuts = collectCutPoints(seq, maxN || 25);
-    if (!cuts.length) return 'ERR:NO_CUTS';
+    var found = cutPointsForSfx(videoTracksAsData(seq), maxN || 25, seqPlayheadSec(seq));
+    var cuts = found.cuts;
+    if (!found.total) return 'ERR:NO_CUTS';
+    if (!cuts.length) return 'ERR:NO_CUTS_AFTER';
 
     // Importa 1x
     var bin = app.project.rootItem;
@@ -568,7 +623,8 @@ function applyAtAllCuts(filePath, fileType, maxN) {
       } catch (e) {/* corte sem espaço — segue */}
     }
     if (!placed) return 'ERR:NO_FREE_TRACK';
-    return 'OK:CUTS_' + placed + '_OF_' + cuts.length;
+    return 'OK:CUTS_' + placed + '_OF_' + found.total +
+      '_UNTIL_' + cuts[cuts.length - 1].toFixed(2) + '_LEFT_' + found.left;
   } catch (e) {
     return 'ERR:CUTS:' + e.toString();
   }

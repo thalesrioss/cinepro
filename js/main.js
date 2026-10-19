@@ -1792,7 +1792,7 @@ function createEffectRow(effect) {
     '</div>' +
     '<div class="row-wave effect-thumb-placeholder"></div>' +
     '<div class="row-actions">' +
-      '<button class="btn btn--floating btn--icon btn--sm btn-cuts" data-action="auto-cuts" title="Aplicar em todos os cortes da timeline" aria-label="Aplicar em todos os cortes">⚡</button>' +
+      '<button class="btn btn--floating btn--icon btn--sm btn-cuts" data-action="auto-cuts" title="Aplicar nos cortes da trilha de vídeo principal (até 25 por vez, a partir da agulha)" aria-label="Aplicar em todos os cortes">⚡</button>' +
       '<button class="btn btn--floating btn--icon btn--sm btn-fav" data-action="fav" title="Favoritar" aria-label="Favoritar">' +
         '<svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linejoin="round">' +
           '<polygon points="12 2 15 9 22 9.5 17 14.5 18.5 22 12 18 5.5 22 7 14.5 2 9.5 9 9 12 2"/>' +
@@ -2608,9 +2608,27 @@ function removeDownloadOverlay(card) {
 }
 
 /**
- * v1.1 Auto-SFX: aplica o efeito em TODOS os cortes da timeline.
+ * Texto do toast do ⚡ a partir de 'OK:CUTS_<colocados>_OF_<total>_UNTIL_<s>_LEFT_<n>'.
+ * Sobrou corte depois do último colocado: diz até onde foi e como continuar.
+ */
+function cutsResultMessage(name, result) {
+  var m = /CUTS_(\d+)_OF_(\d+)(?:_UNTIL_([\d.]+))?(?:_LEFT_(\d+))?/.exec(result || '');
+  if (!m) return '⚡ "' + name + '" aplicado nos cortes';
+  var placed = Number(m[1]), total = Number(m[2]);
+  var left = m[4] != null ? Number(m[4]) : 0;
+  var head = '⚡ "' + name + '" em ' + placed + ' de ' + total + ' corte' + (total === 1 ? '' : 's');
+  if (!left || m[3] == null) return head;
+  var sec = Math.floor(Number(m[3]));
+  var until = Math.floor(sec / 60) + ':' + ('0' + (sec % 60)).slice(-2);
+  return head + ' (até ' + until + '). Ponha a agulha depois de ' + until +
+    ' e clique de novo para continuar.';
+}
+
+/**
+ * v1.1 Auto-SFX: aplica o efeito nos cortes da trilha de vídeo principal.
  * A timeline editada já conhece os cortes (starts dos clipes) — o host
- * coleta, deduplica e coloca em faixa livre em cada um (máx 25).
+ * coleta, deduplica e coloca em faixa livre em cada um (máx 25 por vez,
+ * a partir da agulha).
  */
 function autoApplyAtCuts(effect, card) {
   if (card.classList.contains('downloading')) return;
@@ -2635,9 +2653,9 @@ function autoApplyAtCuts(effect, card) {
             showToast('Auto-cortes: ' + humanizeError(msg), 'error');
           } else {
             var m = /CUTS_(\d+)_OF_(\d+)/.exec(result);
-            var placed = m ? m[1] : '?', total = m ? m[2] : '?';
+            var placed = m ? m[1] : '?';
             setStatus('ok', 'SFX em ' + placed + ' corte(s)!');
-            showToast('⚡ "' + effect.name + '" aplicado em ' + placed + ' de ' + total + ' corte(s)', 'success');
+            showToast(cutsResultMessage(effect.name, result), 'success');
             trackUsage(effect.id);
             recordUsedFile(effect, localPath);
           }
@@ -3412,6 +3430,7 @@ function humanizeError(err) {
   if (err.indexOf('FILE_NOT_FOUND') !== -1) return 'Arquivo não encontrado no cache.';
   if (err.indexOf('NO_VIDEO_TRACK') !== -1) return 'Crie uma trilha de vídeo na timeline.';
   if (err.indexOf('NO_AUDIO_TRACK') !== -1) return 'Crie uma trilha de áudio na timeline.';
+  if (err.indexOf('NO_CUTS_AFTER')  !== -1) return 'Nenhum corte depois da agulha. Volte a agulha para antes dos cortes.';
   if (err.indexOf('NO_CUTS')        !== -1) return 'Nenhum corte encontrado — a timeline precisa ter clipes editados.';
   if (err.indexOf('CUTS:')          !== -1) return 'Falha ao aplicar nos cortes: ' + err.replace('CUTS:', '').trim();
   if (err.indexOf('NO_FREE_TRACK')  !== -1) return 'Sem espaço livre no playhead. Adicione uma trilha ou mova a agulha.';
