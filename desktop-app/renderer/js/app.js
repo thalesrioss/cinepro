@@ -282,8 +282,10 @@ function bindDashboard() {
   });
 
   document.getElementById('btn-open-premiere').addEventListener('click', function () {
-    window.cinepro.openPremiere();
-    showToast('Abrindo Premiere... Procure CinePRO em Janela → Extensões', 'success');
+    window.cinepro.openPremiere().then(function (opened) {
+      if (opened) showToast('Abrindo Premiere... Procure CinePRO em Janela → Extensões', 'success');
+      else showToast('Premiere Pro não encontrado. Abra o Premiere pelo atalho de sempre.', 'error');
+    });
   });
 
   document.getElementById('btn-reinstall').addEventListener('click', function () {
