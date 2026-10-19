@@ -31,6 +31,11 @@ npm start
 cd firebase/functions
 npm install
 firebase deploy --only functions
+
+# Ativar um assinante à mão (cria no Auth se não existir; grava users/<uid>)
+export FIREBASE_PROJECT_ID=... FIREBASE_SERVICE_ACCOUNT='{...}'
+NODE_PATH=firebase/functions/node_modules node scripts/activate-user.js <email>
+node tools/test-activate-user.js   # testes, sem Firebase
 ```
 
 ## Build dos installers
