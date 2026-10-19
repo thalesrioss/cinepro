@@ -1273,7 +1273,9 @@ function filterEffects(query) {
   // Busca única (js/search-core.js); categoria/sub filtram o resultado.
   if (!SEARCH) buildSearchIndex();
   if (!SEARCH) { renderEffects([]); return; }
-  var idxs = window.CinePROSearch.search(SEARCH, query, {
+  // Acerto pelo nome e parecido por conceito separados (BL-0059): o
+  // contador conta só os acertos; os parecidos vão numa seção no fim.
+  var split = window.CinePROSearch.searchSplit(SEARCH, query, {
     accept: function (e) {
       var inCat = activeCategory === 'all'
                 || (activeCategory === 'favorites' && favSet.has(e.id))
@@ -1282,10 +1284,16 @@ function filterEffects(query) {
       return inCat;
     },
   });
-  var result = idxs.map(function (i) { return allEffects[i]; });
+  var toEffect = function (i) { return allEffects[i]; };
+  var result = split.hits.map(toEffect);
+  var related = split.related.map(toEffect);
+  var all = result.concat(related);
+  all.searchInfo = { query: query, nHits: result.length, related: related };
 
-  renderEffects(result);
+  renderEffects(all);
 }
+
+var RELATED_GROUP = '\u0000parecidos';
 
 /** Renderiza efeitos NA ORDEM dada por uma lista de IDs (recentes/mais usados) */
 function renderEffectsByIdOrder(ids, query) {
@@ -1400,22 +1408,36 @@ function renderEffects(effects) {
     return;
   }
 
+  // Busca: contador só com os acertos pelo nome (BL-0059).
+  var info = effects.searchInfo || null;
+  if (info) {
+    var summary = document.createElement('div');
+    summary.className = 'search-summary';
+    summary.style.gridColumn = '1 / -1';
+    summary.textContent = window.CinePROSearch.hitsLabel(info.nHits, info.query);
+    grid.appendChild(summary);
+  }
+  var relatedSet = info && info.related.length ? new Set(info.related) : null;
+
   // Agrupa pela categoria original em "Favoritos"/"Todos";
-  // numa categoria, agrupa por subcategoria.
+  // numa categoria, agrupa por subcategoria. Parecidos num grupo só, no fim.
   var groups = {};
   var groupByCat = (activeCategory === 'favorites' || activeCategory === 'all');
   effects.forEach(function (e) {
+    if (relatedSet && relatedSet.has(e)) return;
     var label = groupByCat
               ? (e.category || 'Geral')
               : (e.subcategory || e.category);
     if (!groups[label]) groups[label] = [];
     groups[label].push(e);
   });
+  if (relatedSet) groups[RELATED_GROUP] = info.related;
 
   // Estado pro lazy render
   renderState = {
     groups:   groups,
     labels:   Object.keys(groups),
+    relatedTitle: relatedSet ? window.CinePROSearch.relatedTitle(info.nHits, info.query) : null,
     cursorLabel: 0,   // qual label tá renderizando
     cursorItem:  0,   // qual item dentro da label
     rendered:    0,   // total renderizado
@@ -1470,7 +1492,13 @@ function renderNextBatch(count) {
     var items = groups[label];
 
     // Se é o primeiro item desse label, insere o title
-    if (renderState.cursorItem === 0 && labels.length > 1) {
+    if (label === RELATED_GROUP && renderState.cursorItem === 0) {
+      var rel = document.createElement('div');
+      rel.className = 'section-title section-title--related';
+      rel.style.gridColumn = '1 / -1';
+      rel.textContent = renderState.relatedTitle;
+      frag.appendChild(rel);
+    } else if (renderState.cursorItem === 0 && labels.length > 1) {
       var title = document.createElement('div');
       title.className = 'section-title';
       title.style.gridColumn = '1 / -1';

@@ -682,13 +682,24 @@ function renderLibResults(q) {
 
   // Busca única com o painel (js/search-core.js, copiada para
   // renderer/js/search-core.js): palavra inteira, PT→EN, conceitos.
-  var idxs = window.CinePROSearch.search(libSearchIndex(), q, { limit: 100 });
-  var hits = idxs.map(function (i) { return LIB_SEARCH.items[i]; });
-  if (footer) footer.textContent = hits.length >= 100 ? '100+ resultados — refine a busca' : hits.length + ' resultado(s)';
-  if (!hits.length) { grid.innerHTML = '<div class="inst-loading">Nada pra "' + escapeHtml(q) + '". Tente outra palavra.</div>'; return; }
+  // O contador conta só o acerto pelo nome; o "parecido" por conceito
+  // vem numa seção própria, depois dos acertos (BL-0059: "tiro" eram 58 espadas).
+  var S = window.CinePROSearch;
+  var split = S.searchSplit(libSearchIndex(), q, { limit: 100 });
+  var toItem = function (i) { return LIB_SEARCH.items[i]; };
+  var hits = split.hits.map(toItem);
+  var related = split.related.map(toItem);
+  if (footer) footer.textContent = S.hitsLabel(hits.length, q, hits.length >= 100);
+  if (!hits.length && !related.length) { grid.innerHTML = '<div class="inst-loading">Nada pra "' + escapeHtml(q) + '". Tente outra palavra.</div>'; return; }
 
   var frag = document.createDocumentFragment();
-  hits.forEach(function (f) {
+  hits.concat(related).forEach(function (f, n) {
+    if (n === hits.length) {
+      var title = document.createElement('div');
+      title.className = 'lib-related-title';
+      title.textContent = S.relatedTitle(hits.length, q);
+      frag.appendChild(title);
+    }
     var row = document.createElement('div');
     row.className = 'inst-card lib-row' + (LIB_CACHED[f.id] ? ' lib-ready' : '');
     row.innerHTML =

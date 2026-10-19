@@ -600,6 +600,8 @@ html, body {
   max-height: 360px; overflow-y: auto;
 }
 .inst-loading { padding: 24px; text-align: center; color: var(--text-dim, #8fa3bc); font-size: 13px; }
+/* Busca da biblioteca: título da seção de parecidos (BL-0059) */
+.lib-related-title { margin-top: 8px; padding: 4px 2px; font-size: 11px; font-weight: 600; letter-spacing: .3px; color: var(--text-dim, #8fa3bc); }
 .inst-card {
   display: flex; align-items: center; gap: 12px;
   padding: 10px 12px; background: var(--bg-card, #0f1722);
