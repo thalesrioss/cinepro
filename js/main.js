@@ -376,7 +376,11 @@ var MANIFEST_URLS = [
 
 // BL-0010: manifest → (falhou) Drive em modo reduzido → (falhou) offline.
 // O modo e o texto vêm de js/catalog-status.js; aqui só pinta a tela.
+// Uma carga por vez: clique repetido em "Tentar de novo" reaproveita a que
+// está rodando (dois Drive walks em paralelo duplicavam as categorias).
+var catalogLoad = null;
 function loadEffects() {
+  if (catalogLoad) return catalogLoad;
   var CS = window.CinePROCatalogStatus;
   setStatus('loading', CS.TEXT.loading);
   showCatalogRetry(false);
@@ -384,7 +388,7 @@ function loadEffects() {
   driveCategories = [];
   driveLoadedCats = {};
 
-  return CS.load({
+  catalogLoad = CS.load({
     manifest: function () { return tryManifest(MANIFEST_URLS.slice()); },
     applyManifest: function (m) { applyManifest(m); return allEffects.length; },
     drive: function () {
@@ -397,7 +401,11 @@ function loadEffects() {
     setStatus(view.dot, view.text);
     showCatalogRetry(view.retry);
     if (view.empty) renderCatalogOffline(view.empty);
+  }).then(function () { catalogLoad = null; }, function (err) {
+    catalogLoad = null;
+    console.error('[CinePRO] loadEffects (pintura):', err);
   });
+  return catalogLoad;
 }
 
 function showCatalogRetry(on) {
@@ -406,8 +414,12 @@ function showCatalogRetry(on) {
 }
 
 function renderCatalogOffline(msg) {
+  var TEXT = window.CinePROCatalogStatus.TEXT;
   renderEmpty(msg + '<br><button class="btn btn--ghost btn--sm catalog-retry" type="button">'
-    + window.CinePROCatalogStatus.TEXT.retry + '</button>');
+    + TEXT.retry + '</button>');
+  // Sem isso a sidebar fica em "Carregando categorias..." para sempre.
+  var skel = document.querySelector && document.querySelector('#sidebar-tree .sidebar-skeleton');
+  if (skel) skel.textContent = TEXT.sidebarOffline;
 }
 
 // Um só handler para os dois botões (barra de status e grade vazia).

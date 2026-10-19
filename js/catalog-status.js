@@ -21,6 +21,7 @@
     offline: 'Sem conexão com a biblioteca.',
     offlineHint: 'Confira a internet e toque em "Tentar de novo".',
     retry: 'Tentar de novo',
+    sidebarOffline: 'As categorias aparecem quando a conexão voltar.',
   };
 
   /**

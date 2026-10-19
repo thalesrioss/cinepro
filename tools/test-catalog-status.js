@@ -92,15 +92,18 @@ function extractFn(src, name) {
 function harness(net) {
   const el = (id) => ({ id, className: '', textContent: '', innerHTML: '', hidden: id === 'status-retry' });
   const nodes = { 'status-dot': el('status-dot'), 'status-text': el('status-text'),
-    'status-retry': el('status-retry'), 'effects-grid': el('effects-grid') };
+    'status-retry': el('status-retry'), 'effects-grid': el('effects-grid'),
+    'sidebar-skeleton': el('sidebar-skeleton') };
+  nodes['sidebar-skeleton'].textContent = 'Carregando categorias...';
   const calls = { tabs: 0, index: 0 };
   const ctx = {
     console: { log() {}, warn() {}, error() {} },
     Promise, Date,
-    document: { getElementById: (id) => nodes[id] || null },
+    document: { getElementById: (id) => nodes[id] || null,
+      querySelector: (sel) => sel === '#sidebar-tree .sidebar-skeleton' ? nodes['sidebar-skeleton'] : null },
     MANIFEST_URLS: ['cdn', './manifest.json'],
     CINEPRO_CONFIG: { GOOGLE_DRIVE_FOLDER_ID: 'root' },
-    allEffects: [], driveCategories: [], driveLoadedCats: {},
+    allEffects: [], driveCategories: [], driveLoadedCats: {}, catalogLoad: null,
     tryManifest: () => Promise.resolve(net.manifest ? { files: new Array(net.manifest).fill(0), builtAt: '2026-10-19T08:00:00Z' } : null),
     applyManifest(m) { ctx.allEffects = m.files.map((_, i) => ({ id: i })); calls.tabs++; calls.index++; },
     listDriveFolderAll: () => net.drive ? Promise.resolve([{ name: 'SFX', folder: true }, { name: 'a.wav' }]) : Promise.reject(new Error('Drive 403')),
@@ -146,6 +149,12 @@ t('tudo abortado → vermelho, grade com mensagem e botão, sem "chave de API"',
     /class="[^"]*catalog-retry[^"]*"[^>]*>Tentar de novo</.test(grid) &&
     !/chave de API/i.test(grid) && n['status-retry'].hidden === false) || [n['status-dot'].className, n['status-text'].textContent, grid].join(' | ');
 });
+t('tudo abortado → sidebar não fica em "Carregando categorias..."', async () => {
+  const h = harness({ manifest: 0, drive: false });
+  await h.ctx.loadEffects();
+  const txt = h.nodes['sidebar-skeleton'].textContent;
+  return txt === CS.TEXT.sidebarOffline || txt;
+});
 t('"Tentar de novo" com a rede de volta → acervo completo, verde, retry some', async () => {
   const net = { manifest: 0, drive: true };
   const h = harness(net);
@@ -165,12 +174,34 @@ t('modo reduzido não duplica itens a cada retry', async () => {
     h.ctx.allEffects.length + ' efeitos, ' + h.ctx.driveCategories.length + ' categorias';
 });
 
+t('dois cliques rápidos em "Tentar de novo" → uma carga só, sem categorias duplicadas', async () => {
+  const h = harness({ manifest: 0, drive: true });
+  await h.ctx.loadEffects();
+  let walks = 0; const list = h.ctx.listDriveFolderAll;
+  h.ctx.listDriveFolderAll = (id) => { walks++; return list(id); };
+  const a = h.ctx.loadEffects(), b = h.ctx.loadEffects();   // clique duplo
+  await Promise.all([a, b]);
+  return (a === b && walks === 1 && h.ctx.driveCategories.length === 2 && h.ctx.catalogLoad === null) ||
+    'mesma promise=' + (a === b) + ', walks=' + walks + ', categorias=' + h.ctx.driveCategories.length;
+});
+t('depois que a carga termina, novo clique carrega de novo', async () => {
+  const h = harness({ manifest: 0, drive: true });
+  await h.ctx.loadEffects();
+  const p1 = h.ctx.loadEffects(); await p1;
+  const p2 = h.ctx.loadEffects(); await p2;
+  return p1 !== p2 || 'reaproveitou carga já terminada';
+});
+
 group('CRITÉRIO DO BL-0010 (estático)');
 t('js/main.js sem "chave de API"', () => !/chave de API/.test(MAIN) || 'ainda tem');
 t('index.html carrega catalog-status.js antes de main.js e tem #status-retry', () => {
   const html = fs.readFileSync(path.join(ROOT, 'index.html'), 'utf8');
   const a = html.indexOf('js/catalog-status.js'), b = html.indexOf('js/main.js');
   return (a > 0 && a < b && /id="status-retry"[^>]*hidden/.test(html)) || 'ordem ou botão errados';
+});
+t('index.html não põe "Limpar busca" na grade do catálogo fora do ar', () => {
+  const html = fs.readFileSync(path.join(ROOT, 'index.html'), 'utf8');
+  return /querySelector\('\.catalog-retry'\)\) return;/.test(html) || 'observer sem a exceção';
 });
 t('CSS tem ponto amarelo (.status-dot.warn)', () => {
   const css = fs.readFileSync(path.join(ROOT, 'css', 'style.css'), 'utf8');

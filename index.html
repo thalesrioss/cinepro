@@ -272,6 +272,8 @@
         var stateBox = grid.querySelector('.state-box');
         if (!stateBox) return;
         if (stateBox.querySelector('.empty-action')) return;
+        // Catálogo fora do ar (BL-0010): não há busca para limpar, só "Tentar de novo".
+        if (stateBox.querySelector('.catalog-retry')) return;
 
         var emptyAction = document.createElement('button');
         emptyAction.type = 'button';
