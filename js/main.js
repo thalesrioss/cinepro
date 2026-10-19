@@ -425,28 +425,59 @@ var MANIFEST_URLS = [
   './manifest.json',
 ];
 
+// BL-0010: manifest → (falhou) Drive em modo reduzido → (falhou) offline.
+// O modo e o texto vêm de js/catalog-status.js; aqui só pinta a tela.
+// Uma carga por vez: clique repetido em "Tentar de novo" reaproveita a que
+// está rodando (dois Drive walks em paralelo duplicavam as categorias).
+var catalogLoad = null;
 function loadEffects() {
-  setStatus('loading', 'Carregando biblioteca...');
+  if (catalogLoad) return catalogLoad;
+  var CS = window.CinePROCatalogStatus;
+  setStatus('loading', CS.TEXT.loading);
+  showCatalogRetry(false);
   allEffects = [];
   driveCategories = [];
   driveLoadedCats = {};
 
-  return tryManifest(MANIFEST_URLS.slice())
-    .then(function (manifest) {
-      if (manifest) {
-        applyManifest(manifest);
-        var ageHours = ((Date.now() - new Date(manifest.builtAt).getTime()) / 3600000).toFixed(0);
-        setStatus('ok', allEffects.length + ' efeitos prontos (manifest ' + ageHours + 'h atrás)');
-        return;
-      }
+  catalogLoad = CS.load({
+    manifest: function () { return tryManifest(MANIFEST_URLS.slice()); },
+    applyManifest: function (m) { applyManifest(m); return allEffects.length; },
+    drive: function () {
       console.warn('[CinePRO] Manifest indisponível, fallback pra Drive walk');
       return loadEffectsFromDriveLive();
-    })
-    .catch(function (err) {
-      console.error('[CinePRO] loadEffects falhou:', err);
-      return loadEffectsFromDriveLive();
-    });
+    },
+  }).then(function (result) {
+    if (result.error) console.error('[CinePRO] loadEffects:', result.mode, result.error);
+    var view = CS.describe(result);
+    setStatus(view.dot, view.text);
+    showCatalogRetry(view.retry);
+    if (view.empty) renderCatalogOffline(view.empty);
+  }).then(function () { catalogLoad = null; }, function (err) {
+    catalogLoad = null;
+    console.error('[CinePRO] loadEffects (pintura):', err);
+  });
+  return catalogLoad;
 }
+
+function showCatalogRetry(on) {
+  var btn = document.getElementById('status-retry');
+  if (btn) btn.hidden = !on;
+}
+
+function renderCatalogOffline(msg) {
+  var TEXT = window.CinePROCatalogStatus.TEXT;
+  renderEmpty(msg + '<br><button class="btn btn--ghost btn--sm catalog-retry" type="button">'
+    + TEXT.retry + '</button>');
+  // Sem isso a sidebar fica em "Carregando categorias..." para sempre.
+  var skel = document.querySelector && document.querySelector('#sidebar-tree .sidebar-skeleton');
+  if (skel) skel.textContent = TEXT.sidebarOffline;
+}
+
+// Um só handler para os dois botões (barra de status e grade vazia).
+document.addEventListener('click', function (e) {
+  var t = e.target;
+  if (t && t.closest && (t.closest('#status-retry') || t.closest('.catalog-retry'))) loadEffects();
+});
 
 function tryManifest(urls) {
   if (!urls.length) return Promise.resolve(null);
@@ -533,8 +564,12 @@ function loadRemoteConfig() {
 }
 
 // ── FALLBACK: Drive walk live (caso manifest off) ────────────────
+// Rejeita se o Drive falhar: quem decide a mensagem é loadEffects (BL-0010).
 function loadEffectsFromDriveLive() {
   setStatus('loading', 'Carregando categorias (modo lento)...');
+  allEffects = [];          // applyManifest pode ter falhado no meio
+  driveCategories = [];
+  driveLoadedCats = {};
 
   return listDriveFolderAll(CINEPRO_CONFIG.GOOGLE_DRIVE_FOLDER_ID)
     .then(function (rootItems) {
@@ -566,14 +601,9 @@ function loadEffectsFromDriveLive() {
       });
     })
     .then(function () {
+      buildSearchIndex();     // retry vindo do acervo completo não deixa índice velho
       buildCategoryTabs();
       renderEffects(allEffects);
-      setStatus('ok', driveCategories.length + ' categorias prontas — clique pra explorar');
-    })
-    .catch(function (err) {
-      setStatus('error', 'Erro ao carregar');
-      showToast('Erro: ' + err.message, 'error');
-      renderEmpty('Não foi possível carregar.<br>Verifique a chave de API e a conexão.');
     });
 }
 
