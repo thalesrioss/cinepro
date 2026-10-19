@@ -27,6 +27,7 @@
     },
     "files": [
       "main.js",
+      "cache-dir.js",
       "preload.js",
       "premiere-locate.js",
       "renderer/**/*",
