@@ -194,6 +194,21 @@ body {
   line-height: 1.6;
 }
 
+.offline-detail {
+  font-size: 9px;
+  color: var(--text-dim);
+  word-break: break-word;
+}
+
+.offline-notice {
+  font-size: 10px;
+  color: var(--text-muted);
+  text-align: center;
+  padding: 3px 8px;
+  border-bottom: 1px solid var(--border);
+}
+.offline-notice.hidden { display: none; }
+
 .btn-subscribe {
   background: linear-gradient(135deg, var(--gold) 0%, var(--gold-dim) 100%);
   color: #000;

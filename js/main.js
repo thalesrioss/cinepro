@@ -85,22 +85,57 @@ function checkSubscription(user) {
     return;
   }
 
+  var SUB = window.CinePROSubscription;
   db.collection('users').doc(user.uid).get()
     .then(function (doc) {
       // Acesso por admin no documento OU assinatura ativa
-      if (doc.exists && (doc.data().admin === true || doc.data().subscriptionActive === true)) {
+      var d = doc.exists ? doc.data() : {};
+      var ativo = doc.exists && (d.admin === true || d.subscriptionActive === true);
+      var r = SUB.resultadoAssinatura({ uid: user.uid, ativo: ativo }, null, Date.now());
+      if (r.estado === 'ativo') {
+        SUB.salvarUltimaAtiva(localStorage, user.uid, Date.now());
+        setOfflineNotice(null);
         showScreen('app');
-        var badge = user.email + (doc.data().admin === true ? ' (ADM)' : '');
-        setUserBadge(badge);
+        setUserBadge(user.email + (d.admin === true ? ' (ADM)' : ''));
         loadEffects();
       } else {
+        // Leitura chegou e disse "não ativo": tolerância offline acaba aqui
+        SUB.apagarUltimaAtiva(localStorage);
         showScreen('no-access');
       }
     })
     .catch(function (err) {
-      showError('Erro ao verificar assinatura: ' + err.message);
-      showScreen('no-access');
+      // Erro de leitura (offline, timeout, permissão) não é "assinatura expirou" (BL-0043)
+      var msg = (err && err.message) || String(err);
+      showError('Erro ao verificar assinatura: ' + msg);
+      var r = SUB.resultadoAssinatura({ uid: user.uid, erro: msg }, SUB.lerUltimaAtiva(localStorage), Date.now());
+      if (r.estado === 'offline-liberado') {
+        setOfflineNotice(r.ate);
+        showScreen('app');
+        setUserBadge(user.email);
+        loadEffects();
+      } else {
+        showOfflineScreen(msg);
+      }
     });
+}
+
+/** Tela "Sem conexão para conferir sua assinatura", com o erro técnico pequeno. */
+function showOfflineScreen(detail) {
+  var btn = document.getElementById('btn-retry-subscription');
+  btn.disabled    = false;
+  btn.textContent = 'Tentar de novo';
+  document.getElementById('offline-detail').textContent = detail || '';
+  showScreen('offline');
+}
+
+/** Aviso discreto no topo do painel quando liberado sem conferir; null esconde. */
+function setOfflineNotice(ate) {
+  var el = document.getElementById('offline-notice');
+  if (!el) return;
+  if (ate == null) { el.classList.add('hidden'); el.textContent = ''; return; }
+  el.textContent = 'Sem conexão: acesso liberado até ' + new Date(ate).toLocaleDateString('pt-BR');
+  el.classList.remove('hidden');
 }
 
 // ══ LOGIN UI ═══════════════════════════════════════════════════
@@ -128,6 +163,13 @@ function bindLoginUI() {
   });
 
   document.getElementById('btn-logout-no-access').addEventListener('click', doLogout);
+  document.getElementById('btn-logout-offline').addEventListener('click', doLogout);
+  document.getElementById('btn-retry-subscription').addEventListener('click', function () {
+    if (!currentUser) return;
+    this.disabled    = true;
+    this.textContent = 'Conferindo...';
+    checkSubscription(currentUser);
+  });
 
   var forgot = document.getElementById('link-forgot-password');
   if (forgot) forgot.addEventListener('click', function (e) {
@@ -204,6 +246,8 @@ function doLogin() {
 }
 
 function doLogout() {
+  window.CinePROSubscription.apagarUltimaAtiva(localStorage);
+  setOfflineNotice(null);
   auth.signOut().then(function () {
     currentUser = null;
     allEffects  = [];
@@ -223,6 +267,7 @@ function showLoginError(msg) {
 function showScreen(name) {
   document.getElementById('login-overlay').classList.toggle('hidden',    name !== 'login');
   document.getElementById('no-access-overlay').classList.toggle('hidden', name !== 'no-access');
+  document.getElementById('offline-overlay').classList.toggle('hidden',   name !== 'offline');
   document.getElementById('app-content').classList.toggle('hidden',       name !== 'app');
 
   if (name === 'login') {
