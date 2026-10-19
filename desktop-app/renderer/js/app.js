@@ -660,6 +660,19 @@ function initLibrary() {
   });
 }
 
+// Índice da busca: só mídia (vídeo/áudio/imagem), como o painel; LUT,
+// MOGRT e preset ficam nos instaláveis. Refeito se o manifest mudar.
+var LIB_SEARCH = null;
+var LIB_SEARCH_SRC = null;
+function libSearchIndex() {
+  if (LIB_SEARCH && LIB_SEARCH_SRC === INST_MANIFEST) return LIB_SEARCH;
+  var MEDIA = { video: 1, audio: 1, image: 1 };
+  var media = (INST_MANIFEST.files || []).filter(function (f) { return MEDIA[f.kind]; });
+  LIB_SEARCH = window.CinePROSearch.buildIndex(media, INST_MANIFEST.concepts);
+  LIB_SEARCH_SRC = INST_MANIFEST;
+  return LIB_SEARCH;
+}
+
 function renderLibResults(q) {
   var grid = document.getElementById('lib-grid');
   var footer = document.getElementById('lib-footer');
@@ -667,18 +680,10 @@ function renderLibResults(q) {
   if (!INST_MANIFEST) { grid.innerHTML = '<div class="inst-loading">Carregando biblioteca…</div>'; return; }
   if (!q || q.length < 2) { grid.innerHTML = '<div class="inst-loading">Digite pelo menos 2 letras.</div>'; if (footer) footer.textContent = ''; return; }
 
-  var MEDIA = { video: 1, audio: 1, image: 1 };
-  var norm = q.normalize ? q.normalize('NFD').replace(/[̀-ͯ]/g, '') : q;
-  var hits = [];
-  var files = INST_MANIFEST.files || [];
-  for (var i = 0; i < files.length && hits.length < 100; i++) {
-    var f = files[i];
-    if (!MEDIA[f.kind]) continue;
-    var hay = (f.name + ' ' + (f.category || '') + ' ' + ((f.tags || []).join(' ')));
-    hay = hay.toLowerCase();
-    hay = hay.normalize ? hay.normalize('NFD').replace(/[̀-ͯ]/g, '') : hay;
-    if (hay.indexOf(norm) !== -1) hits.push(f);
-  }
+  // Busca única com o painel (js/search-core.js, copiada para
+  // renderer/js/search-core.js): palavra inteira, PT→EN, conceitos.
+  var idxs = window.CinePROSearch.search(libSearchIndex(), q, { limit: 100 });
+  var hits = idxs.map(function (i) { return LIB_SEARCH.items[i]; });
   if (footer) footer.textContent = hits.length >= 100 ? '100+ resultados — refine a busca' : hits.length + ' resultado(s)';
   if (!hits.length) { grid.innerHTML = '<div class="inst-loading">Nada pra "' + escapeHtml(q) + '". Tente outra palavra.</div>'; return; }
 
