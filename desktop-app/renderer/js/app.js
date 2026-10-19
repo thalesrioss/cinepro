@@ -289,7 +289,9 @@ function bindDashboard() {
   });
 
   document.getElementById('btn-reinstall').addEventListener('click', function () {
-    showToast('Pra reinstalar, rode o instalador novamente. Em breve isso será automático.', '');
+    // O app não traz o plugin dentro; o instalador da LP instala/repara.
+    window.cinepro.openExternal(CINEPRO_CONFIG.PLUGIN_DOWNLOAD_URL);
+    showToast('Abrindo a página de download. Entre em "Já tem conta?", baixe o instalador e feche o Premiere antes de instalar.', 'success');
   });
 
   document.getElementById('btn-clear-cache').addEventListener('click', function () {
