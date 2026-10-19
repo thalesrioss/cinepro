@@ -110,6 +110,25 @@ function setBtnLoading(loading, label) {
   btn.textContent = label || 'Criar conta';
 }
 
+// Sem SDK do Firebase (bloqueador de anúncios, rede) não há conta, e o app
+// só deixa entrar com conta: não libera download (BL-0070).
+var AUTH_UNAVAILABLE_MSG = 'Não conseguimos falar com o servidor de cadastro. ' +
+  'Desative o bloqueador de anúncios neste site ou tente outro navegador.';
+
+// Código do Firebase → frase em português. Nunca devolve e.message cru.
+function authErrorMessage(code) {
+  switch (code) {
+    case 'auth/invalid-email':          return 'Email inválido.';
+    case 'auth/weak-password':          return 'Senha muito fraca. Use ao menos 6 caracteres.';
+    case 'auth/wrong-password':
+    case 'auth/invalid-credential':     return 'Senha incorreta.';
+    case 'auth/user-not-found':         return 'Email não encontrado. Crie uma conta nova.';
+    case 'auth/network-request-failed': return 'Sem conexão com o servidor. Confira a internet e tente de novo.';
+    case 'auth/too-many-requests':      return 'Muitas tentativas. Espere alguns minutos e tente de novo.';
+    default:                            return 'Não deu certo agora. Tente de novo em instantes.';
+  }
+}
+
 function doSignup() {
   var c = getCreds();
   clearErr();
@@ -118,9 +137,8 @@ function doSignup() {
     return showErr('Preencha email válido e senha de pelo menos 6 caracteres.');
   }
   if (!auth) {
-    // Sem Firebase, libera download mesmo assim (degrade gracioso)
-    if (window.cineproTrack) window.cineproTrack('Signup Success', { method: 'local' });
-    return revealDownloads('Conta criada localmente. Baixa o instalador agora →');
+    setBtnLoading(false);
+    return showErr(AUTH_UNAVAILABLE_MSG);
   }
 
   setBtnLoading(true, 'Criando conta...');
@@ -145,9 +163,7 @@ function doSignup() {
             setBtnLoading(false);
           });
       }
-      if (e.code === 'auth/invalid-email')   showErr('Email inválido.');
-      else if (e.code === 'auth/weak-password') showErr('Senha muito fraca. Use ao menos 6 caracteres.');
-      else                                    showErr(e.message || 'Falha ao criar conta. Tente de novo.');
+      showErr(authErrorMessage(e && e.code));
       setBtnLoading(false);
     });
 }
@@ -160,7 +176,8 @@ function doExistingLogin() {
     return showErr('Preencha email e senha pra entrar.');
   }
   if (!auth) {
-    return revealDownloads('Bem-vindo! Baixa o instalador →');
+    setBtnLoading(false);
+    return showErr(AUTH_UNAVAILABLE_MSG);
   }
 
   setBtnLoading(true, 'Entrando...');
@@ -171,13 +188,7 @@ function doExistingLogin() {
       revealDownloads('Bem-vindo de volta, ' + cred.user.email + '!');
     })
     .catch(function (e) {
-      if (e.code === 'auth/wrong-password' || e.code === 'auth/invalid-credential') {
-        showErr('Senha incorreta.');
-      } else if (e.code === 'auth/user-not-found') {
-        showErr('Email não encontrado. Crie uma conta nova.');
-      } else {
-        showErr(e.message || 'Falha ao entrar.');
-      }
+      showErr(authErrorMessage(e && e.code));
       setBtnLoading(false);
     });
 }
