@@ -546,9 +546,11 @@ var MANIFEST_URL = 'https://cdn.jsdelivr.net/gh/thalesrioss/cinepro@main/manifes
 
 function instAssetUrls(f) {
   var urls = [];
-  var cdn = (window.CINEPRO_CONFIG && CINEPRO_CONFIG.CDN_BASE) || '';
+  // config.js declara `const CINEPRO_CONFIG`: não vira window.CINEPRO_CONFIG,
+  // então o acesso é direto (antes a CDN nunca entrava na lista; BL-0035).
+  var cdn = CINEPRO_CONFIG.CDN_BASE || '';
   if (cdn) urls.push(cdn.replace(/\/+$/, '') + '/' + f.id + '.' + f.ext);
-  var key = (window.CINEPRO_CONFIG && CINEPRO_CONFIG.GOOGLE_DRIVE_API_KEY) || '';
+  var key = CINEPRO_CONFIG.GOOGLE_DRIVE_API_KEY || '';
   if (key) urls.push('https://www.googleapis.com/drive/v3/files/' + f.id + '?alt=media&key=' + key);
   urls.push('https://drive.usercontent.google.com/download?id=' + f.id + '&export=download&confirm=t');
   return urls;
@@ -643,6 +645,71 @@ function libAssetOf(f) {
   return { id: f.id, kind: f.kind, ext: f.ext, name: f.name, urls: instAssetUrls(f) };
 }
 
+// ── Ouvir antes de baixar (BL-0035) ──────────────────────────────
+// Um único <audio> para a biblioteca inteira: tocar outro para o
+// anterior; clicar de novo no mesmo para. Toca direto da CDN (a 1ª URL
+// de instAssetUrls); a CSP do index.html libera essa origem em media-src.
+// Digitar na busca para o som, porque a linha que tocava some.
+var LIB_PREVIEW = { audio: null, id: null, btn: null };
+
+function libPreviewUrl(f) {
+  if (f.kind !== 'audio' || !CINEPRO_CONFIG.CDN_BASE) return '';
+  return instAssetUrls(f)[0];
+}
+
+function libPreviewAudio() {
+  if (LIB_PREVIEW.audio) return LIB_PREVIEW.audio;
+  var a = document.createElement('audio');
+  a.id = 'lib-preview-audio';
+  a.preload = 'none';
+  a.addEventListener('ended', libPreviewStop);
+  a.addEventListener('error', function () {
+    if (!a.getAttribute('src')) return;
+    var btn = LIB_PREVIEW.btn;
+    libPreviewStop();
+    if (btn) { btn.textContent = '!'; btn.title = 'Não deu pra tocar. Verifique a conexão.'; }
+  });
+  document.body.appendChild(a);
+  var input = document.getElementById('lib-search');
+  if (input) input.addEventListener('input', libPreviewStop);
+  LIB_PREVIEW.audio = a;
+  return a;
+}
+
+function libPreviewStop() {
+  var a = LIB_PREVIEW.audio;
+  if (a) { a.pause(); a.removeAttribute('src'); a.load(); }
+  if (LIB_PREVIEW.btn) {
+    LIB_PREVIEW.btn.textContent = '▶';
+    LIB_PREVIEW.btn.title = 'Ouvir';
+    LIB_PREVIEW.btn.classList.remove('is-playing');
+  }
+  LIB_PREVIEW.id = null;
+  LIB_PREVIEW.btn = null;
+}
+
+function libPreviewToggle(f, btn) {
+  var same = LIB_PREVIEW.id === f.id;
+  libPreviewStop();
+  if (same) return;
+  var a = libPreviewAudio();
+  LIB_PREVIEW.id = f.id;
+  LIB_PREVIEW.btn = btn;
+  btn.textContent = '■';
+  btn.title = 'Parar';
+  btn.classList.add('is-playing');
+  a.src = libPreviewUrl(f);
+  var p = a.play();
+  // AbortError = outro ▶ ou parar no meio do carregamento: normal.
+  // Falha de rede chega também no 'error' do <audio>.
+  if (p && p.catch) p.catch(function (err) {
+    if (err && err.name === 'AbortError') return;
+    if (LIB_PREVIEW.id !== f.id) return;
+    libPreviewStop();
+    btn.textContent = '!'; btn.title = 'Não deu pra tocar. Verifique a conexão.';
+  });
+}
+
 function initLibrary() {
   var section = document.getElementById('library-section');
   if (section) section.classList.remove('hidden');
@@ -702,7 +769,9 @@ function renderLibResults(q) {
     }
     var row = document.createElement('div');
     row.className = 'inst-card lib-row' + (LIB_CACHED[f.id] ? ' lib-ready' : '');
+    var canPlay = !!libPreviewUrl(f);
     row.innerHTML =
+      (canPlay ? '<button class="btn btn--soft btn--sm lib-play" title="Ouvir" aria-label="Ouvir ' + escapeAttr(f.name) + '">▶</button>' : '') +
       '<div class="inst-card-info">' +
         '<div class="inst-card-name" title="' + escapeAttr(f.name) + '">' + escapeHtml(f.name) + '</div>' +
         '<div class="inst-card-meta">' + (f.ext || '').toUpperCase() + (f.category ? ' · ' + escapeHtml(f.category) : '') + '</div>' +
@@ -712,6 +781,8 @@ function renderLibResults(q) {
 
     var btnDl = row.querySelector('.lib-dl');
     var btnRes = row.querySelector('.lib-resolve');
+    var btnPlay = row.querySelector('.lib-play');
+    if (btnPlay) btnPlay.addEventListener('click', function () { libPreviewToggle(f, btnPlay); });
 
     btnDl.addEventListener('click', function () {
       if (LIB_CACHED[f.id]) return;
