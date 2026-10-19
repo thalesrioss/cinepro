@@ -38,6 +38,15 @@ NODE_PATH=firebase/functions/node_modules node scripts/activate-user.js <email>
 node tools/test-activate-user.js   # testes, sem Firebase
 ```
 
+## Testes
+
+```bash
+# Todas as suítes tools/test-*.js + tools/check-lua.js (sai ≠0 se uma falhar)
+./tools/run-all-tests.sh
+```
+
+O workflow `build-installers.yml` roda o mesmo script antes do build.
+
 ## Build dos installers
 
 ```bash
