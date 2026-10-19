@@ -6,6 +6,7 @@ const { app, BrowserWindow, shell, ipcMain, dialog } = require('electron');
 const path = require('path');
 const fs   = require('fs');
 const os   = require('os');
+const { findPremiere } = require('./premiere-locate');
 
 const APP_NAME = 'CinePRO';
 const CACHE_DIR = path.join(os.homedir(), 'Library', 'Application Support', 'CinePRO', 'cache');
@@ -45,21 +46,15 @@ function createWindow() {
 ipcMain.handle('open-external', (_e, url) => shell.openExternal(url));
 
 ipcMain.handle('open-premiere', () => {
-  // macOS: usa `open -a` pra abrir o Premiere
-  // Windows: tenta achar o .exe padrão
+  // Abre o Premiere mais novo instalado (BL-0006). false = não achou,
+  // e o renderer avisa em vez de dizer "Abrindo...".
+  const found = findPremiere(process.platform);
+  if (!found) return false;
+  const cp = require('child_process');
   if (process.platform === 'darwin') {
-    require('child_process').exec('open -a "Adobe Premiere Pro 2024" || open -a "Adobe Premiere Pro 2025" || open -a "Adobe Premiere Pro"');
+    cp.execFile('open', [found]);
   } else {
-    const candidates = [
-      'C:\\Program Files\\Adobe\\Adobe Premiere Pro 2025\\Adobe Premiere Pro.exe',
-      'C:\\Program Files\\Adobe\\Adobe Premiere Pro 2024\\Adobe Premiere Pro.exe',
-    ];
-    for (const p of candidates) {
-      if (fs.existsSync(p)) {
-        require('child_process').spawn(p, [], { detached: true });
-        return true;
-      }
-    }
+    cp.spawn(found, [], { detached: true, stdio: 'ignore' }).unref();
   }
   return true;
 });
