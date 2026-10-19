@@ -12,6 +12,7 @@ const { defineSecret } = require('firebase-functions/params');
 const { setGlobalOptions } = require('firebase-functions/v2');
 const admin = require('firebase-admin');
 const { google } = require('googleapis');
+const crypto = require('crypto');
 
 admin.initializeApp();
 setGlobalOptions({ region: 'southamerica-east1', maxInstances: 10 });
@@ -131,6 +132,33 @@ exports.leadCapture = onRequest(
 //   2. TICTO WEBHOOK
 // ═════════════════════════════════════════════════════════════
 
+// Token pode vir no corpo, num dos headers abaixo ou em ?token= (o primeiro
+// não vazio vale). Valor que não é string conta como ausente.
+function tictoTokenFrom(req) {
+  const body = req.body || {};
+  const h = req.headers || {};
+  const q = req.query || {};
+  const str = (v) => (typeof v === 'string' ? v : '');
+  return (
+    str(body.token)
+    || str(h['x-ticto-token'])
+    || str(h['x-token'])
+    || str(h['x-postback-token'])
+    || str(h['x-postback-secret'])
+    || str(h['authorization']).replace(/^Bearer\s+/i, '')
+    || str(q.token)
+    || ''
+  ).trim();
+}
+
+// Comparação em tempo constante. Segredo vazio no ambiente nunca aceita nada.
+function tokenMatches(received, expected) {
+  const exp = Buffer.from(String(expected || '').trim());
+  const rec = Buffer.from(String(received || '').trim());
+  if (exp.length === 0 || rec.length !== exp.length) return false;
+  return crypto.timingSafeEqual(rec, exp);
+}
+
 exports.tictoWebhook = onRequest(
   { secrets: ALL_SECRETS, invoker: 'public' },
   async (req, res) => {
@@ -138,42 +166,12 @@ exports.tictoWebhook = onRequest(
 
     const data = req.body || {};
 
-    // 1. Validacao em camadas. A Ticto pode mandar token em varios lugares OU nao mandar.
-    // Log temporario pra debug
-    console.log('TICTO REQ headers:', JSON.stringify(req.headers));
-    console.log('TICTO REQ query:',   JSON.stringify(req.query));
-    console.log('TICTO REQ body keys:', Object.keys(data));
-
-    const expectedToken = (TICTO_TOKEN.value() || '').trim();
-    const receivedToken = (
-      data.token
-      || req.headers['x-ticto-token']
-      || req.headers['x-token']
-      || req.headers['x-postback-token']
-      || req.headers['x-postback-secret']
-      || (req.headers['authorization'] || '').replace(/^Bearer\s+/i, '')
-      || req.query.token
-      || ''
-    ).trim();
-
-    const tokenValid = receivedToken && receivedToken === expectedToken;
-
-    // Fallback: se nao tem token, valida pela "forma" do payload (Ticto v2)
-    // Real Ticto v2 webhook tem: version="2.0", commission_type, customer.email, order
-    const looksLikeTictoV2 =
-      data.version === '2.0' &&
-      typeof data.commission_type === 'string' &&
-      typeof data.status === 'string' &&
-      data.customer && typeof data.customer.email === 'string' &&
-      data.order && (data.order.id || data.order.hash);
-
-    if (!tokenValid && !looksLikeTictoV2) {
-      console.warn('Webhook rejeitado: token invalido E payload nao parece Ticto v2');
+    // 1. Só passa com o token da Ticto (ADR-0008). Forma do payload não
+    //    autentica: os campos são públicos. Nunca logar headers/query/token.
+    const receivedToken = tictoTokenFrom(req);
+    if (!tokenMatches(receivedToken, TICTO_TOKEN.value())) {
+      console.warn('Webhook rejeitado: ' + (receivedToken ? 'token invalido' : 'token ausente'));
       return res.status(401).json({ error: 'invalid token' });
-    }
-
-    if (!tokenValid && looksLikeTictoV2) {
-      console.warn('FALLBACK ATIVADO: token ausente mas payload Ticto v2 valido. Email=' + (data.customer.email || ''));
     }
 
     // 2. Campos
