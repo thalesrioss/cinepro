@@ -6,9 +6,11 @@ const { app, BrowserWindow, shell, ipcMain, dialog } = require('electron');
 const path = require('path');
 const fs   = require('fs');
 const os   = require('os');
+const { cacheDir } = require('./cache-dir');
 
 const APP_NAME = 'CinePRO';
-const CACHE_DIR = path.join(os.homedir(), 'Library', 'Application Support', 'CinePRO', 'cache');
+// Mesma pasta do plugin (jsx/hostscript.jsx getCacheDir): %APPDATA% no Windows.
+const CACHE_DIR = cacheDir();
 
 let mainWindow = null;
 

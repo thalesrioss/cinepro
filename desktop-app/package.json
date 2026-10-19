@@ -26,6 +26,7 @@
     },
     "files": [
       "main.js",
+      "cache-dir.js",
       "preload.js",
       "renderer/**/*",
       "resolve/**/*",
