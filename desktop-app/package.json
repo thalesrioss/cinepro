@@ -28,6 +28,7 @@
     "files": [
       "main.js",
       "preload.js",
+      "premiere-locate.js",
       "renderer/**/*",
       "resolve/**/*",
       "shared/**/*"
