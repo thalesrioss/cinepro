@@ -45,7 +45,8 @@ const PLACEHOLDER = ['seu', 'secret', 'key', 'aqui'].join('-');
 
 function trackedJsFiles() {
   const out = execFileSync('git', ['ls-files', '*.js'], { cwd: ROOT, encoding: 'utf8' });
-  return out.split('\n').filter(f => f && !f.includes('node_modules/') && fs.existsSync(path.join(ROOT, f)));
+  const self = path.relative(ROOT, __filename);  // os exemplos do detector acima casariam
+  return out.split('\n').filter(f => f && f !== self && !f.includes('node_modules/') && fs.existsSync(path.join(ROOT, f)));
 }
 
 group('detector');
