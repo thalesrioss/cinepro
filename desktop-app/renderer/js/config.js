@@ -28,6 +28,11 @@ const CINEPRO_CONFIG = {
   // URL da sua página de vendas na Ticto
   TICTO_CHECKOUT_URL: 'https://checkout.ticto.app/O292AD8B4',
 
+  // -- Instalador --
+  // "Instalar/Reinstalar plugin" abre a seção de download da LP. O app não
+  // embute o plugin (package.json build.files), então o caminho é o instalador.
+  PLUGIN_DOWNLOAD_URL: 'https://cinepro-rho.vercel.app/#signup',
+
   // -- App --
   PLUGIN_VERSION: '1.0.16',
 
