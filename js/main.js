@@ -284,6 +284,7 @@ function bindAppUI() {
   document.getElementById('btn-logout').addEventListener('click', doLogout);
   bindGridDelegation();
   bindKeyboardShortcuts();
+  bindSidebarDrawer();
   scheduleUpdateCheck();
   // v1.3: carrega bundle manifest (assets pre-instalados)
   initBundleLookup();
@@ -2116,6 +2117,82 @@ function moveFocusBy(deltaCol, deltaRow) {
   setFocusedCard(cards[next]);
 }
 
+/* ── Gaveta da sidebar em painel estreito (BL-0051) ──────────
+ * Com o painel ≤ 480 px a sidebar some da grade (css/style.css) e o ☰ do
+ * cabeçalho abre a mesma árvore por cima da grade. Escolher categoria,
+ * subcategoria ou pack fecha; pasta só expande (para escolher a sub);
+ * Restaurar mídias e Diagnóstico deixam aberta porque o progresso aparece
+ * no próprio item. Esc (bindKeyboardShortcuts) e clique fora fecham. */
+var SIDEBAR_NARROW_MQ = '(max-width: 480px)';
+
+function isSidebarDrawerOpen() {
+  var sb = document.getElementById('sidebar');
+  return !!(sb && sb.classList.contains('is-drawer-open'));
+}
+
+function openSidebarDrawer() {
+  var sb = document.getElementById('sidebar');
+  var btn = document.getElementById('btn-sidebar-toggle');
+  if (!sb || !btn) return;
+  sb.classList.add('is-drawer-open');
+  btn.setAttribute('aria-expanded', 'true');
+  btn.setAttribute('aria-label', 'Fechar categorias');
+  var first = sb.querySelector('.sidebar-item.is-active') || sb.querySelector('.sidebar-item');
+  if (first) first.focus();
+}
+
+function closeSidebarDrawer(returnFocus) {
+  var sb = document.getElementById('sidebar');
+  var btn = document.getElementById('btn-sidebar-toggle');
+  if (!sb || !btn || !sb.classList.contains('is-drawer-open')) return;
+  sb.classList.remove('is-drawer-open');
+  btn.setAttribute('aria-expanded', 'false');
+  btn.setAttribute('aria-label', 'Abrir categorias');
+  if (returnFocus) btn.focus();
+}
+
+function bindSidebarDrawer() {
+  var sb = document.getElementById('sidebar');
+  var btn = document.getElementById('btn-sidebar-toggle');
+  var tree = document.getElementById('sidebar-tree');
+  if (!sb || !btn || !tree) return;
+
+  btn.addEventListener('click', function () {
+    if (isSidebarDrawerOpen()) closeSidebarDrawer(true);
+    else openSidebarDrawer();
+  });
+
+  // Fase de bubble: o clique já filtrou. O item pode ter saído do DOM
+  // (buildSidebarTree), mas closest() funciona no nó solto.
+  tree.addEventListener('click', function (e) {
+    if (!isSidebarDrawerOpen()) return;
+    var item = e.target.closest && e.target.closest('.sidebar-item');
+    if (!item || item.classList.contains('is-folder')) return;
+    var cat = item.dataset.cat;
+    if (cat === 'restore-media' || cat === 'diagnostics') return;
+    closeSidebarDrawer(true);
+  });
+
+  // Clique fora: fase de captura, antes que um clique de pasta reconstrua
+  // a árvore e tire o alvo de dentro da sidebar. O clique só fecha: não
+  // chega ao card de baixo (não aplica efeito sem querer).
+  document.addEventListener('click', function (e) {
+    if (!isSidebarDrawerOpen()) return;
+    if (sb.contains(e.target) || btn.contains(e.target)) return;
+    e.preventDefault();
+    e.stopPropagation();
+    closeSidebarDrawer(true);
+  }, true);
+
+  // Painel alargado com a gaveta aberta: a sidebar volta para a grade.
+  if (window.matchMedia) {
+    var mq = window.matchMedia(SIDEBAR_NARROW_MQ);
+    var onChange = function () { if (!mq.matches) closeSidebarDrawer(false); };
+    if (mq.addEventListener) mq.addEventListener('change', onChange);
+    else if (mq.addListener) mq.addListener(onChange);
+  }
+}
+
 function bindKeyboardShortcuts() {
   document.addEventListener('keydown', function (e) {
     // Não captura quando user tá digitando num input
@@ -2138,6 +2215,7 @@ function bindKeyboardShortcuts() {
     if (e.key === 'Escape') {
       var modal = document.querySelector('.update-modal.is-open');
       if (modal) { modal.classList.remove('is-open'); return; }
+      if (isSidebarDrawerOpen()) { closeSidebarDrawer(true); return; }
       if (isTyping && t.id === 'search-input') {
         t.value = '';
         var clear = document.getElementById('search-clear');

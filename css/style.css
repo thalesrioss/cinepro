@@ -1682,10 +1682,31 @@ body {
 }
 .sidebar-item.is-sub .sidebar-icon { color: var(--text-faint); font-size: 9px; }
 
-/* Em painéis muito estreitos, esconde a sidebar */
+/* Botão ☰ da gaveta: só existe em painel estreito (BL-0051) */
+.app-header-brand {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.sidebar-toggle { display: none; }
+
+/* Em painéis muito estreitos a sidebar vira gaveta por cima da grade,
+   aberta pelo ☰ do cabeçalho (js/main.js bindSidebarDrawer) */
 @media (max-width: 480px) {
-  .layout-split { grid-template-columns: 1fr; }
+  .layout-split { grid-template-columns: 1fr; position: relative; }
   .sidebar { display: none; }
+  .sidebar-toggle { display: inline-flex; }
+  .sidebar-toggle[aria-expanded="true"] { color: var(--brand); }
+  .sidebar.is-drawer-open {
+    display: block;
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    width: min(240px, 85%);
+    z-index: 20;
+    box-shadow: 8px 0 24px rgba(0, 0, 0, 0.55);
+  }
 }
 
 /* Esconde as abas horizontais antigas (substituídas pela sidebar) */
