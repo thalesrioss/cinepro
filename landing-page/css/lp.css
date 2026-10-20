@@ -1287,6 +1287,8 @@ section:not(:last-child) { border-bottom: 1px solid var(--border-subtle); }
   padding: 16px 18px !important;
   text-align: left;
   position: relative;
+  /* sem cor própria o <a> herdava o azul de link padrão (btn--soft não existe) */
+  color: var(--text);
 }
 .download-btn .download-icon {
   width: 36px;
@@ -1309,6 +1311,7 @@ section:not(:last-child) { border-bottom: 1px solid var(--border-subtle); }
 .download-btn .download-text strong {
   font-size: 14px;
   font-weight: 700;
+  color: var(--text-strong);
 }
 .download-btn .download-text small {
   font-size: 11px;
