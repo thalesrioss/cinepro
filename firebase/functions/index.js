@@ -2,7 +2,8 @@
 //  CinePRO — Cloud Functions
 //  • tictoWebhook  — recebe Ticto v2 e atualiza Firestore + Sheets
 //  • leadCapture   — LP chama após signup, registra no Sheets "Leads"
-//  • checkStatus   — debug HTTP de status de assinatura por email
+//  (o endpoint de debug de status por e-mail saiu no BL-0075: expunha
+//   dados de qualquer cliente; consulta é pelo console do Firebase)
 //
 //  ⚙ Deploy automático via GitHub Actions ao push em main.
 // =============================================================
@@ -64,6 +65,12 @@ async function appendRow(tabName, row) {
   } catch (err) {
     console.error('Sheets append falhou (' + tabName + '):', err.message);
   }
+}
+
+// "paulo@exemplo.com" → "pa***@exemplo.com", para log.
+function maskEmail(email) {
+  const [user, domain] = String(email || '').split('@');
+  return (user || '').slice(0, 2) + '***' + (domain ? '@' + domain : '');
 }
 
 function isoNow() {
@@ -239,9 +246,10 @@ exports.tictoWebhook = onRequest(
         // sem precisar de Resend ou domínio verificado).
         await triggerFirebasePasswordReset(email).catch(function (e) {
           console.error('Falha ao disparar email Firebase:', e.message);
-          // Fallback: tenta Resend se estiver configurado
+          // Fallback: tenta Resend se estiver configurado. O link entra na
+          // conta do cliente: nunca vai para o log (BL-0075).
           return admin.auth().generatePasswordResetLink(email).then(function (link) {
-            console.log(`[fallback] ${email} - link manual: ${link}`);
+            console.log('fallback Resend para ' + maskEmail(email));
             return sendWelcomeEmail(email, name, link).catch(function (e2) {
               console.error('Resend fallback tambem falhou:', e2.message);
             });
@@ -258,27 +266,6 @@ exports.tictoWebhook = onRequest(
     }
   }
 );
-
-// ═════════════════════════════════════════════════════════════
-//   3. CHECK STATUS (debug)
-// ═════════════════════════════════════════════════════════════
-
-exports.checkStatus = onRequest({ invoker: 'public' }, async (req, res) => {
-  const email = (req.query.email || '').toLowerCase().trim();
-  if (!email) return res.status(400).send('missing email');
-
-  try {
-    const user = await admin.auth().getUserByEmail(email);
-    const doc  = await admin.firestore().collection('users').doc(user.uid).get();
-    return res.json({
-      uid: user.uid,
-      email,
-      data: doc.exists ? doc.data() : null,
-    });
-  } catch (err) {
-    return res.status(404).json({ error: err.message });
-  }
-});
 
 // ═════════════════════════════════════════════════════════════
 //   PASSWORD RESET via Firebase Auth (built-in, sem precisar dominio)
