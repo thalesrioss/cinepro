@@ -19,6 +19,7 @@
   <script src="js/config.js"></script>
   <script src="js/update-checker.js" defer></script>
   <script src="js/search-core.js" defer></script>
+  <script src="js/acervo-count.js" defer></script>
   <script src="js/app.js" defer></script>
 </head>
 <body>
@@ -120,7 +121,7 @@
         <div>
           <div class="library-preview-eyebrow">Biblioteca</div>
           <h2 class="library-preview-title">Amostras do acervo</h2>
-          <p class="library-preview-desc">Uma seleção aleatória de arquivos reais. Acesso completo a 12.000 efeitos após início da avaliação.</p>
+          <p class="library-preview-desc">Uma seleção aleatória de arquivos reais. Acesso completo a <span class="acervo-total">11.000+</span> efeitos após início da avaliação.</p>
         </div>
         <button id="btn-refresh-preview" class="btn btn--ghost btn--md">Outra amostra</button>
       </div>
@@ -159,7 +160,7 @@
         <p class="resolve-help" id="resolve-help"></p>
         <div class="resolve-actions" id="resolve-actions"></div>
       </div>
-      <input type="text" id="lib-search" class="lib-search" placeholder="Buscar em 11.000+ efeitos… (ex: chuva, whoosh, épico)">
+      <input type="text" id="lib-search" class="lib-search" placeholder="Buscar em 11.000+ efeitos… (ex: chuva, whoosh, épico)" data-acervo-placeholder="Buscar em {n} efeitos… (ex: chuva, whoosh, épico)">
       <div class="inst-grid" id="lib-grid">
         <div class="inst-loading">Digite pra buscar na biblioteca.</div>
       </div>
