@@ -1,9 +1,10 @@
 #!/usr/bin/env node
 // =============================================================
-//  firebase/functions/index.js — tictoWebhook — asserções (BL-0074)
+//  firebase/functions/index.js — tictoWebhook — asserções (BL-0074, BL-0075)
 //
 //  O risco aqui é a URL pública aceitar pedido sem o token da Ticto
-//  e ativar ou cancelar assinatura de qualquer e-mail (ADR-0008).
+//  e ativar ou cancelar assinatura de qualquer e-mail (ADR-0008), e as
+//  functions vazarem dado de cliente (checkStatus, link de senha no log).
 //  firebase-functions, firebase-admin, googleapis e fetch são falsos,
 //  em memória; nada sai da máquina.
 //
@@ -24,6 +25,8 @@ const SECRET = 'tok-certo-0123456789';
 const env = { TICTO_TOKEN: SECRET, GOOGLE_SHEET_ID: '', RESEND_API_KEY: '' };
 const calls = { auth: [], db: [], fetch: [], sheets: [] };
 const users = { 'pagante@exemplo.com': 'uid-pagante' };
+const RESET_LINK = 'https://link-secreto';
+let failFirebaseEmail = false;   // sendOobCode do Identity Toolkit responde erro
 
 const fakeAdmin = {
   initializeApp() {},
@@ -39,7 +42,7 @@ const fakeAdmin = {
         users[u.email] = 'uid-' + u.email;
         return { uid: users[u.email], email: u.email };
       },
-      async generatePasswordResetLink(email) { calls.auth.push(['resetLink', email]); return 'https://x'; },
+      async generatePasswordResetLink(email) { calls.auth.push(['resetLink', email]); return RESET_LINK; },
     };
   },
   firestore: Object.assign(function () {
@@ -66,7 +69,12 @@ Module._load = function (request, parent, isMain) {
 };
 global.fetch = async (url) => {
   calls.fetch.push(url);
-  return { ok: true, status: 200, async json() { return {}; }, async text() { return ''; } };
+  const ok = !(failFirebaseEmail && /identitytoolkit/.test(url));
+  return {
+    ok, status: ok ? 200 : 400,
+    async json() { return ok ? {} : { error: { message: 'EMAIL_NOT_FOUND' } }; },
+    async text() { return ''; },
+  };
 };
 
 // Captura todo console.* para conferir que o token não vaza em log.
@@ -206,6 +214,51 @@ t('rejeição não loga e-mail nem headers', () => {
 t('nenhum "FALLBACK ATIVADO" no código', () => {
   const src = require('fs').readFileSync(INDEX, 'utf8');
   return (!/FALLBACK ATIVADO|looksLikeTictoV2/.test(src) && src.includes('timingSafeEqual')) || 'achou fallback';
+});
+
+group('VAZAMENTO (BL-0075)');
+t('checkStatus não é exportado', () => !('checkStatus' in F) || 'ainda exportado');
+t('só tictoWebhook e leadCapture são exportados', () => {
+  const k = Object.keys(F).sort().join(',');
+  return k === 'leadCapture,tictoWebhook' || k;
+});
+let novoN = 0;   // e-mail novo a cada chamada, para cair sempre em compra nova
+async function fallbackLogs(withResend) {
+  failFirebaseEmail = true;
+  const keep = env.RESEND_API_KEY; env.RESEND_API_KEY = withResend ? 're_teste' : '';
+  const from = logs.length;
+  try {
+    const r = await call({ body: tictoV2('pa' + (++novoN) + 'ulo@exemplo.com'), query: { token: SECRET } });
+    return { r, novos: logs.slice(from) };
+  } finally { failFirebaseEmail = false; env.RESEND_API_KEY = keep; }
+}
+t('compra nova com e-mail do Firebase falhando → nenhum log com o link de senha', async () => {
+  const { r, novos } = await fallbackLogs(false);
+  const leak = novos.filter((l) => l.includes('link-secreto'));
+  return (r.code === 200 && calls.auth.some((c) => c[0] === 'resetLink') && leak.length === 0)
+    || JSON.stringify({ code: r.code, leak });
+});
+t('mesmo cenário com Resend configurado → link vai no e-mail, não no log', async () => {
+  const { r, novos } = await fallbackLogs(true);
+  const resend = calls.fetch.filter((u) => /resend\.com/.test(u)).length;
+  const leak = novos.filter((l) => l.includes('link-secreto'));
+  return (r.code === 200 && resend === 1 && leak.length === 0) || JSON.stringify({ code: r.code, resend, leak });
+});
+t('log do fallback mascara o e-mail (pa***@exemplo.com)', async () => {
+  const { novos } = await fallbackLogs(false);
+  const fb = novos.filter((l) => /fallback/i.test(l));
+  return (fb.length > 0 && fb.every((l) => l.includes('pa***@exemplo.com') && !/pa\d+ulo@/.test(l)))
+    || JSON.stringify(novos);
+});
+t('nenhum log da suíte inteira com o link de senha', () => {
+  const leak = logs.filter((l) => l.includes('link-secreto'));
+  return leak.length === 0 || leak[0].slice(0, 200);
+});
+t('nenhum console.* no código imprime link, token ou corpo inteiro do pedido', () => {
+  const src = require('fs').readFileSync(INDEX, 'utf8');
+  const bad = src.split('\n').filter((l) => /console\.\w+\(/.test(l)
+    && /\b(link|resetLink|passwordResetLink|token|receivedToken|req\.body|data\b(?!\.id))/.test(l.replace(/'[^']*'/g, "''").replace(/receivedToken \?/, '')));
+  return bad.length === 0 || bad.join(' | ');
 });
 
 (async () => {

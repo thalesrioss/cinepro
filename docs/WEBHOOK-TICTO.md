@@ -42,6 +42,25 @@ deploy. Conferir primeiro:
    (`git checkout <commit-anterior> -- firebase/functions/index.js` e deploy),
    enquanto corrige o token no painel.
 
+## Endpoint de status removido e link de senha fora do log (BL-0075)
+
+- `checkStatus` saiu de `firebase/functions/index.js`. Era público e, com o
+  repositório aberto, qualquer um consultava por `?email=` se a pessoa era
+  cliente, o nome e se pediu reembolso ou chargeback. Nada no app, no painel
+  nem na LP chamava. Consulta de cliente agora é pelo console do Firebase
+  (Authentication + Firestore `users/<uid>`).
+- No fallback do e-mail de boas-vindas (quando o envio do Firebase falha), o
+  log era `[fallback] <e-mail> - link manual: <link>`: quem lia o Cloud
+  Logging entrava na conta do cliente novo antes dele. Agora o log é só
+  `fallback Resend para pa***@exemplo.com`.
+- **Atenção:** os dois só saem do ar quando o chefe fizer o deploy das
+  functions. Até lá a URL de `checkStatus` em produção continua respondendo.
+  Depois do deploy, conferir que a função `checkstatus` sumiu da lista do
+  Firebase/Cloud Run (`firebase deploy --only functions` pergunta se pode
+  apagar funções que não estão mais no código: responder sim).
+
+Teste: `node tools/test-ticto-webhook.js` (grupo "VAZAMENTO").
+
 ## Rascunho removido (BL-0011)
 
 Existia `webhook/ticto-webhook-handler.js`, um router Express que nunca foi
