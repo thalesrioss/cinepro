@@ -1271,7 +1271,8 @@ section:not(:last-child) { border-bottom: 1px solid var(--border-subtle); }
   opacity: 0.55;
   transition: opacity var(--duration-base) var(--ease-smooth);
 }
-.signup-download.unlocked { opacity: 1; }
+.signup-download.unlocked,
+.signup-download.is-unlocked { opacity: 1; } /* lp.js revealDownloads põe is-unlocked */
 
 .download-buttons {
   display: flex;

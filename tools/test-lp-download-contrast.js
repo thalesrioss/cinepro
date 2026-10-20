@@ -88,5 +88,13 @@ check('contraste >= 4,5:1 no botão .is-detected', () => {
   assert.ok(r >= 4.5, 'contraste ' + r.toFixed(2));
 });
 
+check('bloco de download desbloqueado fica opaco (classe que o lp.js põe)', () => {
+  const js = read('landing-page/js/lp.js');
+  const m = js.match(/dlBlock\.classList\.add\('([\w-]+)'\)/);
+  assert.ok(m, 'revealDownloads não adiciona classe ao bloco');
+  assert.ok(new RegExp('\\.signup-download\\.' + m[1] + '\\s*\\{\\s*opacity:\\s*1;').test(lpCss),
+    '.signup-download.' + m[1] + ' sem opacity: 1 (bloco fica a 0,55 depois do cadastro)');
+});
+
 console.log(`\n${ok} ok, ${fail} falha(s)`);
 process.exit(fail ? 1 : 0);
