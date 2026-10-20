@@ -493,7 +493,7 @@ function renderLibrarySamples(samples) {
     grid.appendChild(card);
   });
 
-  if (count) count.textContent = 'Amostra · 12.000 efeitos no total';
+  if (count) count.textContent = 'Amostra · ' + window.CinePROAcervo.acervoLabel(ACERVO_TOTAL) + ' efeitos no total';
 }
 
 // Bind extra dos botoes do preview
@@ -544,6 +544,7 @@ document.addEventListener('DOMContentLoaded', function () {
 //  Baixa do CDN→Drive e instala na pasta certa do Premiere via main process.
 // ════════════════════════════════════════════════════════════════
 var INST_MANIFEST = null;       // cache do manifest
+var ACERVO_TOTAL = null;        // manifest.counts.total quando o manifest carrega (BL-0038)
 var INST_INITED = false;
 var INST_KIND_LABEL = { lut: 'LUTs', mogrt: 'MOGRT', preset: 'Presets' };
 var MANIFEST_URL = 'https://cdn.jsdelivr.net/gh/thalesrioss/cinepro@main/manifest/dist/manifest.json';
@@ -581,7 +582,12 @@ function initInstallables() {
   var grid = document.getElementById('inst-grid');
   if (grid) grid.innerHTML = '<div class="inst-loading">Carregando biblioteca…</div>';
   fetch(MANIFEST_URL).then(function (r) { return r.json(); })
-    .then(function (m) { INST_MANIFEST = m; renderInstTab('lut'); })
+    .then(function (m) {
+      INST_MANIFEST = m;
+      ACERVO_TOTAL = m && m.counts && m.counts.total;
+      window.CinePROAcervo.fillAcervoTotal(document, ACERVO_TOTAL);
+      renderInstTab('lut');
+    })
     .catch(function () {
       if (grid) grid.innerHTML = '<div class="inst-loading">Não consegui carregar a biblioteca. Verifique a conexão.</div>';
     });
