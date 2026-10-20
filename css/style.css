@@ -463,9 +463,9 @@ body {
   height: 24px;
   opacity: 1;
 }
-/* nome + meta (largura fixa) */
+/* nome + meta (até 150px; encolhe com reticências antes das ações — BL-0078) */
 .effect-row .row-info {
-  flex: 0 0 150px;
+  flex: 0 1 150px;
   min-width: 0;
 }
 .effect-row .effect-name {
