@@ -559,6 +559,69 @@ function ensureFreeAudioTracks(n) {
   }
 }
 
+// ══ BIN "CinePRO" (BL-0061) ═════════════════════════════════════
+// Tudo que o plugin importa vai para a bin "CinePRO" na raiz do
+// projeto, e o mesmo arquivo é reaproveitado em vez de importado de
+// novo. A busca é pelo caminho (getMediaPath), não pelo nome: dois
+// arquivos "whoosh.wav" de pastas diferentes são itens diferentes.
+// Bin renomeada ou movida pelo editor: procura só na raiz e cria outra.
+
+function cineproBin() {
+  var root = app.project.rootItem;
+  function find() {
+    for (var i = 0; i < root.children.numItems; i++) {
+      var it = root.children[i];
+      if (it && it.name === 'CinePRO' && it.type === 2) return it; // 2 = ProjectItemType.BIN
+    }
+    return null;
+  }
+  try {
+    var bin = find();
+    if (bin) return bin;
+    bin = root.createBin('CinePRO');
+    return bin || find() || root;
+  } catch (e) {
+    return root; // sem bin, importa na raiz como antes
+  }
+}
+
+function sameMediaPath(a, b) {
+  return String(a || '').replace(/\\/g, '/').toLowerCase() ===
+         String(b || '').replace(/\\/g, '/').toLowerCase();
+}
+
+function findChildByPath(bin, filePath) {
+  for (var i = bin.children.numItems - 1; i >= 0; i--) {
+    var it = bin.children[i];
+    try {
+      if (it && it.getMediaPath && sameMediaPath(it.getMediaPath(), filePath)) return it;
+    } catch (e) {/* item sem mídia (bin, sequência) */}
+  }
+  return null;
+}
+
+/** Item do projeto para filePath: reaproveita da bin "CinePRO" ou importa nela. null se não achar. */
+function importIntoCineproBin(filePath) {
+  var bin = cineproBin();
+  var item = findChildByPath(bin, filePath);
+  if (item) {
+    // arquivo re-baixado no mesmo caminho: tira o item de "offline"
+    try { if (item.isOffline && item.isOffline() && item.changeMediaPath) item.changeMediaPath(filePath); } catch (e) {}
+    return item;
+  }
+  app.project.importFiles([filePath], true, bin, false);
+  item = findChildByPath(bin, filePath);
+  if (item) return item;
+  // MOGRT e afins podem não devolver o caminho: cai no nome, do último pro primeiro
+  var fileName = filePath.split('/').pop().split('\\').pop();
+  var base = fileName.replace(/\.[^.]+$/, '');
+  for (var j = bin.children.numItems - 1; j >= 0; j--) {
+    var n = bin.children[j].name;
+    if (n === fileName || n === base) return bin.children[j];
+  }
+  return null;
+}
+
 /**
  * Aplica um arquivo num TEMPO específico (segundos), em faixa livre.
  * Usado pelo auto-apply de pack (cama em 0s, hook no 1º corte, etc).
@@ -570,13 +633,7 @@ function applyAtTime(filePath, fileType, sec) {
     var seq = app.project.activeSequence;
     if (!seq) return 'ERR:NO_SEQUENCE';
 
-    var bin = app.project.rootItem;
-    app.project.importFiles([filePath], true, bin, false);
-    var fileName = filePath.split('/').pop().split('\\').pop();
-    var importedItem = null;
-    for (var i = bin.children.numItems - 1; i >= 0; i--) {
-      if (bin.children[i].name === fileName) { importedItem = bin.children[i]; break; }
-    }
+    var importedItem = importIntoCineproBin(filePath);
     if (!importedItem) return 'WARN:IMPORTED_BUT_NOT_FOUND';
 
     var isAudio = !!AUDIO_EXTS[(fileType || '').toLowerCase()];
@@ -605,13 +662,7 @@ function applyAtAllCuts(filePath, fileType, maxN) {
     if (!cuts.length) return 'ERR:NO_CUTS_AFTER';
 
     // Importa 1x
-    var bin = app.project.rootItem;
-    app.project.importFiles([filePath], true, bin, false);
-    var fileName = filePath.split('/').pop().split('\\').pop();
-    var importedItem = null;
-    for (var i = bin.children.numItems - 1; i >= 0; i--) {
-      if (bin.children[i].name === fileName) { importedItem = bin.children[i]; break; }
-    }
+    var importedItem = importIntoCineproBin(filePath);
     if (!importedItem) return 'WARN:IMPORTED_BUT_NOT_FOUND';
 
     var isAudio = !!AUDIO_EXTS[(fileType || '').toLowerCase()];
@@ -814,13 +865,7 @@ function applyEffectToSelection(filePath, fileType) {
     }
 
     // Importa o arquivo uma vez
-    var bin = app.project.rootItem;
-    app.project.importFiles([filePath], true, bin, false);
-    var fileName = filePath.split('/').pop().split('\\').pop();
-    var importedItem = null;
-    for (var i = bin.children.numItems - 1; i >= 0; i--) {
-      if (bin.children[i].name === fileName) { importedItem = bin.children[i]; break; }
-    }
+    var importedItem = importIntoCineproBin(filePath);
     if (!importedItem) return 'WARN:IMPORTED_BUT_NOT_FOUND';
 
     // Coloca no IN POINT de cada clip selecionado, em faixa LIVRE
@@ -912,25 +957,8 @@ function installLUT(filePath) {
  */
 function importMogrtAtPlayhead(filePath, seq) {
   try {
-    var bin = app.project.rootItem;
-
-    // Importa o arquivo MOGRT no projeto
-    app.project.importFiles(
-      [filePath],
-      true,   // suppressUI
-      bin,
-      false   // importAsNumberedStills
-    );
-
-    // Localiza o item recém-importado
-    var importedItem = null;
-    for (var i = 0; i < bin.children.numItems; i++) {
-      var item = bin.children[i];
-      if (item.name && filePath.indexOf(item.name.replace('.mogrt', '')) !== -1) {
-        importedItem = item;
-        break;
-      }
-    }
+    // Importa na bin "CinePRO" (ou reaproveita o que já está lá)
+    var importedItem = importIntoCineproBin(filePath);
 
     // Se achou, insere na primeira track de vídeo LIVRE no playhead
     if (importedItem) {
@@ -953,19 +981,7 @@ function importMogrtAtPlayhead(filePath, seq) {
  */
 function importAudioAtPlayhead(filePath, seq) {
   try {
-    var bin = app.project.rootItem;
-    app.project.importFiles([filePath], true, bin, false);
-
-    // Acha o item recém-importado (último com o nome do arquivo)
-    var fileName = filePath.split('/').pop().split('\\').pop();
-    var importedItem = null;
-    // Itera de trás pra frente — o item recém-importado é o último
-    for (var i = bin.children.numItems - 1; i >= 0; i--) {
-      if (bin.children[i].name === fileName) {
-        importedItem = bin.children[i];
-        break;
-      }
-    }
+    var importedItem = importIntoCineproBin(filePath);
     if (!importedItem) return 'WARN:IMPORTED_BUT_NOT_FOUND';
 
     var cti = seq.getPlayerPosition();
@@ -984,23 +1000,7 @@ function importAudioAtPlayhead(filePath, seq) {
  */
 function importClipAtPlayhead(filePath, seq) {
   try {
-    var bin = app.project.rootItem;
-    var importResult = app.project.importFiles(
-      [filePath],
-      true,
-      bin,
-      false
-    );
-
-    // Busca o item no bin
-    var importedItem = null;
-    var fileName = filePath.split('/').pop().split('\\').pop();
-    for (var i = 0; i < bin.children.numItems; i++) {
-      if (bin.children[i].name === fileName) {
-        importedItem = bin.children[i];
-        break;
-      }
-    }
+    var importedItem = importIntoCineproBin(filePath);
 
     if (!importedItem) return 'WARN:IMPORTED_BUT_NOT_FOUND';
 
