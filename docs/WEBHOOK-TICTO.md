@@ -53,11 +53,16 @@ deploy. Conferir primeiro:
   log era `[fallback] <e-mail> - link manual: <link>`: quem lia o Cloud
   Logging entrava na conta do cliente novo antes dele. Agora o log é só
   `fallback Resend para pa***@exemplo.com`.
-- **Atenção:** os dois só saem do ar quando o chefe fizer o deploy das
-  functions. Até lá a URL de `checkStatus` em produção continua respondendo.
-  Depois do deploy, conferir que a função `checkstatus` sumiu da lista do
-  Firebase/Cloud Run (`firebase deploy --only functions` pergunta se pode
-  apagar funções que não estão mais no código: responder sim).
+- **Atenção:** os dois só saem do ar com o deploy das functions. Até lá a URL
+  de `checkStatus` em produção continua respondendo.
+- O deploy é automático: push em `main` que mexe em `firebase/**` dispara
+  `.github/workflows/deploy-functions.yml` (`firebase deploy --only functions
+  --force`, que apaga sem perguntar as funções que saíram do código). Ou seja,
+  o push do merge já é o deploy, e leva junto o BL-0074: fazer a conferência
+  do Cloud Logging da seção "Antes do deploy" **antes** do push.
+- Depois do deploy, conferir que `checkstatus` sumiu da lista de funções do
+  Firebase (ou do Cloud Run) e que `GET <url-antiga>/checkStatus?email=x`
+  não responde mais com dados.
 
 Teste: `node tools/test-ticto-webhook.js` (grupo "VAZAMENTO").
 
