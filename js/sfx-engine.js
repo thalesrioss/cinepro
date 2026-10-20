@@ -89,11 +89,12 @@
    * só como desempate leve. Isso é o que faz um whoosh de terror ganhar
    * de um whoosh genérico mais "whooshy" num pack de terror.
    */
-  function buildPool(effects, role, recipe, cIdx, size) {
+  function buildPool(effects, role, recipe, cIdx, size, exclude) {
     var scored = [];
     for (var i = 0; i < effects.length; i++) {
       var e = effects[i];
       if (e.kind !== 'audio' || !e.embed) continue;
+      if (exclude && exclude[e.id]) continue;                        // "↻ Outra opção" (BL-0068)
       if (typeof e.dur !== 'number' || !isFinite(e.dur)) continue;   // sem duração não entra
       if (e.dur < role.minDur || e.dur > role.maxDur) continue;      // janela do papel
       var rs = roleStrength(e, role, cIdx);
@@ -110,7 +111,8 @@
    * antes de executar é o que transforma o botão de caixa-preta em
    * algo revisável (e depurável na mão do cliente).
    *
-   * @param {object} o  {effects, concepts, recipe, roles, limits, timeline}
+   * @param {object} o  {effects, concepts, recipe, roles, limits, timeline,
+   *                     exclude?: {papel: {effectId: 1}}}
    * @returns {object}  {steps, pools, warnings, stats}
    */
   function buildPlan(o) {
@@ -122,12 +124,13 @@
     var cIdx     = conceptIndex(o.concepts);
     var warnings = [];
     var pools    = {};
+    var exclude  = o.exclude || {};
 
     if (!recipe) return { steps: [], pools: {}, warnings: ['receita ausente'], stats: {} };
 
     ['cut', 'impact', 'bed', 'riser'].forEach(function (name) {
       if (!roles[name]) { warnings.push('papel "' + name + '" não definido'); return; }
-      pools[name] = buildPool(effects, roles[name], recipe, cIdx, roles[name].poolSize);
+      pools[name] = buildPool(effects, roles[name], recipe, cIdx, roles[name].poolSize, exclude[name]);
       if (!pools[name].length) warnings.push('nenhum candidato para "' + name + '"');
     });
 
@@ -219,27 +222,93 @@
       }
     }
 
+    return { steps: steps, pools: pools, warnings: warnings, stats: planStats(steps, pools, cuts.length) };
+  }
+
+  function planStats(steps, pools, nCuts) {
     var distinct = {};
     steps.forEach(function (s) { distinct[s.effect.id] = 1; });
-
     return {
-      steps: steps,
-      pools: pools,
-      warnings: warnings,
-      stats: {
-        placements: steps.length,
-        distinctFiles: Object.keys(distinct).length,
-        cuts: cuts.length,
-        poolSizes: {
-          cut:    pools.cut    ? pools.cut.length    : 0,
-          impact: pools.impact ? pools.impact.length : 0,
-          bed:    pools.bed    ? pools.bed.length    : 0,
-        },
+      placements: steps.length,
+      distinctFiles: Object.keys(distinct).length,
+      cuts: nCuts,
+      poolSizes: {
+        cut:    pools.cut    ? pools.cut.length    : 0,
+        impact: pools.impact ? pools.impact.length : 0,
+        bed:    pools.bed    ? pools.bed.length    : 0,
       },
     };
   }
 
-  var API = { buildPlan: buildPlan, hashSeed: hashSeed, buildPool: buildPool, genreFit: genreFit,
+  /**
+   * "↻ Outra opção" (BL-0068): refaz SÓ um papel do plano, sem tocar nos
+   * outros. Remonta o plano com os mesmos parâmetros excluindo do papel
+   * todo arquivo que ele já usou (nesta e nas trocas anteriores, para o
+   * ↻ não ficar alternando entre os mesmos dois sons) e troca apenas os
+   * passos daquele papel.
+   *
+   * Não altera `plan`. Sem candidato novo devolve {changed:false} e o
+   * plano marcado com exhausted[papel], para a linha dizer "sem outra
+   * opção" e desligar o ↻.
+   *
+   * @param {object} o     mesmos parâmetros dados a buildPlan
+   * @param {object} plan  plano atual (de buildPlan ou de rerollRole)
+   * @param {string} role  'bed' | 'riser' | 'impact' | 'cut'
+   * @returns {{plan: object, changed: boolean}}
+   */
+  function rerollRole(o, plan, role) {
+    var excluded = {}, k, r;
+    var prev = plan.excluded || {};
+    for (r in prev) {
+      if (!Object.prototype.hasOwnProperty.call(prev, r)) continue;
+      excluded[r] = {};
+      for (k in prev[r]) if (Object.prototype.hasOwnProperty.call(prev[r], k)) excluded[r][k] = 1;
+    }
+    var mine = excluded[role] || (excluded[role] = {});
+    var had = false;
+    plan.steps.forEach(function (s) { if (s.role === role) { mine[s.effect.id] = 1; had = true; } });
+
+    var exhausted = {};
+    for (r in (plan.exhausted || {})) exhausted[r] = plan.exhausted[r];
+
+    var fresh = had ? buildPlan(merge(o, { exclude: excluded })) : { steps: [] };
+    var newSteps = fresh.steps.filter(function (s) { return s.role === role; });
+
+    if (!newSteps.length) {
+      exhausted[role] = true;
+      return { plan: withSteps(plan, plan.steps, plan.excluded || {}, exhausted), changed: false };
+    }
+
+    // Ordem canônica do buildPlan: cama, impacto, riser, cortes.
+    var ORDER = ['bed', 'impact', 'riser', 'cut'];
+    var steps = [];
+    ORDER.forEach(function (name) {
+      var src = name === role ? newSteps : plan.steps.filter(function (s) { return s.role === name; });
+      steps = steps.concat(src);
+    });
+    var pools = {};
+    for (r in plan.pools) pools[r] = plan.pools[r];
+    pools[role] = fresh.pools[role];
+    return { plan: withSteps(merge(plan, { pools: pools }), steps, excluded, exhausted), changed: true };
+  }
+
+  function merge(a, b) {
+    var out = {}, k;
+    for (k in a) if (Object.prototype.hasOwnProperty.call(a, k)) out[k] = a[k];
+    for (k in b) if (Object.prototype.hasOwnProperty.call(b, k)) out[k] = b[k];
+    return out;
+  }
+
+  function withSteps(plan, steps, excluded, exhausted) {
+    return merge(plan, {
+      steps: steps,
+      excluded: excluded,
+      exhausted: exhausted,
+      stats: planStats(steps, plan.pools || {}, plan.stats ? plan.stats.cuts : 0),
+    });
+  }
+
+  var API = { buildPlan: buildPlan, rerollRole: rerollRole, hashSeed: hashSeed, buildPool: buildPool, genreFit: genreFit,
               roleStrength: roleStrength, conceptIndex: conceptIndex };
 
   if (typeof module !== 'undefined' && module.exports) module.exports = API;
