@@ -4,6 +4,44 @@ O único handler que vale é `tictoWebhook` em `firebase/functions/index.js`
 (Firebase Functions v2, região `southamerica-east1`, secret `TICTO_TOKEN`).
 Passo a passo de deploy em `INICIO_RAPIDO.md` (Passo 3).
 
+## Autenticação (ADR-0008, BL-0074)
+
+Só passa pedido com o token da Ticto igual ao secret `TICTO_TOKEN`,
+comparado em tempo constante. Não existe mais o "fallback" que aceitava
+pedido sem token quando o corpo parecia Ticto v2: os campos são públicos e
+qualquer um ativava ou cancelava assinatura de qualquer e-mail.
+
+- Sem token, token errado ou `TICTO_TOKEN` vazio no ambiente → `401`, nada é
+  escrito no Auth, no Firestore nem no Sheets, e nenhum e-mail sai.
+- Onde o token é procurado (o primeiro não vazio vale): campo `token` do
+  corpo, headers `x-ticto-token`, `x-token`, `x-postback-token`,
+  `x-postback-secret`, `Authorization: Bearer <token>`, e `?token=` na URL.
+- A função não loga mais headers, query nem o token. A rejeição loga só
+  "token ausente" ou "token invalido".
+
+Teste: `node tools/test-ticto-webhook.js` (entra no `tools/run-all-tests.sh`).
+
+## Antes do deploy (chefe)
+
+Se a Ticto hoje chega sem token, compra legítima passa a dar `401` depois do
+deploy. Conferir primeiro:
+
+1. Google Cloud Console → Logging → Logs Explorer, projeto do CinePRO,
+   últimos 30 dias, consulta (a busca pelo texto basta; o nome do serviço
+   da função v2 no Cloud Run é `tictowebhook`, se quiser filtrar):
+   ```
+   textPayload:"FALLBACK ATIVADO"
+   ```
+2. **Apareceu compra real** → no painel da Ticto, trocar a URL do webhook
+   para `https://<url-da-funcao>?token=<TICTO_TOKEN>` (ou configurar o token
+   no campo próprio do painel), mandar um evento de teste e conferir que ele
+   **não** gera mais "FALLBACK ATIVADO" no log atual. Só então fazer o deploy.
+3. **Não apareceu nada** → a Ticto já manda o token; pode fazer o deploy.
+4. Depois do deploy: evento de teste do painel da Ticto deve dar `200`.
+   Se der `401`, o plano de volta é redeployar o commit anterior da função
+   (`git checkout <commit-anterior> -- firebase/functions/index.js` e deploy),
+   enquanto corrige o token no painel.
+
 ## Rascunho removido (BL-0011)
 
 Existia `webhook/ticto-webhook-handler.js`, um router Express que nunca foi
