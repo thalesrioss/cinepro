@@ -1142,6 +1142,7 @@ function getPackIds(packId) {
  * A seleção mudou por completo — ver js/sfx-engine.js.
  */
 var PENDING_PLAN = {};   // packId → plano aguardando confirmação
+var PENDING_PLAN_OPTS = {};   // packId → parâmetros do buildPlan (para o ↻ refazer um papel)
 
 function packAutoApply(packId, btn) {
   var recipes = window.CINEPRO_RECIPES || [];
@@ -1153,6 +1154,7 @@ function packAutoApply(packId, btn) {
   if (PENDING_PLAN[packId]) {
     var plan = PENDING_PLAN[packId];
     delete PENDING_PLAN[packId];
+    delete PENDING_PLAN_OPTS[packId];
     return executePlan(plan, recipe, btn);
   }
 
@@ -1183,14 +1185,15 @@ function packAutoApply(packId, btn) {
     // Se a config remota ainda não respondeu (rede lenta, primeiro boot),
     // usa os padrões embarcados em vez de montar um plano vazio.
     var fallback = (window.CinePRORemoteConfig && window.CinePRORemoteConfig.DEFAULT_ROLES) || {};
-    var plan = window.CinePROSfxEngine.buildPlan({
+    var planOpts = {
       effects: allEffects,
       concepts: CINEPRO_CONCEPTS_DICT,
       recipe: recipe,
       roles: CINEPRO_ROLES || fallback.roles,
       limits: CINEPRO_LIMITS || fallback.limits,
       timeline: tl,
-    });
+    };
+    var plan = window.CinePROSfxEngine.buildPlan(planOpts);
 
     if (!plan.steps.length) {
       return fail(plan.warnings.length
@@ -1199,6 +1202,7 @@ function packAutoApply(packId, btn) {
     }
 
     PENDING_PLAN[packId] = plan;
+    PENDING_PLAN_OPTS[packId] = planOpts;
     renderPlanPreview(packId, plan, recipe);
     if (btn) { btn.disabled = false; btn.textContent = '✓ Confirmar e aplicar'; }
     setStatus('ok', 'Plano pronto — revise e confirme');
@@ -1223,14 +1227,20 @@ function renderPlanPreview(packId, plan, recipe) {
     var names = {};
     list.forEach(function (s) { names[s.effect.name] = 1; });
     var uniq = Object.keys(names);
+    var noMore = !!(plan.exhausted && plan.exhausted[role]);
     rows +=
-      '<div class="pack-plan-row">' +
+      '<div class="pack-plan-row" data-role="' + role + '">' +
         '<span class="pack-plan-role">' + LABEL[role] + '</span>' +
         '<span class="pack-plan-detail">' +
           escapeHtmlLite(uniq.slice(0, 3).join(' · ')) +
           (uniq.length > 3 ? ' +' + (uniq.length - 3) : '') +
           (role === 'cut' ? ' <em>(' + list.length + '×)</em>' : '') +
+          (noMore ? ' <em class="pack-plan-nomore">· sem outra opção</em>' : '') +
         '</span>' +
+        '<button type="button" class="pack-plan-reroll" data-role="' + role + '"' +
+          (noMore ? ' disabled title="Sem outra opção para ' + LABEL[role] + '"'
+                  : ' title="Outra opção para ' + LABEL[role] + '"') +
+          ' aria-label="Outra opção para ' + LABEL[role] + '">↻</button>' +
       '</div>';
   });
 
@@ -1240,7 +1250,24 @@ function renderPlanPreview(packId, plan, recipe) {
     '<div class="pack-plan-title">Plano · ' + plan.stats.placements + ' colocações · ' +
       plan.stats.distinctFiles + ' sons diferentes</div>' + rows +
     (plan.warnings.length ? '<div class="pack-plan-warn">' + escapeHtmlLite(plan.warnings[0]) + '</div>' : '');
+  box.addEventListener('click', function (ev) {
+    var b = ev.target.closest && ev.target.closest('.pack-plan-reroll');
+    if (!b || b.disabled) return;
+    ev.stopPropagation();
+    rerollPlanRole(packId, b.getAttribute('data-role'), recipe);
+  });
   head.appendChild(box);
+}
+
+/** "↻ Outra opção" (BL-0068): troca só um papel do plano pendente. */
+function rerollPlanRole(packId, role, recipe) {
+  var plan = PENDING_PLAN[packId], opts = PENDING_PLAN_OPTS[packId];
+  if (!plan || !opts || !window.CinePROSfxEngine) return;
+  var res = window.CinePROSfxEngine.rerollRole(opts, plan, role);
+  PENDING_PLAN[packId] = res.plan;
+  renderPlanPreview(packId, res.plan, recipe);
+  var again = document.querySelector('.pack-plan-reroll[data-role="' + role + '"]');
+  if (again && !again.disabled) again.focus();
 }
 
 function escapeHtmlLite(s) {

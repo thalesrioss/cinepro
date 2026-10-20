@@ -2123,6 +2123,20 @@ body {
   white-space: nowrap;
 }
 .pack-plan-detail em { font-style: normal; opacity: .7; }
+.pack-plan-reroll {
+  flex: 0 0 auto;
+  align-self: center;
+  padding: 0 6px;
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--text-dim);
+  background: none;
+  border: 1px solid var(--border, rgba(255,255,255,.08));
+  border-radius: 5px;
+  cursor: pointer;
+}
+.pack-plan-reroll:hover:not(:disabled) { color: var(--accent, #7c9cff); border-color: var(--accent, #7c9cff); }
+.pack-plan-reroll:disabled { opacity: .35; cursor: default; }
 .pack-plan-warn {
   margin-top: 6px;
   font-size: 10px;
