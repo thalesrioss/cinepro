@@ -38,22 +38,30 @@ function initFirebase() {
 
 // ──────── OS Detection ────────
 
-function setupDownloads() {
-  var ua = navigator.userAgent;
-  var os = 'mac';
-
-  if (/Mac|iPhone|iPad/.test(ua) || (navigator.platform || '').indexOf('Mac') !== -1) {
-    os = 'mac';
-  } else if (/Win/.test(ua) || /Windows/.test(ua)) {
-    os = 'windows';
-  } else if (/Linux/.test(ua)) {
-    os = 'linux';
+// Puro (sem DOM) para dar para testar fora do navegador.
+// iPhone/iPad/Android viram 'mobile': o CinePRO não instala no celular.
+// iPad no modo desktop diz "Macintosh" + platform MacIntel; o que o
+// denuncia é a tela de toque (Mac de verdade tem maxTouchPoints 0).
+function downloadPlatform(ua, platform, maxTouchPoints) {
+  ua = ua || '';
+  platform = platform || '';
+  if (/iPhone|iPad|iPod|Android/i.test(ua)) return 'mobile';
+  if (/Mac/.test(ua) || platform.indexOf('Mac') !== -1) {
+    return (maxTouchPoints || 0) > 1 ? 'mobile' : 'mac';
   }
+  if (/Win/.test(ua) || /Windows/.test(ua)) return 'windows';
+  if (/Linux/.test(ua)) return 'linux';
+  return 'mac';
+}
+
+function setupDownloads() {
+  var os = downloadPlatform(navigator.userAgent, navigator.platform, navigator.maxTouchPoints);
 
   var osLabel = document.getElementById('os-detect');
   if (osLabel) {
     osLabel.textContent = os === 'mac'     ? '🍎 Você está no macOS'
                        : os === 'windows'  ? '🪟 Você está no Windows'
+                       : os === 'mobile'   ? '📱 Você está no celular: o CinePRO instala no Mac ou no Windows'
                        :                     '💻 Disponível pra Mac e Windows';
   }
 
