@@ -1167,6 +1167,9 @@ section:not(:last-child) { border-bottom: 1px solid var(--border-subtle); }
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-xl);
   padding: 40px;
+  /* item de grid tem min-width:auto: sem isto o nowrap dos botões de
+     download empurrava o cartão para 444 px e a página estourava a 360 px */
+  min-width: 0;
 }
 
 .signup-form-header {
@@ -1290,6 +1293,7 @@ section:not(:last-child) { border-bottom: 1px solid var(--border-subtle); }
   position: relative;
   /* sem cor própria o <a> herdava o azul de link padrão (btn--soft não existe) */
   color: var(--text);
+  white-space: normal; /* .btn é nowrap: no celular o texto precisa quebrar */
 }
 .download-btn .download-icon {
   width: 36px;
@@ -1308,6 +1312,7 @@ section:not(:last-child) { border-bottom: 1px solid var(--border-subtle); }
   align-items: flex-start;
   gap: 2px;
   line-height: 1.3;
+  min-width: 0;
 }
 .download-btn .download-text strong {
   font-size: 14px;
@@ -1324,11 +1329,14 @@ section:not(:last-child) { border-bottom: 1px solid var(--border-subtle); }
   background: var(--brand-glow-2);
   border-color: var(--brand) !important;
 }
+/* Selo na borda de cima do botão: no meio da altura ele cobria o <small>
+   (até 69 px) em qualquer largura. O padding de 16 px do botão é maior que
+   meia altura do selo, então não encosta no texto. */
 .download-btn.is-detected::after {
   content: 'Recomendado';
   position: absolute;
   right: 14px;
-  top: 50%;
+  top: 0;
   transform: translateY(-50%);
   background: var(--brand);
   color: #000;
@@ -1583,6 +1591,7 @@ section:not(:last-child) { border-bottom: 1px solid var(--border-subtle); }
   cursor: text;
   overflow-x: auto;
   white-space: nowrap;
+  max-width: 100%; /* comando longo rola dentro da caixa, não estoura o cartão */
 }
 
 .faq-item code {
