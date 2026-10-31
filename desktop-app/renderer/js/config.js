@@ -46,5 +46,6 @@ const CINEPRO_CONFIG = {
   ADMIN_EMAILS: [
     'thales.rioss@gmail.com',
     'marquesfelipe059@gmail.com',
+    'feliperod003@gmail.com',
   ],
 };
